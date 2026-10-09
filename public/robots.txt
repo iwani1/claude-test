@@ -1,0 +1,4 @@
+# Prevent indexing of POS terminal and backend administrative modules
+User-agent: *
+Disallow: /api/
+Disallow: /
