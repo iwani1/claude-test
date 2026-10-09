@@ -112,11 +112,22 @@ async function handlePOST(req: Request, { params }: { params: Promise<{ id: stri
         lines.push({ method: "momo", cents: payCents, reference: ref || "MOMO", tenderedCents: null, changeCents: 0 });
       }
 
+      const shiftRows = await tx
+        .select()
+        .from(shifts)
+        .where(eq(shifts.status, "open"))
+        .orderBy(desc(shifts.openedAt))
+        .limit(1)
+        .for("update");
+      const shift = shiftRows[0];
+      if (!shift) return { error: "Open a shift before recording payment", status: 409 };
+
       const records = await tx
         .insert(payments)
         .values(
           lines.map((l) => ({
             orderId,
+            shiftId: shift.id,
             amount: fromCents(l.cents),
             paymentMethod: l.method,
             referenceNumber: l.reference,
@@ -144,14 +155,6 @@ async function handlePOST(req: Request, { params }: { params: Promise<{ id: stri
       // Shift totals: cash into the drawer total, MoMo into the digital total.
       const cashIn = lines.filter((l) => l.method === "cash").reduce((s, l) => s + l.cents, 0);
       const momoIn = lines.filter((l) => l.method === "momo").reduce((s, l) => s + l.cents, 0);
-      const shiftRows = await tx
-        .select()
-        .from(shifts)
-        .where(eq(shifts.status, "open"))
-        .orderBy(desc(shifts.openedAt))
-        .limit(1)
-        .for("update");
-      const shift = shiftRows[0];
       if (shift) {
         await tx
           .update(shifts)

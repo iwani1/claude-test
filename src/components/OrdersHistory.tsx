@@ -28,7 +28,24 @@ export const OrdersHistory: React.FC<{ currentUser: any }> = ({ currentUser }) =
   const [refundOrderTarget, setRefundOrderTarget] = useState<any | null>(null);
   const [refundReason, setRefundReason] = useState("");
   const [refundManagerPin, setRefundManagerPin] = useState("");
-  const [returnStock, setReturnStock] = useState(true);
+  const [returnStock, setReturnStock] = useState(false);
+  const [refundCash, setRefundCash] = useState("0.00");
+  const [refundMomo, setRefundMomo] = useState("0.00");
+  const [refundKey, setRefundKey] = useState("");
+  const [refundBusy, setRefundBusy] = useState(false);
+  const [refundLocked, setRefundLocked] = useState(false);
+  const [refundLimits, setRefundLimits] = useState({ cashRemaining: "0.00", momoRemaining: "0.00" });
+  const openRefund = async (order: any) => {
+    try {
+      const response = await fetch(`/api/orders/${order.id}/refund`);
+      const data = await response.json();
+      if (!response.ok || data.requiresReconciliation) { alert(data.error || "Historical tender records require reconciliation before refunding"); return; }
+      setRefundLimits(data); setRefundCash(data.cashRemaining); setRefundMomo(data.momoRemaining);
+      setRefundKey(crypto.randomUUID()); setRefundLocked(false); setRefundBusy(false);
+      setRefundReason(""); setRefundManagerPin(""); setReturnStock(false); setRefundOrderTarget(order);
+    } catch { alert("Could not load refundable tender balances"); }
+  };
+
 
   // Print Receipt Modal
   const [showReceiptModal, setShowReceiptModal] = useState(false);
@@ -54,14 +71,16 @@ export const OrdersHistory: React.FC<{ currentUser: any }> = ({ currentUser }) =
 
   const handleProcessRefund = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!refundOrderTarget) return;
+    if (!refundOrderTarget || refundBusy) return;
+    setRefundBusy(true); setRefundLocked(true);
 
     try {
       const res = await fetch(`/api/orders/${refundOrderTarget.id}/refund`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          amount: refundOrderTarget.paidAmount || refundOrderTarget.totalAmount,
+          amount: ((Math.round(Number(refundCash) * 100) + Math.round(Number(refundMomo) * 100)) / 100).toFixed(2),
+          cashAmount: refundCash, momoAmount: refundMomo, idempotencyKey: refundKey,
           reason: refundReason,
           managerPin: refundManagerPin,
           returnStock,
@@ -75,11 +94,12 @@ export const OrdersHistory: React.FC<{ currentUser: any }> = ({ currentUser }) =
         setRefundReason("");
         fetchOrders();
       } else {
+        setRefundLocked(false);
         alert(data.error || "Refund failed");
       }
     } catch {
-      alert("Error processing refund");
-    }
+      alert("Refund result is unknown. Retry this unchanged request to check its result; do not issue a second refund.");
+    } finally { setRefundBusy(false); }
   };
 
   const filteredOrders = orders.filter((o) => {
@@ -228,12 +248,9 @@ export const OrdersHistory: React.FC<{ currentUser: any }> = ({ currentUser }) =
                             <Printer className="w-3.5 h-3.5" />
                           </button>
 
-                          {isCompleted && (
+                          {Number(ord.paidAmount) > 0 && ord.paymentStatus !== "refunded" && (
                             <button
-                              onClick={() => {
-                                setRefundOrderTarget(ord);
-                                setRefundReason("");
-                              }}
+                              onClick={() => openRefund(ord)}
                               className="px-2 py-1 bg-neutral-800 hover:bg-rose-950/40 text-neutral-300 hover:text-rose-400 rounded-lg text-[11px] font-medium border border-neutral-700 transition flex items-center gap-1"
                               title="Process Refund"
                             >
@@ -279,12 +296,23 @@ export const OrdersHistory: React.FC<{ currentUser: any }> = ({ currentUser }) =
             </div>
 
             <div className="space-y-3 text-xs">
+              <p className="text-amber-300">Record money actually returned. Cash is automatically deducted from the current drawer; do not create another payout. MoMo transfers must be completed and verified separately.</p>
+              <div className="grid grid-cols-2 gap-3">
+                <label>Cash returned (max GH₵{refundLimits.cashRemaining})
+                  <input aria-label="Cash refund" type="number" min="0" step="0.01" max={refundLimits.cashRemaining} required disabled={refundLocked} value={refundCash} onChange={e => setRefundCash(e.target.value)} className="w-full bg-neutral-800 p-2 rounded mt-1" />
+                </label>
+                <label>MoMo returned (max GH₵{refundLimits.momoRemaining})
+                  <input aria-label="MoMo refund" type="number" min="0" step="0.01" max={refundLimits.momoRemaining} required disabled={refundLocked} value={refundMomo} onChange={e => setRefundMomo(e.target.value)} className="w-full bg-neutral-800 p-2 rounded mt-1" />
+                </label>
+              </div>
+              {refundLocked && !refundBusy && <p role="alert" className="text-amber-300">Retry the unchanged request to resolve its status before starting another refund.</p>}
               <div>
                 <label className="text-neutral-300 block mb-1">Reason for Refund</label>
                 <input
                   type="text"
                   required
                   placeholder="e.g. Dissatisfied with dish, order error"
+                  disabled={refundLocked}
                   value={refundReason}
                   onChange={(e) => setRefundReason(e.target.value)}
                   className="w-full bg-neutral-800 border border-neutral-700 rounded-xl px-3 py-2 text-white"
@@ -295,14 +323,14 @@ export const OrdersHistory: React.FC<{ currentUser: any }> = ({ currentUser }) =
                 <label className="text-neutral-300 block mb-1">Manager PIN Authorization</label>
                 <input
                   type="password"
-                  maxLength={4}
+                  maxLength={8}
                   required
                   value={refundManagerPin}
                   onChange={(e) => setRefundManagerPin(e.target.value)}
                   className="w-full bg-neutral-800 border border-neutral-700 rounded-xl px-3 py-2 text-white font-mono text-center tracking-widest text-lg"
                 />
                 <span className="text-[10px] text-neutral-500 mt-0.5 block">
-                  Enter your assigned 4-digit Manager or Owner authorization PIN
+                  Enter your assigned 4–8 digit Manager or Owner authorization PIN
                 </span>
               </div>
 
@@ -310,6 +338,7 @@ export const OrdersHistory: React.FC<{ currentUser: any }> = ({ currentUser }) =
                 <input
                   type="checkbox"
                   id="returnStockCheck"
+                  disabled={refundLocked}
                   checked={returnStock}
                   onChange={(e) => setReturnStock(e.target.checked)}
                   className="rounded border-neutral-700 text-amber-500 focus:ring-0"
@@ -330,9 +359,10 @@ export const OrdersHistory: React.FC<{ currentUser: any }> = ({ currentUser }) =
               </button>
               <button
                 type="submit"
+                disabled={refundBusy}
                 className="px-4 py-2 text-xs font-semibold bg-rose-600 hover:bg-rose-500 text-white rounded-xl shadow-xs"
               >
-                Authorize & Refund
+                {refundBusy ? "Recording…" : refundLocked ? "Retry Same Refund" : "Authorize & Record Refund"}
               </button>
             </div>
           </form>

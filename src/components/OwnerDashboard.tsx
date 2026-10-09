@@ -112,7 +112,7 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ onNavigate, open
               <DollarSign className="w-4 h-4 text-emerald-400" />
             </div>
             <div className="text-2xl font-bold font-mono text-emerald-400 mt-1">
-              GH₵{Number(summary.totalSales).toFixed(2)}
+              GH₵{Number(summary.netCollections ?? 0).toFixed(2)}
             </div>
             <div className="text-[11px] text-neutral-500 mt-1 flex justify-between">
               <span>{summary.totalOrdersCount} orders placed</span>

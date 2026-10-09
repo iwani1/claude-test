@@ -1,4 +1,5 @@
-import { secureRoute } from "@/lib/api";
+import { collectionSummary, reportWindow } from "@/lib/collection-report";
+import { secureRoute, ApiError } from "@/lib/api";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import {
@@ -10,32 +11,22 @@ import {
   ingredients,
   stockMovements,
 } from "@/db/schema";
-import { desc, eq, gte } from "drizzle-orm";
+import { desc, eq, gte, lt, and } from "drizzle-orm";
 
 async function handleGET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
     const timeframe = searchParams.get("timeframe") || "all"; // 'today', '7days', '30days', 'all'
 
-    let startDate: Date | null = null;
-    const now = new Date();
-
-    if (timeframe === "today") {
-      startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    } else if (timeframe === "7days") {
-      startDate = new Date(now.getTime() - 7 * 86400000);
-    } else if (timeframe === "30days") {
-      startDate = new Date(now.getTime() - 30 * 86400000);
-    }
-
-    const allOrders = startDate
-      ? await db.select().from(orders).where(gte(orders.createdAt, startDate)).orderBy(desc(orders.createdAt))
-      : await db.select().from(orders).orderBy(desc(orders.createdAt));
+    const window = reportWindow(timeframe);
+    const collections = await collectionSummary(window);
+    const allOrders = await db.select().from(orders).where(and(
+      window.start ? gte(orders.createdAt, window.start) : undefined, lt(orders.createdAt, window.end)
+    )).orderBy(desc(orders.createdAt));
 
     const allOrderItems = await db.select().from(orderItems);
     const allCategories = await db.select().from(menuCategories);
     const allMenuItems = await db.select().from(menuItems);
-    const allPayments = await db.select().from(payments);
     const allIngredients = await db.select().from(ingredients);
     const allMovements = await db.select().from(stockMovements);
 
@@ -93,11 +84,7 @@ async function handleGET(req: Request) {
 
     // Sales by Payment Method
     // This restaurant settles by Mobile Money or cash only.
-    const paymentMethodMap: Record<string, number> = { momo: 0, cash: 0 };
-    for (const p of allPayments) {
-      const method = p.paymentMethod || "cash";
-      paymentMethodMap[method] = (paymentMethodMap[method] || 0) + Number(p.amount);
-    }
+    const paymentMethodMap = { cash: Number(collections.cashCollections), momo: Number(collections.momoCollections), other: Number(collections.otherCollections) };
 
     // Top Selling Items
     const itemSalesMap: Record<string, { name: string; quantity: number; revenue: number }> = {};
@@ -132,7 +119,10 @@ async function handleGET(req: Request) {
       }));
 
     return NextResponse.json({
+      window: { start: window.start?.toISOString() ?? null, endExclusive: window.end.toISOString(), timezone: "UTC / Africa/Accra", basis: "Collections/refunds use transaction dates; gross billed sales use order creation dates." },
       summary: {
+        ...collections,
+        grossBilledSales: totalSales.toFixed(2),
         totalSales: totalSales.toFixed(2),
         totalOrdersCount,
         avgOrderValue: avgOrderValue.toFixed(2),
@@ -162,6 +152,7 @@ async function handleGET(req: Request) {
       })),
     });
   } catch (err: any) {
+    if (err instanceof ApiError) throw err;
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }

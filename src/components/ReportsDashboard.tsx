@@ -38,7 +38,7 @@ export const ReportsDashboard: React.FC = () => {
       const res = await fetch("/api/integrations", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "export_accounting", format }),
+        body: JSON.stringify({ action: "export_accounting", format, timeframe }),
       });
       const exportData = await res.json();
 
@@ -131,23 +131,34 @@ export const ReportsDashboard: React.FC = () => {
 
       {/* Reports Content */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
+        <section className="grid grid-cols-1 sm:grid-cols-3 gap-3" aria-label="Collection reconciliation">
+          {[["Gross collections", summary.grossCollections], ["Refunds recorded", summary.totalRefunds], ["Net collections", summary.netCollections]].map(([label, value]) => (
+            <div key={label} className="p-4 rounded-2xl bg-neutral-900 border border-neutral-800">
+              <h3 className="text-xs text-neutral-400">{label}</h3><p className="text-xl font-mono text-white">GH₵{Number(value || 0).toFixed(2)}</p>
+            </div>
+          ))}
+        </section>
+        <p className="text-xs text-neutral-400">Collections use payment dates; refunds use refund dates (UTC / Africa/Accra). Net collections can be negative when older sales are refunded. These are manual tender records, not verified bank balances or a tax return.</p>
+        <p className="text-xs text-neutral-400">Cash: GH₵{summary.cashCollections || "0.00"} collected / GH₵{summary.cashRefunds || "0.00"} refunded · MoMo: GH₵{summary.momoCollections || "0.00"} collected / GH₵{summary.momoRefunds || "0.00"} refunded</p>
+        {Number(summary.unallocatedRefunds) > 0 && <p role="alert" className="text-amber-300 text-sm">GH₵{summary.unallocatedRefunds} of historical refunds have unknown tender. They reduce net collections but need manual cash/MoMo reconciliation.</p>}
+        <p className="text-xs text-neutral-500">CSV exports contain payment/refund events for this timeframe; review and map them before importing into accounting software. Item/category charts remain gross bill analysis.</p>
         {/* KPI Cards Grid */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3.5">
           <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-4 shadow-lg">
             <span className="text-[10px] text-neutral-400 uppercase font-bold tracking-wider block">
-              Total Revenue
+              Gross Billed Sales
             </span>
             <div className="text-2xl font-bold font-mono text-emerald-400 mt-1">
               GH₵{Number(summary.totalSales).toLocaleString()}
             </div>
             <div className="text-[11px] text-neutral-500 mt-1 flex items-center gap-1">
-              <span>{summary.totalOrdersCount} orders completed</span>
+              <span>{summary.totalOrdersCount} bills created (before refunds)</span>
             </div>
           </div>
 
           <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-4 shadow-lg">
             <span className="text-[10px] text-neutral-400 uppercase font-bold tracking-wider block">
-              Gross Profit
+              Gross Bill Margin (Estimate)
             </span>
             <div className="text-2xl font-bold font-mono text-white mt-1">
               GH₵{Number(summary.grossProfit).toLocaleString()}

@@ -13,10 +13,14 @@ then stops the services. It never uses production data. Ports 15432/3100 must be
 
 The synthetic pilot starts with a GH₵200 float, sells GH₵20 split tender (cash 8,
 MoMo 12), sells GH₵10 cash, returns that GH₵10 through partial/final refunds,
-records the corresponding GH₵10 drawer payout and a GH₵3 petty-cash payout,
-and closes at GH₵205 with zero difference. It verifies kitchen-ticket creation,
-table release, change, stock restoration, and offline replay deduplication.
-This is a manual-tender simulation; it sends no money and prints no paper.
+records a GH₵3 petty-cash payout, and closes at GH₵205 with zero difference
+(the GH₵10 cash refunds now debit the drawer automatically and are linked to
+their refunds). It verifies kitchen-ticket creation, table release, change, stock
+restoration, and offline replay deduplication. A separate accounting suite covers
+refund tender allocation, retry idempotency, drawer-movement linkage, refund of
+old sales against the current shift, closed-shift immutability, refund/close
+races, legacy unallocated refunds, and event-date collection reporting.
+These are manual-tender simulations; no money moves and no paper prints.
 
 ## Preflight — site manager + operator
 
@@ -39,12 +43,12 @@ This is a manual-tender simulation; it sends no money and prints no paper.
 | Cash payment | Tender/change correct; actual notes/coins agree with ledger | Cashier |
 | MoMo payment | Provider reference and confirmed receipt agree with manual POS entry | Cashier + finance |
 | Split tender | Cash and confirmed MoMo sum exactly to the bill | Cashier |
-| Partial/final refund | Manager approval; actual disbursement recorded once; drawer payout linked | Manager + finance |
+| Partial/final refund | Manager approval; tender split matches original cash/MoMo; refund recorded once; cash drawer debited automatically and linked | Manager + finance |
 | Prepared-food refund | Stock return off unless goods genuinely returned/reusable | Kitchen + inventory |
 | Offline order | Queue survives reload; reconnect/retry creates one order; prices revalidated | Operator |
 | Offline failure | Invalid item/shortage leaves entire batch queued for correction | Operator |
 | Branch switch | No other branch's cached menu or queued order exposed in normal UI | Site manager |
-| Shift close | Physical cash, MoMo statement, refunds and payouts reconcile | Finance |
+| Shift close | Physical cash, MoMo statement, refunds and payouts reconcile; closed shifts cannot be rewritten | Finance |
 | Failure/recovery | Restart does not duplicate transactions; restore rehearsal passes | Administrator |
 
 Capture receipt/docket photos, POS order IDs, MoMo references (redacted), refund
@@ -58,11 +62,16 @@ receipt fields, discount authority, complimentary meals, refund/stock policy,
 and reporting definitions. Do not assume the default tax configuration is correct.
 
 Current limitations to explicitly accept or fix:
-- MoMo and refunds are records, not verified gateway transactions.
-- A cash refund requires a separate, linked drawer payout; it is not automatic.
-- Report sales/category figures are not a complete net-refund accounting statement.
-  Finance must reconcile payment and refund ledgers independently; do not use the
-  dashboard gross figures alone as a tax return or final accounting export.
+- MoMo and refunds are records, not verified gateway transactions; a completed
+  MoMo reversal must be verified in the provider account by finance.
+- Cash refunds now automatically create a uniquely linked drawer outflow on the
+  shift that hands the cash back (which may be a later shift than the sale).
+  Manual payouts are for non-refund cash only and cannot be re-pointed at refunds.
+- The dashboard separates gross collections, refunds, and net collections by
+  transaction date, and reports legacy refunds with unknown tender as such.
+  Item/category charts remain gross bill analysis, and the CSV is a reconciliation
+  ledger for review — neither is a certified tax return or accounting-software
+  import. Finance still reconciles against the provider statement and cash count.
 - No automatic cross-branch owner view or legacy ownership conversion is supplied.
 
 If these manual controls are unacceptable, stop the pilot and implement the

@@ -1,4 +1,5 @@
 /** Synthetic one-register shift. This does not certify payment networks/printers. */
+import { randomUUID } from "node:crypto";
 import assert from "node:assert/strict";
 import { Pool } from "pg";
 const admin = new Pool({ connectionString: process.env.TEST_ADMIN_URL });
@@ -8,6 +9,10 @@ function check(actual: unknown, expected: unknown, label: string) {
   assert.deepEqual(actual, expected, label); checks++; console.log(`PASS pilot: ${label}`);
 }
 async function api(path: string, body?: unknown) {
+  if (path.endsWith("/refund") && body && typeof body === "object") {
+    const value = body as Record<string, unknown>;
+    body = { cashAmount: value.amount, momoAmount: "0.00", idempotencyKey: randomUUID(), ...value };
+  }
   const response = await fetch(`http://127.0.0.1:3100/api/${path}`, {
     method: body === undefined ? "GET" : "POST",
     headers: { "Content-Type": "application/json", Cookie: cookie },
@@ -34,9 +39,7 @@ async function main() {
   await api(`orders/${takeaway.id}/refund`, { amount: "2.00", managerPin: "1111", reason: "Pilot partial refund" });
   await api(`orders/${takeaway.id}/refund`, { amount: "8.00", managerPin: "1111", reason: "Pilot final refund", returnStock: true });
   check(Number((await admin.query("SELECT sum(amount) AS total FROM refunds WHERE order_id=$1", [takeaway.id])).rows[0].total), 10, "partial + final refunds total collected amount");
-  // Money was physically returned in cash: explicitly record the drawer outflow.
-  // Refund API is a financial ledger, not an automatic cash dispenser.
-  await api("shifts", { action: "cash_payout", shiftId: shift.id, amount: "10.00", reason: `Refund for order ${takeaway.id}` });
+  check((await admin.query("SELECT count(*)::int AS count FROM drawer_movements WHERE shift_id=$1 AND kind='refund'", [shift.id])).rows[0].count, 2, "both cash refunds automatically create linked drawer outflows");
   await api("shifts", { action: "cash_payout", shiftId: shift.id, amount: "3.00", reason: "Pilot petty cash" });
   const state = (await api("shifts")).activeShift;
   check(state.totalSales, "30.00", "gross tender recorded");

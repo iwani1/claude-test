@@ -244,6 +244,7 @@ export const ShiftCashDrawer: React.FC<{ currentUser: any }> = ({ currentUser })
               </div>
             </div>
 
+            <p className="text-xs text-neutral-400">Cash refunds included in outflows: GH₵{Number(activeShift.cashRefunds || 0).toFixed(2)}. Refunds are recorded automatically; use manual payouts only for other cash outflows.</p>
             {/* Metrics Breakdown Grid */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
               <div className="bg-neutral-850 p-3 rounded-xl border border-neutral-800 text-xs">
@@ -275,7 +276,7 @@ export const ShiftCashDrawer: React.FC<{ currentUser: any }> = ({ currentUser })
 
               <div className="bg-neutral-850 p-3 rounded-xl border border-neutral-800 text-xs">
                 <span className="text-neutral-400 block text-[10px] uppercase font-semibold">
-                  Cash Drops & Payouts
+                  Total Cash Outflows
                 </span>
                 <span className="text-rose-400 font-mono font-bold text-sm">
                   -GH₵{payouts.toFixed(2)}
@@ -431,7 +432,7 @@ export const ShiftCashDrawer: React.FC<{ currentUser: any }> = ({ currentUser })
           >
             <h3 className="text-base font-bold text-white flex items-center gap-2">
               <ArrowDownRight className="w-5 h-5 text-rose-400" />
-              <span>Record Cash Drop / Payout</span>
+              <span>Record Non-refund Cash Payout</span>
             </h3>
 
             <div className="space-y-3 text-xs">
@@ -502,7 +503,7 @@ export const ShiftCashDrawer: React.FC<{ currentUser: any }> = ({ currentUser })
                 <span className="font-mono text-emerald-400">+GH₵{cashSales.toFixed(2)}</span>
               </div>
               <div className="flex justify-between text-neutral-400">
-                <span>Total Cash Payouts:</span>
+                <span>Total Cash Outflows (incl. refunds):</span>
                 <span className="font-mono text-rose-400">-GH₵{payouts.toFixed(2)}</span>
               </div>
               <div className="pt-2 border-t border-neutral-750 flex justify-between font-bold text-white text-sm">

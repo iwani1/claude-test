@@ -2,13 +2,17 @@ import assert from "node:assert/strict";
 import { Pool } from "pg";
 import { readFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
-import { createHmac } from "node:crypto";
+import { createHmac, randomUUID } from "node:crypto";
 import { createToken, verifyToken } from "../src/lib/auth";
 const base = "http://127.0.0.1:3100";
 const admin = new Pool({ connectionString: process.env.TEST_ADMIN_URL });
 let checks = 0;
 function check(condition: unknown, message: string) { assert.ok(condition, message); checks++; console.log(`PASS ${message}`); }
 async function request(path: string, method = "GET", body?: unknown, cookie = "", headers: Record<string,string> = {}) {
+  if (path.endsWith("/refund") && method === "POST" && body && typeof body === "object") {
+    const value = body as Record<string, unknown>;
+    body = { cashAmount: value.amount, momoAmount: "0.00", idempotencyKey: randomUUID(), ...value };
+  }
   const response = await fetch(base + path, { method, headers: { "Content-Type": "application/json", ...(cookie ? { Cookie: cookie } : {}), ...headers }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
   const result = await response.json();
   return { status: response.status, body: result, cookie: response.headers.get("set-cookie")?.split(";")[0] || "", headers: response.headers };
@@ -41,6 +45,7 @@ async function main() {
     }
   }
   const owner = await login(1), manager = await login(2), cashier = await login(3), accountant = await login(4), other = await login(7), otherOwner = await login(8), otherTenant = await login(9);
+  check((await request("/api/shifts", "POST", { action: "open_shift", openingCash: "100.00" }, owner)).status === 200, "security fixture opens register");
   check((await request("/api/auth/login", "POST", { email: "user6@test.invalid", password: "Test-password-only-123!" })).status === 401, "kitchen account cannot log in");
   check((await request("/api/reports", "GET", undefined, cashier)).status === 403, "cashier cannot read reports");
   check((await request("/api/orders", "POST", order("accountant-denied"), accountant)).status === 403, "accountant cannot create sales");
@@ -77,7 +82,7 @@ async function main() {
   check((await admin.query("SELECT payment_status FROM orders WHERE id=$1", [id])).rows[0].payment_status === "partially_refunded", "partial refund preserves distinct state");
   // Change recipe after sale: restoration must use original ledger.
   await admin.query("UPDATE recipe_ingredients SET quantity=9 WHERE recipe_id=1");
-  const refund = await Promise.all([1,2].map(() => request(`/api/orders/${id}/refund`, "POST", { amount: "6", reason: "Remaining", managerPin: "2222", returnStock: true }, cashier)));
+  const refund = await Promise.all([1,2].map(() => request(`/api/orders/${id}/refund`, "POST", { amount: "6", cashAmount: "0.00", momoAmount: "6.00", reason: "Remaining", managerPin: "2222", returnStock: true }, cashier)));
   check(refund.filter(r => r.status === 200).length === 1 && refund.filter(r => r.status === 409).length === 1, "concurrent final refunds cannot over-refund");
   check(Number((await admin.query("SELECT current_stock FROM ingredients WHERE id=1")).rows[0].current_stock) === 100, "stock restored once using original deduction, not changed recipe");
   await admin.query("UPDATE recipe_ingredients SET quantity=2 WHERE recipe_id=1");
@@ -92,6 +97,7 @@ async function main() {
   const faultOrder = await request("/api/orders", "POST", order("refund-fault-order"), cashier);
   const faultId = faultOrder.body.order.id;
   await request(`/api/orders/${faultId}/pay`, "POST", { paymentMethod: "cash", amount: "10" }, cashier);
+  const beforeFaultPayouts = (await admin.query("SELECT cash_payouts FROM shifts WHERE branch_id=1 AND status='open'")).rows[0].cash_payouts;
   const beforeFaultStock = (await admin.query("SELECT current_stock FROM ingredients WHERE id=1")).rows[0].current_stock;
   await admin.query(`CREATE FUNCTION test_refund_fault() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.action = 'order_refunded' THEN RAISE EXCEPTION 'Injected late audit failure'; END IF; RETURN NEW; END $$; CREATE TRIGGER test_refund_fault BEFORE INSERT ON audit_logs FOR EACH ROW EXECUTE FUNCTION test_refund_fault();`);
   const fault = await request(`/api/orders/${faultId}/refund`, "POST", { amount: "10", reason: "Failure injection", managerPin: "2222", returnStock: true }, cashier);
@@ -99,6 +105,8 @@ async function main() {
   check((await admin.query("SELECT id FROM refunds WHERE order_id=$1", [faultId])).rowCount === 0, "failed refund rolls back refund ledger");
   check((await admin.query("SELECT payment_status FROM orders WHERE id=$1", [faultId])).rows[0].payment_status === "paid", "failed refund rolls back order state");
   check((await admin.query("SELECT current_stock FROM ingredients WHERE id=1")).rows[0].current_stock === beforeFaultStock, "failed refund rolls back stock restoration");
+  check((await admin.query("SELECT cash_payouts FROM shifts WHERE branch_id=1 AND status='open'")).rows[0].cash_payouts === beforeFaultPayouts, "failed refund rolls back drawer aggregate");
+  check((await admin.query("SELECT dm.id FROM drawer_movements dm JOIN refunds r ON r.id=dm.refund_id WHERE r.order_id=$1", [faultId])).rowCount === 0, "failed refund leaves no drawer movement");
   await admin.query("DROP TRIGGER test_refund_fault ON audit_logs; DROP FUNCTION test_refund_fault()");
   const branchWrites = await Promise.all([
     request("/api/orders", "POST", order("branch-one-parallel"), cashier),
@@ -124,6 +132,9 @@ async function main() {
   check(limited === 429, "login throttling persists across failed request rollbacks");
   const runtime = new Pool({ connectionString: process.env.DATABASE_URL });
   try { check((await runtime.query("SELECT * FROM orders")).rowCount === 0, "runtime DB connection without request scope sees no orders"); } finally { await runtime.end(); }
+  const shift = (await request("/api/shifts", "GET", undefined, owner)).body.activeShift;
+  const expected = Number(shift.openingCash) + Number(shift.totalCashSales) - Number(shift.cashPayouts);
+  check((await request("/api/shifts", "POST", { action: "close_shift", shiftId: shift.id, actualClosingCash: expected.toFixed(2) }, owner)).status === 200, "security fixture closes register");
   console.log(`\n${checks} security checks passed against disposable PostgreSQL.`);
 }
 main().catch(error => { console.error(error); process.exitCode = 1; }).finally(() => admin.end());

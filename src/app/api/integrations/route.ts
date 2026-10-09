@@ -1,4 +1,5 @@
-import { secureRoute } from "@/lib/api";
+import { collectionEvents, reportWindow } from "@/lib/collection-report";
+import { secureRoute, ApiError } from "@/lib/api";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { orders } from "@/db/schema";
@@ -16,7 +17,7 @@ async function handlePOST(req: Request) {
     const guard = await requirePermission("canViewReports", "POST /api/integrations");
     if (!guard.ok) return guard.response;
 
-    const { action, format } = await req.json();
+    const { action, format, timeframe = "all" } = await req.json();
 
     // No payment gateway is connected: staff record Cash / MoMo themselves.
     // Never answer with a made-up "approved" transaction.
@@ -41,25 +42,22 @@ async function handlePOST(req: Request) {
         return NextResponse.json({ error: "Format must be quickbooks or xero." }, { status: 400 });
       }
 
-      const orderList = await db.select().from(orders).orderBy(desc(orders.createdAt)).limit(1000);
-      const headers = ["TransactionID", "Date", "Description", "GrossAmount(GHS)", "GRA_VAT(GHS)", "Discount(GHS)", "PaymentStatus", "AccountCode"];
-      const rows = orderList.map((o) => [
-        o.orderNumber,
-        new Date(o.createdAt).toISOString().split("T")[0],
-        `Asanka Royal Restaurant Sale - ${o.customerName} (${o.orderType})`,
-        o.totalAmount,
-        o.taxAmount,
-        o.discountAmount,
-        o.paymentStatus,
-        format === "xero" ? "200 - Food & Beverage Revenue" : "4000 - Restaurant Sales GH",
+      const window = reportWindow(timeframe);
+      const events = await collectionEvents(window);
+      const headers = ["EventID", "EventDateUTC", "OrderID", "ShiftID", "Kind", "GrossCollectionGHS", "RefundGHS", "NetCollectionGHS", "CashPortionGHS", "MoMoPortionGHS", "OtherOrUnallocatedGHS"];
+      const rows = events.map(e => [
+        `${e.kind}-${e.id}`, new Date(String(e.created_at)).toISOString(), e.order_id, e.shift_id ?? "",
+        e.kind, e.kind === "payment" ? e.amount : "0.00", e.kind === "refund" ? e.amount : "0.00",
+        (Number(e.amount) * (e.kind === "refund" ? -1 : 1)).toFixed(2), e.cash, e.momo, e.unallocated,
       ]);
       const csvContent = [headers, ...rows].map((r) => r.map(csvCell).join(",")).join("\r\n");
 
-      return NextResponse.json({ success: true, format, csvContent, recordCount: rows.length });
+      return NextResponse.json({ success: true, format, csvContent, recordCount: rows.length, timeframe, exportType: "collection-reconciliation", note: "Reconciliation ledger, not a certified QuickBooks/Xero import or tax return. Refund amounts are positive; net collection events carry the sign." });
     }
 
     return NextResponse.json({ error: "Unsupported action." }, { status: 400 });
   } catch (err) {
+    if (err instanceof ApiError) throw err;
     console.error("Integration request failed:", err);
     return NextResponse.json({ error: "Request failed." }, { status: 500 });
   }

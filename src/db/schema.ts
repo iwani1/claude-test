@@ -374,6 +374,7 @@ export const payments = pgTable("payments", {
   id: serial("id").primaryKey(),
   branchId: integer("branch_id").notNull().default(sql`nullif(current_setting('app.branch_id', true), '')::integer`),
   orderId: integer("order_id").notNull(),
+  shiftId: integer("shift_id"),
   amount: numeric("amount", { precision: 10, scale: 2 }).notNull(),
   paymentMethod: text("payment_method").notNull(), // 'cash' | 'card' | 'stripe' | 'other'
   referenceNumber: text("reference_number"),
@@ -390,6 +391,11 @@ export const refunds = pgTable("refunds", {
   branchId: integer("branch_id").notNull().default(sql`nullif(current_setting('app.branch_id', true), '')::integer`),
   orderId: integer("order_id").notNull(),
   paymentId: integer("payment_id"),
+  cashAmount: numeric("cash_amount", { precision: 10, scale: 2 }),
+  momoAmount: numeric("momo_amount", { precision: 10, scale: 2 }),
+  shiftId: integer("shift_id"),
+  idempotencyKey: text("idempotency_key"),
+  requestFingerprint: text("request_fingerprint"),
   amount: numeric("amount", { precision: 10, scale: 2 }).notNull(),
   reason: text("reason").notNull(),
   authorizedBy: integer("authorized_by").notNull(),
@@ -420,4 +426,17 @@ export const applicationSettings = pgTable("application_settings", {
   value: text("value").notNull(),
   description: text("description"),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// Positive drawer outflows; refund links are unique and enforced in SQL migration.
+export const drawerMovements = pgTable("drawer_movements", {
+  id: serial("id").primaryKey(),
+  branchId: integer("branch_id").notNull().default(sql`nullif(current_setting('app.branch_id', true), '')::integer`),
+  shiftId: integer("shift_id").notNull(),
+  refundId: integer("refund_id"),
+  kind: text("kind").notNull(),
+  amount: numeric("amount", { precision: 10, scale: 2 }).notNull(),
+  reason: text("reason").notNull(),
+  createdBy: integer("created_by").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
 });

@@ -71,8 +71,10 @@ failed-batch rollback, session expiry/revocation, role changes and throttling.
 
 - Rehearse a site-specific migration for any populated legacy installation;
   fresh-schema migrations do not guess ownership for old global tables.
-- Reconcile manual refunds/disbursements with drawer payouts and accounting.
-  The application does not execute financial-network transactions.
+- Cash refunds are automatically recorded as uniquely linked drawer outflows;
+  finance must still reconcile actual cash handed back and MoMo reversals
+  against the provider statement and drawer count. The application does not
+  execute financial-network transactions.
 - Complete browser/device acceptance tests (thermal printing, receipt layout,
   offline queue recovery). Automated API tests do not certify hardware behavior.
 - UI lint findings have been fixed without disabling the rules. Lint with zero
@@ -87,9 +89,12 @@ failed-batch rollback, session expiry/revocation, role changes and throttling.
 
 - Production Next build: passed (Next 16.4.0).
 - TypeScript check: passed, including generated Next route types.
-- Production HTTP regression suite: **105 checks passed** against disposable
-  PostgreSQL, plus offline-storage isolation/retention assertions and **12 synthetic
-  shift reconciliation checks**.
+- Production HTTP regression suite: **110 checks passed** against disposable
+  PostgreSQL, plus offline-storage isolation/retention assertions, **13 synthetic
+  shift reconciliation checks**, and **30 accounting checks** (refund tender
+  allocation, retry idempotency, linked drawer movements, refund of old sales
+  against the current shift, closed-shift immutability, refund/close races, legacy
+  unallocated refunds, and event-date collection reporting).
 - Injected late audit failure verified rollback of refund ledger, order state,
   and restored stock together.
 - Production dependency audit: **0 vulnerabilities** at verification time.

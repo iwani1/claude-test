@@ -1,13 +1,15 @@
-import { secureRoute } from "@/lib/api";
+import { secureRoute, ApiError } from "@/lib/api";
+import { moneyCents } from "@/lib/money";
 import { NextResponse } from "next/server";
 import { db, requestContext } from "@/db";
-import { shifts, users, auditLogs } from "@/db/schema";
+import { shifts, users, auditLogs, drawerMovements } from "@/db/schema";
 import { requireSession } from "@/lib/guard";
 import { eq, desc } from "drizzle-orm";
 
 async function handleGET() {
   try {
     const allShifts = await db.select().from(shifts).orderBy(desc(shifts.openedAt)).limit(20);
+    const movements = await db.select().from(drawerMovements);
     const allUsers = await db.select().from(users);
 
     const activeShift = allShifts.find((s) => s.status === "open") || null;
@@ -17,6 +19,7 @@ async function handleGET() {
       const reconciler = s.reconciledBy ? allUsers.find((usr) => usr.id === s.reconciledBy) : null;
       return {
         ...s,
+        cashRefunds: (movements.filter(m => m.shiftId === s.id && m.kind === "refund").reduce((sum, m) => sum + moneyCents(m.amount), 0) / 100).toFixed(2),
         userName: u?.name || "Unknown",
         reconciledByName: reconciler?.name,
       };
@@ -25,13 +28,15 @@ async function handleGET() {
     return NextResponse.json({
       activeShift: activeShift
         ? {
-            ...activeShift,
+            ...enrichedShifts.find(s => s.id === activeShift.id),
             userName: allUsers.find((u) => u.id === activeShift.userId)?.name,
           }
         : null,
       history: enrichedShifts,
+      drawerMovements: movements,
     });
   } catch (err: any) {
+    if (err instanceof ApiError) throw err;
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
@@ -61,7 +66,7 @@ async function handlePOST(req: Request) {
         .values({
           branchId: requestContext.getStore()!.user!.branchId,
           userId: Number(userId || 1),
-          openingCash: String(openingCash || "200.00"),
+          openingCash: (moneyCents(openingCash, true) / 100).toFixed(2),
           totalSales: "0.00",
           totalCashSales: "0.00",
           totalCardSales: "0.00",
@@ -85,12 +90,17 @@ async function handlePOST(req: Request) {
     if (action === "cash_payout") {
       const { shiftId, amount, reason } = body;
       const userId = sessionUserId;
-      const [shift] = await db.select().from(shifts).where(eq(shifts.id, Number(shiftId))).limit(1);
+      const [shift] = await db.select().from(shifts).where(eq(shifts.id, Number(shiftId))).limit(1).for("update");
       if (!shift) {
         return NextResponse.json({ error: "Shift not found" }, { status: 404 });
       }
 
-      const newPayouts = Number(shift.cashPayouts || 0) + Number(amount);
+      if (shift.status !== "open") throw new ApiError(409, "Shift is closed");
+      if (body.refundId !== undefined || body.kind === "refund") throw new ApiError(400, "Use the refund endpoint; linked cash outflows are recorded automatically");
+      const payout = moneyCents(amount);
+      if (typeof reason !== "string" || !reason.trim() || reason.length > 500) throw new ApiError(400, "Payout reason required");
+      const newPayouts = (moneyCents(shift.cashPayouts || "0", true) + payout) / 100;
+      await db.insert(drawerMovements).values({ shiftId: shift.id, kind: "payout", amount: (payout / 100).toFixed(2), reason: reason.trim(), createdBy: sessionUserId });
       const [updated] = await db
         .update(shifts)
         .set({ cashPayouts: newPayouts.toFixed(2) })
@@ -111,25 +121,26 @@ async function handlePOST(req: Request) {
     if (action === "close_shift") {
       const { shiftId, actualClosingCash, notes } = body;
       const reconciledBy = sessionUserId;
-      const [shift] = await db.select().from(shifts).where(eq(shifts.id, Number(shiftId))).limit(1);
+      const [shift] = await db.select().from(shifts).where(eq(shifts.id, Number(shiftId))).limit(1).for("update");
       if (!shift) {
         return NextResponse.json({ error: "Shift not found" }, { status: 404 });
       }
 
-      const opening = Number(shift.openingCash);
-      const cashSales = Number(shift.totalCashSales || 0);
-      const payouts = Number(shift.cashPayouts || 0);
+      if (shift.status !== "open") throw new ApiError(409, "Shift is already closed");
+      const opening = moneyCents(shift.openingCash, true);
+      const cashSales = moneyCents(shift.totalCashSales || "0", true);
+      const payouts = moneyCents(shift.cashPayouts || "0", true);
       const expectedCash = opening + cashSales - payouts;
-      const counted = Number(actualClosingCash || 0);
+      const counted = moneyCents(actualClosingCash, true);
       const diff = counted - expectedCash;
 
       const [closedShift] = await db
         .update(shifts)
         .set({
           closedAt: new Date(),
-          expectedClosingCash: expectedCash.toFixed(2),
-          actualClosingCash: counted.toFixed(2),
-          cashDifference: diff.toFixed(2),
+          expectedClosingCash: (expectedCash / 100).toFixed(2),
+          actualClosingCash: (counted / 100).toFixed(2),
+          cashDifference: (diff / 100).toFixed(2),
           status: "closed",
           notes: notes || "Shift closed and reconciled",
           reconciledBy: Number(reconciledBy || 1),
@@ -143,10 +154,10 @@ async function handlePOST(req: Request) {
         action: "shift_closed",
         entityType: "shift",
         entityId: String(shift.id),
-        details: `Closed shift. Counted: $${counted.toFixed(2)}, Expected: $${expectedCash.toFixed(2)}, Diff: ${diff >= 0 ? "+" : ""}$${diff.toFixed(2)}`,
+        details: `Closed shift. Counted: $${(counted / 100).toFixed(2)}, Expected: $${(expectedCash / 100).toFixed(2)}, Diff: ${diff >= 0 ? "+" : ""}$${(diff / 100).toFixed(2)}`,
       });
 
-      return NextResponse.json({ success: true, shift: closedShift, difference: diff.toFixed(2) });
+      return NextResponse.json({ success: true, shift: closedShift, difference: (diff / 100).toFixed(2) });
     }
 
     if (action === "open_drawer") {
@@ -154,7 +165,7 @@ async function handlePOST(req: Request) {
       const [shift] = shiftId
         ? await db.select().from(shifts).where(eq(shifts.id, Number(shiftId))).limit(1)
         : await db.select().from(shifts).where(eq(shifts.status, "open")).limit(1);
-      if (!shift) {
+      if (!shift || shift.status !== "open") {
         return NextResponse.json({ error: "No open shift — open the register first" }, { status: 400 });
       }
 
@@ -167,11 +178,12 @@ async function handlePOST(req: Request) {
         details: `Cash drawer opened (no sale) by ${guard.user.name}. Reason: ${reason || "Manual open"}`,
       });
 
-      return NextResponse.json({ success: true, message: "Drawer open signal sent" });
+      return NextResponse.json({ success: true, message: "Drawer-open request logged. Open the physical drawer using your local hardware controls." });
     }
 
     return NextResponse.json({ error: "Invalid action" }, { status: 400 });
   } catch (err: any) {
+    if (err instanceof ApiError) throw err;
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }

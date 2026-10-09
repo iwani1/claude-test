@@ -42,6 +42,7 @@ async function main() {
     });
     await run("node_modules/.bin/tsx", ["tests/security.ts"]);
     await run("node_modules/.bin/tsx", ["tests/pilot.ts"]);
+    await run("node_modules/.bin/tsx", ["tests/accounting.ts"]);
   } finally {
     if (app && app.exitCode === null) {
       app.kill("SIGTERM");
