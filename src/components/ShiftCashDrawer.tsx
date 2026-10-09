@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   Coins,
   DollarSign,
@@ -34,20 +34,17 @@ export const ShiftCashDrawer: React.FC<{ currentUser: any }> = ({ currentUser })
   const [payoutReason, setPayoutReason] = useState("");
   const [drawerMessage, setDrawerMessage] = useState<string | null>(null);
 
-  const fetchShifts = async () => {
-    try {
-      const res = await fetch("/api/shifts");
-      const data = await res.json();
+  const fetchShifts = useCallback(() => fetch("/api/shifts")
+    .then(res => { if (!res.ok) throw new Error("Request failed"); return res.json(); })
+    .then(data => {
       setActiveShift(data.activeShift);
       setShiftHistory(data.history || []);
-    } catch (e) {
-      console.error(e);
-    }
-  };
+
+    }).catch(console.error), []);
 
   useEffect(() => {
     fetchShifts();
-  }, []);
+  }, [fetchShifts]);
 
   const handleOpenShift = async (e: React.FormEvent) => {
     e.preventDefault();

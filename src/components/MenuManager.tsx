@@ -1,4 +1,5 @@
 "use client";
+import Image from "next/image";
 
 import React, { useState } from "react";
 import {
@@ -120,7 +121,7 @@ export const MenuManager: React.FC<MenuManagerProps> = ({
             <span>Menu Catalog & Dish Offerings</span>
           </h2>
           <p className="text-xs text-neutral-400 mt-0.5">
-            Manage restaurant food items, stations, modifier links, and 86'd availability
+            Manage restaurant food items, stations, modifier links, and 86&apos;d availability
           </p>
         </div>
 
@@ -196,7 +197,7 @@ export const MenuManager: React.FC<MenuManagerProps> = ({
               {filtered.map((item) => (
                 <tr key={item.id} className="hover:bg-neutral-850/50">
                   <td className="px-4 py-2.5 flex items-center gap-3">
-                    <img
+                    <Image unoptimized width={40} height={40}
                       src={item.imageUrl || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=100"}
                       alt={item.name}
                       className="w-10 h-10 rounded-lg object-cover bg-neutral-800 shrink-0"
@@ -232,7 +233,7 @@ export const MenuManager: React.FC<MenuManagerProps> = ({
                           : "bg-rose-500/20 text-rose-300"
                       }`}
                     >
-                      {item.isAvailable ? "In Stock" : "86'd Out"}
+                      {item.isAvailable ? "In Stock" : "86&apos;d Out"}
                     </button>
                   </td>
                   <td className="px-4 py-2.5 text-right">

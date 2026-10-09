@@ -13,7 +13,9 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      - run: python3 scripts/package-release.py --check
       - run: npm ci
+      - run: npm run lint -- --max-warnings=0
       - run: npm run typecheck
       - run: npm run test:security
       - run: npm audit --omit=dev

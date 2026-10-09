@@ -139,7 +139,7 @@ export const KitchenTicketModal: React.FC<KitchenTicketModalProps> = ({
             <div className="flex justify-between">
               <span>TIME IN:</span>
               <span className="font-bold">
-                {new Date(order.createdAt || Date.now()).toLocaleTimeString([], {
+                {new Date(order.createdAt || 0).toLocaleTimeString([], {
                   hour: "2-digit",
                   minute: "2-digit",
                 })}

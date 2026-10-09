@@ -75,8 +75,8 @@ failed-batch rollback, session expiry/revocation, role changes and throttling.
   The application does not execute financial-network transactions.
 - Complete browser/device acceptance tests (thermal printing, receipt layout,
   offline queue recovery). Automated API tests do not certify hardware behavior.
-- The inherited UI has ESLint findings (effect/state patterns and JSX text).
-  They are not suppressed by this change; lint is a separate outstanding cleanup.
+- UI lint findings have been fixed without disabling the rules. Lint with zero
+  warnings is now enforced in CI. See docs/PILOT_RUNBOOK.md for on-site gates.
 - `npm audit --omit=dev` is clean after updating Next/PostCSS. Development tooling
   still has transitive advisories; do not expose development/tooling servers
   publicly. Review those upgrades separately rather than force-downgrading Next.
@@ -88,15 +88,19 @@ failed-batch rollback, session expiry/revocation, role changes and throttling.
 - Production Next build: passed (Next 16.4.0).
 - TypeScript check: passed, including generated Next route types.
 - Production HTTP regression suite: **105 checks passed** against disposable
-  PostgreSQL, plus offline-storage isolation/retention assertions.
+  PostgreSQL, plus offline-storage isolation/retention assertions and **12 synthetic
+  shift reconciliation checks**.
 - Injected late audit failure verified rollback of refund ledger, order state,
   and restored stock together.
 - Production dependency audit: **0 vulnerabilities** at verification time.
-- Full ESLint run: **20 errors and 4 warnings** remain in inherited UI code;
-  these have not been suppressed or represented as passing.
+- Full ESLint run: **0 errors and 0 warnings** after the release-check cleanup.
 
 Offline caches/queues are now branch-keyed. Old unscoped browser queues are not
 silently imported; reconcile/export any pending legacy entries before cutover.
 The client submits batches of at most 50 and retains entries added while a sync
 request is in flight. These storage tests use a mocked browser storage API;
 real-device/offline acceptance remains necessary.
+
+Release preparation: see [pilot runbook](docs/PILOT_RUNBOOK.md) and
+[dependency advisory review](docs/DEPENDENCY_REVIEW.md). The synthetic shift
+suite is part of the security test command, not a replacement for on-site acceptance.

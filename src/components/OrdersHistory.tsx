@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   Receipt,
   Search,
@@ -39,21 +39,18 @@ export const OrdersHistory: React.FC<{ currentUser: any }> = ({ currentUser }) =
   const [docketOrder, setDocketOrder] = useState<any | null>(null);
   const [showDocketModal, setShowDocketModal] = useState(false);
 
-  const fetchOrders = async () => {
-    try {
-      const res = await fetch("/api/orders?limit=100");
-      const data = await res.json();
+  const fetchOrders = useCallback(() => fetch("/api/orders?limit=100")
+    .then(res => { if (!res.ok) throw new Error("Request failed"); return res.json(); })
+    .then(data => {
       if (data.orders) {
         setOrders(data.orders);
       }
-    } catch (e) {
-      console.error(e);
-    }
-  };
+
+    }).catch(console.error), []);
 
   useEffect(() => {
     fetchOrders();
-  }, []);
+  }, [fetchOrders]);
 
   const handleProcessRefund = async (e: React.FormEvent) => {
     e.preventDefault();

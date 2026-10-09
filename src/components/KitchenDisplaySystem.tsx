@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   ChefHat,
   Flame,
@@ -20,7 +20,7 @@ export const KitchenDisplaySystem: React.FC = () => {
   const [stationFilter, setStationFilter] = useState<string>("all");
   const [isLoading, setIsLoading] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
-  const [currentTime, setCurrentTime] = useState(Date.now());
+  const [currentTime, setCurrentTime] = useState(() => Date.now());
 
   // Reprinting a docket: the kitchen has no screen, so a lost or damaged
   // paper ticket must be re-printed by front-of-house.
@@ -28,17 +28,14 @@ export const KitchenDisplaySystem: React.FC = () => {
   const [showReprintModal, setShowReprintModal] = useState(false);
 
   // Polling every 5 seconds
-  const fetchTickets = async () => {
-    try {
-      const res = await fetch(`/api/kds?station=${stationFilter}`);
-      const data = await res.json();
+  const fetchTickets = useCallback(() => fetch(`/api/kds?station=${stationFilter}`)
+    .then(res => { if (!res.ok) throw new Error("Request failed"); return res.json(); })
+    .then(data => {
       if (data.tickets) {
         setTickets(data.tickets);
       }
-    } catch (e) {
-      console.error("KDS fetch error:", e);
-    }
-  };
+
+    }).catch(console.error), [stationFilter]);
 
   useEffect(() => {
     fetchTickets();
@@ -47,7 +44,7 @@ export const KitchenDisplaySystem: React.FC = () => {
       setCurrentTime(Date.now());
     }, 5000);
     return () => clearInterval(interval);
-  }, [stationFilter]);
+  }, [fetchTickets]);
 
   const updateTicketStatus = async (ticketId: number, status: "preparing" | "ready" | "completed") => {
     try {

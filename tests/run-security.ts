@@ -41,6 +41,7 @@ async function main() {
       app!.stderr!.on("data", data => { if (process.env.TEST_VERBOSE) process.stderr.write(data); });
     });
     await run("node_modules/.bin/tsx", ["tests/security.ts"]);
+    await run("node_modules/.bin/tsx", ["tests/pilot.ts"]);
   } finally {
     if (app && app.exitCode === null) {
       app.kill("SIGTERM");

@@ -102,7 +102,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
             <span>{order.orderType === "room_service" ? "ROOM SERVICE" : order.orderType?.toUpperCase()}</span>
           </div>
           <div className="flex justify-between text-neutral-700">
-            <span>Date: {new Date(order.createdAt || Date.now()).toLocaleString()}</span>
+            <span>Date: {new Date(order.createdAt || 0).toLocaleString()}</span>
             {order.tableId && <span>Table: #{order.tableNumber || order.tableId}</span>}
             {order.roomNumber && <span>Room: {order.roomNumber}</span>}
           </div>

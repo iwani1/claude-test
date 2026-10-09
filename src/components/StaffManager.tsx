@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   Users2,
   Plus,
@@ -30,21 +30,18 @@ export const StaffManager: React.FC = () => {
   const [error, setError] = useState("");
   const [phone, setPhone] = useState("");
 
-  const fetchStaff = async () => {
-    try {
-      const res = await fetch("/api/staff");
-      const data = await res.json();
+  const fetchStaff = useCallback(() => fetch("/api/staff")
+    .then(res => { if (!res.ok) throw new Error("Request failed"); return res.json(); })
+    .then(data => {
       if (data.staff) {
         setStaff(data.staff);
       }
-    } catch (e) {
-      console.error(e);
-    }
-  };
+
+    }).catch(console.error), []);
 
   useEffect(() => {
     fetchStaff();
-  }, []);
+  }, [fetchStaff]);
 
   const handleAddEmployee = async (e: React.FormEvent) => {
     e.preventDefault();

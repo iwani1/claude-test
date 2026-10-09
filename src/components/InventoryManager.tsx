@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   Boxes,
   AlertTriangle,
@@ -46,24 +46,21 @@ export const InventoryManager: React.FC = () => {
   const [auditItems, setAuditItems] = useState<Record<number, string>>({});
   const [auditNotes, setAuditNotes] = useState("");
 
-  const fetchInventory = async () => {
-    try {
-      const res = await fetch("/api/inventory");
-      const data = await res.json();
+  const fetchInventory = useCallback(() => fetch("/api/inventory")
+    .then(res => { if (!res.ok) throw new Error("Request failed"); return res.json(); })
+    .then(data => {
       if (data.ingredients) {
         setIngredients(data.ingredients);
         setMovements(data.movements || []);
         setTotalValuation(data.totalValuation || "0.00");
         setLowStockCount(data.lowStockCount || 0);
       }
-    } catch (e) {
-      console.error(e);
-    }
-  };
+
+    }).catch(console.error), []);
 
   useEffect(() => {
     fetchInventory();
-  }, []);
+  }, [fetchInventory]);
 
   const handleAdjustStock = async (e: React.FormEvent) => {
     e.preventDefault();

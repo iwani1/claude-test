@@ -53,36 +53,26 @@ export default function App() {
 
   /** Loads all operational data the shell needs. Falls back to the cached
    *  menu snapshot when the network is unavailable (offline PWA mode). */
-  const fetchOperationalData = useCallback(async () => {
-    if (!currentBranchId) return;
-    try {
-      const menuRes = await fetch("/api/menu");
-      const menuData = await menuRes.json();
+  const fetchOperationalData = useCallback(() => {
+    if (!currentBranchId) return Promise.resolve();
+    return Promise.all(["menu", "tables", "shifts", "inventory"].map(path =>
+      fetch(`/api/${path}`).then(async res => {
+        // A role may use the shell without permission to access every widget.
+        if (res.status === 403) return {};
+        if (!res.ok) throw new Error("Operational data unavailable");
+        return res.json();
+      })
+    )).then(([menuData, tablesData, shiftsData, invData]) => {
       if (menuData.categories && menuData.items) {
-        setCategories(menuData.categories);
-        setMenuItems(menuData.items);
+        setCategories(menuData.categories); setMenuItems(menuData.items);
         saveMenuToCache(menuData, currentBranchId);
       }
-
-      const tablesRes = await fetch("/api/tables");
-      const tablesData = await tablesRes.json();
-      if (tablesData.areas) setAreas(tablesData.areas);
-      if (tablesData.tables) setTables(tablesData.tables);
-
-      const shiftsRes = await fetch("/api/shifts");
-      const shiftsData = await shiftsRes.json();
-      setOpenShift(shiftsData.activeShift || null);
-
-      const invRes = await fetch("/api/inventory");
-      const invData = await invRes.json();
-      if (invData.lowStockCount !== undefined) setLowStockCount(invData.lowStockCount);
-    } catch {
+      setAreas(tablesData.areas || []); setTables(tablesData.tables || []);
+      setOpenShift(shiftsData.activeShift || null); setLowStockCount(invData.lowStockCount || 0);
+    }).catch(() => {
       const cached = getCachedMenu(currentBranchId);
-      if (cached) {
-        setCategories(cached.categories || []);
-        setMenuItems(cached.items || []);
-      }
-    }
+      if (cached) { setCategories(cached.categories || []); setMenuItems(cached.items || []); }
+    });
   }, [currentBranchId]);
 
   /** Verify the signed session cookie on mount. */
@@ -219,15 +209,13 @@ export default function App() {
         return <OwnerDashboard onNavigate={setActiveTab} openShift={openShift} />;
       case "pos":
         return (
-          <PosTerminal
-            key={`pos-${posResetKey}`}
+          <PosTerminal key={`${currentUser.id}:${posResetKey}`}
             categories={categories}
             menuItems={menuItems}
             tables={tables}
             currentUser={currentUser}
             activeTableId={activeTableId}
             onOrderCreated={fetchOperationalData}
-            resetKey={posResetKey}
             onOpenDrawer={handleOpenDrawer}
             onGoTables={handleGoTables}
             onGoOrders={handleGoOrders}

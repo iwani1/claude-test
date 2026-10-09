@@ -38,7 +38,7 @@ async function main() {
     process.env.AUTH_SECRET = randomBytes(48).toString("hex");
     const { seedSecurityFixtures } = await import("../tests/security-fixtures");
     await seedSecurityFixtures(admin);
-    const env = { ...process.env,
+    const env: NodeJS.ProcessEnv = { ...process.env,
       DATABASE_URL: `postgresql://pos_preview_runtime:${password}@127.0.0.1:${port}/pos_preview`,
       NODE_ENV: "development", PIN_LOGIN_BRANCH_ID: "", MIGRATION_DATABASE_URL: "", TEST_ADMIN_URL: "",
     };

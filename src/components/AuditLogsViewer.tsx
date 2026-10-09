@@ -1,25 +1,22 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { FileText, Search, Shield, RefreshCw } from "lucide-react";
 
 export const AuditLogsViewer: React.FC = () => {
   const [logs, setLogs] = useState<any[]>([]);
   const [search, setSearch] = useState("");
 
-  const fetchLogs = async () => {
-    try {
-      const res = await fetch("/api/audit-logs?limit=100");
-      const data = await res.json();
+  const fetchLogs = useCallback(() => fetch("/api/audit-logs?limit=100")
+    .then(res => { if (!res.ok) throw new Error("Request failed"); return res.json(); })
+    .then(data => {
       if (data.logs) setLogs(data.logs);
-    } catch (e) {
-      console.error(e);
-    }
-  };
+
+    }).catch(console.error), []);
 
   useEffect(() => {
     fetchLogs();
-  }, []);
+  }, [fetchLogs]);
 
   const filteredLogs = logs.filter(
     (l) =>

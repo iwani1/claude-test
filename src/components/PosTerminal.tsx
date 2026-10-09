@@ -1,4 +1,5 @@
 "use client";
+import Image from "next/image";
 
 import React, { useState, useMemo, useEffect } from "react";
 import {
@@ -32,7 +33,6 @@ interface PosTerminalProps {
   currentUser: any;
   onOrderCreated?: () => void;
   activeTableId?: number | null;
-  resetKey?: number;
   onOpenDrawer?: () => void;
   onGoTables?: () => void;
   onGoOrders?: () => void;
@@ -45,7 +45,6 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
   currentUser,
   onOrderCreated,
   activeTableId = null,
-  resetKey = 0,
   onOpenDrawer,
   onGoTables,
   onGoOrders,
@@ -97,11 +96,12 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
   const [compReason, setCompReason] = useState("Complimentary breakfast — room guest");
   const [showCompModal, setShowCompModal] = useState(false);
 
-  // Keep local table selection in sync when opened from the floor plan,
-  // and clear the ticket when the global "New Order" button is tapped.
-  useEffect(() => {
+  // Adjust local table selection only when the parent selection changes.
+  const [previousTableId, setPreviousTableId] = useState(activeTableId);
+  if (previousTableId !== activeTableId) {
+    setPreviousTableId(activeTableId);
     setSelectedTableId(activeTableId ?? null);
-  }, [activeTableId]);
+  }
 
   // Load the live room charge + VAT so the till never shows a stale amount
   // after management changes the charge in Settings.
@@ -126,23 +126,6 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
       cancelled = true;
     };
   }, []);
-
-  useEffect(() => {
-    if (resetKey > 0) {
-      setCart([]);
-      setDiscountPercent(0);
-      setDiscountAmount(0);
-      setDiscountReason("");
-      setTipAmount(0);
-      setOrderNotes("");
-      setIsComplimentary(false);
-      setCustomerName("Walk-in Guest");
-      setCustomerPhone("");
-      setRoomNumber("");
-      setSelectedTableId(activeTableId ?? null);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [resetKey]);
 
   // Post-payment receipt modal
   const [lastCompletedOrder, setLastCompletedOrder] = useState<any | null>(null);
@@ -673,7 +656,7 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
                   {/* Photo with badges */}
                   <div className="relative w-full h-32 rounded-xl overflow-hidden bg-neutral-800 mb-3">
                     {item.imageUrl ? (
-                      <img
+                      <Image unoptimized width={400} height={300}
                         src={item.imageUrl}
                         alt={item.name}
                         className="w-full h-full object-cover group-hover:scale-105 transition duration-300"

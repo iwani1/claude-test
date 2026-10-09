@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   BarChart3,
   Calendar,
@@ -20,24 +20,18 @@ import {
 export const ReportsDashboard: React.FC = () => {
   const [timeframe, setTimeframe] = useState<"today" | "7days" | "30days" | "all">("all");
   const [data, setData] = useState<any | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const fetchReports = async () => {
-    setIsLoading(true);
-    try {
-      const res = await fetch(`/api/reports?timeframe=${timeframe}`);
-      const json = await res.json();
+  const fetchReports = useCallback(() => fetch(`/api/reports?timeframe=${timeframe}`)
+    .then(res => { if (!res.ok) throw new Error("Request failed"); return res.json(); })
+    .then(json => {
       setData(json);
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+
+    }).catch(console.error).finally(() => setIsLoading(false)), [timeframe]);
 
   useEffect(() => {
     fetchReports();
-  }, [timeframe]);
+  }, [fetchReports]);
 
   const handleExportCSV = async (format: "quickbooks" | "xero") => {
     try {

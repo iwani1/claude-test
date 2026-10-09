@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   Truck,
   Plus,
@@ -45,30 +45,20 @@ export const PurchasingManager: React.FC = () => {
   const [supPhone, setSupPhone] = useState("");
   const [supTerms, setSupTerms] = useState("Net 30");
 
-  const fetchData = async () => {
-    try {
-      const [poRes, supRes, ingRes] = await Promise.all([
-        fetch("/api/purchasing/orders"),
-        fetch("/api/purchasing/suppliers"),
-        fetch("/api/inventory"),
-      ]);
-      const [poData, supData, ingData] = await Promise.all([
-        poRes.json(),
-        supRes.json(),
-        ingRes.json(),
-      ]);
-
-      if (poData.purchaseOrders) setPurchaseOrders(poData.purchaseOrders);
-      if (supData.suppliers) setSuppliers(supData.suppliers);
-      if (ingData.ingredients) setIngredients(ingData.ingredients);
-    } catch (e) {
-      console.error(e);
-    }
-  };
+  const fetchData = useCallback(() => Promise.all([
+    fetch("/api/purchasing/orders"), fetch("/api/purchasing/suppliers"), fetch("/api/inventory"),
+  ]).then(responses => Promise.all(responses.map(res => {
+    if (!res.ok) throw new Error("Purchasing data unavailable");
+    return res.json();
+  }))).then(([poData, supData, ingData]) => {
+    if (poData.purchaseOrders) setPurchaseOrders(poData.purchaseOrders);
+    if (supData.suppliers) setSuppliers(supData.suppliers);
+    if (ingData.ingredients) setIngredients(ingData.ingredients);
+  }).catch(console.error), []);
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [fetchData]);
 
   const addPoItemRow = () => {
     setPoItems([...poItems, { ingredientId: "", quantity: "10", unitPrice: "5.00", unit: "pcs" }]);

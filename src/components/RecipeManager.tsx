@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   Scroll,
   Plus,
@@ -28,23 +28,20 @@ export const RecipeManager: React.FC = () => {
     { ingredientId: number | ""; quantity: string; unit: string }[]
   >([{ ingredientId: "", quantity: "1", unit: "pcs" }]);
 
-  const fetchRecipes = async () => {
-    try {
-      const res = await fetch("/api/inventory/recipes");
-      const data = await res.json();
+  const fetchRecipes = useCallback(() => fetch("/api/inventory/recipes")
+    .then(res => { if (!res.ok) throw new Error("Request failed"); return res.json(); })
+    .then(data => {
       if (data.recipes) {
         setRecipes(data.recipes);
         setMenuItems(data.menuItems || []);
         setAllIngredients(data.allIngredients || []);
       }
-    } catch (e) {
-      console.error(e);
-    }
-  };
+
+    }).catch(console.error), []);
 
   useEffect(() => {
     fetchRecipes();
-  }, []);
+  }, [fetchRecipes]);
 
   const addIngRow = () => {
     setRecipeIngRows([...recipeIngRows, { ingredientId: "", quantity: "1", unit: "pcs" }]);
@@ -201,7 +198,7 @@ export const RecipeManager: React.FC = () => {
 
                   {rec.prepInstructions && (
                     <div className="p-2 bg-neutral-850/60 rounded-lg text-[11px] text-neutral-400 italic">
-                      "{rec.prepInstructions}"
+                      &quot;{rec.prepInstructions}&quot;
                     </div>
                   )}
                 </div>

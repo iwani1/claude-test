@@ -1,4 +1,5 @@
 "use client";
+import { useOnlineStatus, useOfflineQueueCount } from "@/lib/use-terminal-status";
 
 import React, { useState, useEffect } from "react";
 import {
@@ -46,40 +47,18 @@ export const Navbar: React.FC<NavbarProps> = ({
   onGoOrders,
   currentTab,
 }) => {
-  const [isOnline, setIsOnline] = useState(true);
-  const [offlineCount, setOfflineCount] = useState(0);
+  const isOnline = useOnlineStatus();
+  const offlineCount = useOfflineQueueCount(currentUser.branchId);
   const [isSyncing, setIsSyncing] = useState(false);
   const [showRoleDropdown, setShowRoleDropdown] = useState(false);
   const [showPinModal, setShowPinModal] = useState(false);
   const [pinInput, setPinInput] = useState("");
   const [pinError, setPinError] = useState("");
 
-  useEffect(() => {
-    const handleOnline = () => setIsOnline(true);
-    const handleOffline = () => setIsOnline(false);
-
-    window.addEventListener("online", handleOnline);
-    window.addEventListener("offline", handleOffline);
-    setIsOnline(navigator.onLine);
-
-    const checkQueue = () => {
-      setOfflineCount(getOfflineQueue(currentUser.branchId).length);
-    };
-    checkQueue();
-    const interval = setInterval(checkQueue, 4000);
-
-    return () => {
-      window.removeEventListener("online", handleOnline);
-      window.removeEventListener("offline", handleOffline);
-      clearInterval(interval);
-    };
-  }, [currentUser.branchId]);
-
   const handleManualSync = async () => {
     setIsSyncing(true);
     const res = await syncOfflineQueueToServer(currentUser.branchId);
     setIsSyncing(false);
-    setOfflineCount(getOfflineQueue(currentUser.branchId).length);
     if (res.success && res.count > 0) {
       alert(`Successfully synchronized ${res.count} offline orders to the server!`);
     }

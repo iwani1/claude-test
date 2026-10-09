@@ -92,7 +92,7 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ onNavigate, open
         <div className="flex items-center gap-2 text-xs">
           <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-neutral-800 border border-neutral-700 text-neutral-300">
             <Clock className="w-3.5 h-3.5 text-amber-400" />
-            <span>Today's Live Metrics</span>
+            <span>Today&apos;s Live Metrics</span>
           </span>
         </div>
       </div>
