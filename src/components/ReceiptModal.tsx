@@ -43,10 +43,12 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
   const taxableBase = Math.max(0, subtotal - (isComp ? 0 : discount)) + (isComp ? 0 : roomCharge);
   const taxRate = taxableBase > 0 ? Number(((tax / taxableBase) * 100).toFixed(2)) : 0;
 
-  const restName = restaurantInfo?.name || "ASANKA ROYAL BISTRO & LOUNGE";
-  const restAddress = restaurantInfo?.address || "14 Senchi St, Airport Residential Area, Accra";
-  const restPhone = restaurantInfo?.phone || "+233 30 278 9011";
-  const restTaxNo = restaurantInfo?.taxNumber || "GRA-TIN-C002849102X";
+  const restName = restaurantInfo?.name || "LUSH VIEW HOTEL";
+  const restAddress = restaurantInfo?.address || "";
+  const restPhone = restaurantInfo?.phone || "";
+  const restTaxNo = restaurantInfo?.taxNumber || "";
+  const receiptHeader = restaurantInfo?.receiptHeader || restName;
+  const receiptFooter = restaurantInfo?.receiptFooter || "Thank you for visiting Lush View Hotel";
   const currency = restaurantInfo?.currencySymbol || "GH₵";
 
   return (
@@ -69,12 +71,12 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
         {/* Printable Receipt Body */}
         <div className="p-6 font-mono text-xs leading-relaxed bg-neutral-50 border-y border-neutral-200 print:border-none print:p-0 print:bg-white">
           <div className="text-center mb-4">
-            <h2 className="text-base font-bold tracking-wider uppercase text-neutral-900">
-              {restName}
+            <h2 className="text-base font-bold tracking-wider uppercase text-neutral-900 whitespace-pre-line">
+              {receiptHeader}
             </h2>
-            <p className="text-neutral-600 mt-0.5">{restAddress}</p>
-            <p className="text-neutral-600">Tel: {restPhone}</p>
-            <p className="text-neutral-500 text-[11px] mt-1">GRA TIN: {restTaxNo}</p>
+            {restAddress && <p className="text-neutral-600 mt-0.5">{restAddress}</p>}
+            {restPhone && <p className="text-neutral-600">Tel: {restPhone}</p>}
+            {restTaxNo && <p className="text-neutral-500 text-[11px] mt-1">GRA TIN: {restTaxNo}</p>}
             <p className="text-[10px] text-neutral-500 font-bold uppercase">
               {isComp ? "Complimentary — No Charge" : "Official VAT Invoice"}
             </p>
@@ -107,7 +109,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
             {order.roomNumber && <span>Room: {order.roomNumber}</span>}
           </div>
           <div className="flex justify-between text-neutral-700">
-            <span>Cashier: Akosua S.</span>
+            {(order.cashierName || order.userName) && <span>Cashier: {order.cashierName || order.userName}</span>}
             <span>Guest: {order.customerName || "Walk-in"}</span>
           </div>
 
@@ -273,15 +275,13 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
 
           {/* Barcode & Ghanaian Welcome Footer */}
           <div className="text-center space-y-1 text-neutral-600 text-[11px]">
-            <p className="font-bold">*** AKWAABA - MEDAASE PA ARA! ***</p>
-            <p>High-Speed Guest Wi-Fi</p>
-            <p>SSID: AsankaGuest | Pass: jollofmaster</p>
+            <p className="font-bold whitespace-pre-line">{receiptFooter}</p>
             <div className="py-2 flex justify-center">
               <div className="bg-neutral-900 text-white font-mono text-[9px] px-3 py-1 tracking-widest rounded-xs">
                 *{order.orderNumber}*
               </div>
             </div>
-            <p className="text-[10px] text-neutral-400">Powered by Asanka Royal Cloud POS</p>
+            <p className="text-[10px] text-neutral-400">Powered by Lush View Hotel POS</p>
           </div>
         </div>
 

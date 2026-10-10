@@ -221,8 +221,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {!isCollapsed ? (
         <div className="p-3.5 border-t border-neutral-800 bg-neutral-950/60 space-y-1">
           <div className="flex items-center justify-between text-[11px]">
-            <span className="font-medium text-neutral-400">Asanka Royal POS</span>
-            <span className="text-emerald-400 font-semibold">GH₵ · 15% VAT</span>
+            <span className="font-medium text-neutral-400">Lush View POS</span>
+            <span className="text-emerald-400 font-semibold">GH₵ · GHS</span>
           </div>
           <div className="text-[10px] text-neutral-600">v2.5.0 · Touch Terminal Build</div>
         </div>

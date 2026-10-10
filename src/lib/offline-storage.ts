@@ -1,5 +1,7 @@
 "use client";
 
+// Legacy key names are kept so terminals upgraded mid-service never lose
+// already-queued offline orders; the prefix is internal only.
 const OFFLINE_QUEUE_KEY = "bistro_pos_offline_orders_queue";
 const MENU_CACHE_KEY = "bistro_pos_cached_menu";
 function scopedKey(key: string, branchId: number): string {

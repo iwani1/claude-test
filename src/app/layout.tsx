@@ -3,8 +3,8 @@ import type { ReactNode } from "react";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Asanka Royal Bistro & Lounge | Ghanaian Restaurant POS & Inventory ERP",
-  description: "Touchscreen-optimized Ghanaian restaurant point-of-sale, Jollof & Waakye kitchen display (KDS), Mobile Money (MoMo) payments, and ingredient recipe inventory control.",
+  title: "Lush View Hotel | Restaurant, Bar & Hospitality POS",
+  description: "Touchscreen POS for restaurant, bar and room-service operations: Cash and MoMo payments, kitchen dockets, and recipe-linked ingredient inventory control.",
   manifest: "/manifest.json",
   icons: {
     icon: "/favicon.ico",

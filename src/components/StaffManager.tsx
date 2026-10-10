@@ -291,7 +291,7 @@ export const StaffManager: React.FC = () => {
                 <input
                   type="email"
                   required
-                  placeholder="kmensah@asankaroyal.com"
+                  placeholder="name@lushviewhotel.net"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="w-full bg-neutral-800 border border-neutral-700 rounded-xl px-3 py-2 text-white"

@@ -579,7 +579,7 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
             <Search className="w-4 h-4 text-neutral-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
-              placeholder="Search Jollof, Waakye, Tilapia, Banku..."
+              placeholder="Search menu items, dishes, drinks..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-9 pr-4 py-2 bg-neutral-800 border border-neutral-700 rounded-xl text-sm text-white placeholder-neutral-400 focus:outline-none focus:border-amber-500"
@@ -1228,7 +1228,7 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
                   type="text"
                   value={discountReason}
                   onChange={(e) => setDiscountReason(e.target.value)}
-                  placeholder="e.g. VIP Akwaaba Promo, Staff Discount"
+                  placeholder="e.g. Guest Discount, Staff Discount"
                   className="w-full bg-neutral-800 border border-neutral-700 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-amber-500"
                 />
               </div>

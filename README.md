@@ -19,6 +19,9 @@ npm run build
 npm start
 ```
 
+Branding (name, logo, titles, export filenames) lives in `src/lib/brand.ts`
+and `public/logo.svg`; receipt business details are managed in Restaurant Settings.
+
 No MySQL support. No default owner password/PIN. Existing populated databases
 need a reviewed ownership conversion before cutover. Cash/MoMo are manual tender
 records, not payment gateway integrations.

@@ -5,19 +5,19 @@ import { Sliders, Save, CheckCircle2, Building, DollarSign, Smartphone } from "l
 
 export const RestaurantSettings: React.FC = () => {
   const [restaurant, setRestaurant] = useState<any>({
-    name: "Asanka Royal Bistro & Lounge",
-    phone: "+233 30 278 9011",
-    email: "info@asankaroyal.com",
-    address: "14 Senchi Street, Airport Residential Area, Accra, Ghana",
-    taxNumber: "GRA-TIN-C002849102X",
+    name: "Lush View Hotel",
+    phone: "",
+    email: "",
+    address: "",
+    taxNumber: "",
     currency: "GHS",
     currencySymbol: "GH₵",
-    defaultTaxRate: "15.00",
+    defaultTaxRate: "0.00",
     defaultServiceCharge: "0.00",
-    receiptHeader: "ASANKA ROYAL BISTRO & LOUNGE\nAuthentic Ghanaian Cuisine & Chop Bar Experience",
-    receiptFooter: "Akwaaba! Medaase for dining with us.\nGRA VAT Invoice | MoMo: 055 892 4410",
+    receiptHeader: "LUSH VIEW HOTEL\nRestaurant · Bar · Room Service",
+    receiptFooter: "Thank you for visiting Lush View Hotel",
   });
-  const [momoNumber, setMomoNumber] = useState("0558924410");
+  const [momoNumber, setMomoNumber] = useState("");
   const [isSaved, setIsSaved] = useState(false);
 
   // Room-service charge — the fee added when hotel food is delivered to and

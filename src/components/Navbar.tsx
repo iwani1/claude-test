@@ -118,10 +118,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <span className="font-bold text-[15px] tracking-tight text-neutral-100 truncate">
-                Asanka Royal Bistro &amp; Lounge
-              </span>
-              <span className="hidden xl:inline-block px-2 py-0.5 text-[11px] font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/30 rounded-full shrink-0">
-                Airport Residential
+                Lush View Hotel
               </span>
             </div>
             <div className="flex items-center gap-1.5 text-[12px] text-neutral-400">

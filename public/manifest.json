@@ -1,21 +1,16 @@
 {
-  "name": "Bistro Gusto Restaurant POS",
-  "short_name": "BistroPOS",
-  "description": "Cloud Restaurant Point of Sale, KDS, & Inventory Management",
+  "name": "Lush View Hotel POS",
+  "short_name": "LushViewPOS",
+  "description": "Restaurant, bar and room-service POS with inventory control",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#09090b",
-  "theme_color": "#f59e0b",
+  "theme_color": "#047857",
   "icons": [
     {
-      "src": "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=192&auto=format&fit=crop&q=80",
-      "sizes": "192x192",
-      "type": "image/png"
-    },
-    {
-      "src": "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=512&auto=format&fit=crop&q=80",
-      "sizes": "512x512",
-      "type": "image/png"
+      "src": "/logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
     }
   ]
 }

@@ -16,7 +16,7 @@ export const IntegrationsManager: React.FC = () => {
         body: JSON.stringify({
           action: "test_thermal_printer",
           printerIp,
-          testText: "Asanka Royal Kitchen Ticket & Docket Test\nCutter: PASS\nFeed: PASS\n",
+          testText: "Lush View Hotel Kitchen Ticket & Docket Test\nCutter: PASS\nFeed: PASS\n",
         }),
       });
       const data = await res.json();
@@ -41,7 +41,7 @@ export const IntegrationsManager: React.FC = () => {
         const url = URL.createObjectURL(blob);
         const link = document.createElement("a");
         link.href = url;
-        link.setAttribute("download", `asanka_sales_journal_${format}_${Date.now()}.csv`);
+        link.setAttribute("download", `lushview_hotel_sales_journal_${format}_${Date.now()}.csv`);
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -106,11 +106,11 @@ export const IntegrationsManager: React.FC = () => {
               <div className="grid grid-cols-2 gap-2 text-[11px]">
                 <div className="p-2 bg-neutral-900 rounded-lg">
                   <span className="text-neutral-500 block">MTN MoMo / Merchant</span>
-                  <span className="font-mono text-white font-bold">055 892 4410</span>
+                  <span className="font-mono text-white font-bold">Configure in Settings</span>
                 </div>
                 <div className="p-2 bg-neutral-900 rounded-lg">
                   <span className="text-neutral-500 block">GhQR Universal Code</span>
-                  <span className="font-mono text-white font-bold">ASANKA-ACC-001</span>
+                  <span className="font-mono text-white font-bold">Configure in Settings</span>
                 </div>
               </div>
             </div>

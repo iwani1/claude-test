@@ -223,7 +223,7 @@ export const KitchenTicketModal: React.FC<KitchenTicketModalProps> = ({
             <div>Started cooking: ____________</div>
             <div>Completed &amp; plated: ____________</div>
             <div className="pt-1 text-[10px]">
-              Printed {new Date().toLocaleTimeString()} • Asanka Royal Bistro
+              Printed {new Date().toLocaleTimeString()} • Lush View Hotel
             </div>
           </div>
         </div>
