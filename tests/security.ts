@@ -55,6 +55,16 @@ async function main() {
   check((await request("/api/staff", "POST", { action: "create_employee", name: "Escalation", email: "escalate@test.invalid", role: "super_admin", password: "Long-enough-password" }, manager)).status === 403, "manager cannot create owner");
   check((await request("/api/staff", "POST", { action: "update_pin", userId: 1, pin: "9876" }, manager)).status === 403, "manager cannot change owner PIN");
   check((await request("/api/staff", "POST", { action: "create_employee", name: "No password", email: "nopass@test.invalid", role: "cashier" }, owner)).status === 400, "no default staff password");
+  const pwStaff = await request("/api/staff", "POST", { action: "create_employee", name: "Password Test", email: "pwtest@test.invalid", role: "cashier", password: "Initial-password-123!" }, owner);
+  check(pwStaff.status === 200, "owner creates employee for password reset");
+  const pwLogin = await request("/api/auth/login", "POST", { email: "pwtest@test.invalid", password: "Initial-password-123!" });
+  check(pwLogin.status === 200, "password test employee can log in");
+  check((await request("/api/staff", "POST", { action: "reset_password", userId: pwStaff.body.employee.id, password: "short" }, owner)).status === 400, "password reset rejects short password");
+  check((await request("/api/staff", "POST", { action: "reset_password", userId: 1, password: "Manager-cannot-reset-123!" }, manager)).status === 403, "manager cannot reset owner password");
+  check((await request("/api/staff", "POST", { action: "reset_password", userId: pwStaff.body.employee.id, password: "Rotated-password-123!" }, owner)).status === 200, "owner resets staff password");
+  check((await request("/api/auth/me", "GET", undefined, pwLogin.cookie)).status === 401, "password reset revokes existing sessions");
+  check((await request("/api/auth/login", "POST", { email: "pwtest@test.invalid", password: "Rotated-password-123!" })).status === 200, "login works with rotated password");
+  check((await request("/api/auth/login", "POST", { email: "pwtest@test.invalid", password: "Initial-password-123!" })).status >= 400, "old password rejected after reset");
   const menu = await request("/api/menu", "GET", undefined, other);
   check(menu.body.items.length === 1 && menu.body.items[0].id === 2, "menu isolated between branches of same restaurant");
   const tenantMenu = await request("/api/menu", "GET", undefined, otherTenant);

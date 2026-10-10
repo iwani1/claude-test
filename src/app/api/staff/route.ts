@@ -22,7 +22,7 @@ export const POST = secureRoute(async req => {
     [employee] = await db.insert(users).values({ restaurantId: actor.restaurantId, branchId: actor.branchId, name: name.trim(), email: email.trim().toLowerCase(),
       passwordHash: hashPassword(password), pin: pin ? hashPassword(pin) : null, pinLookup: pin ? pinDigest(pin) : null,
       role: role as UserRole, phone: typeof phone === "string" ? phone : null }).returning(fields);
-  } else if (["toggle_active", "update_pin"].includes(action)) {
+  } else if (["toggle_active", "update_pin", "reset_password"].includes(action)) {
     const [target] = await db.select().from(users).where(eq(users.id, Number(body.userId))).for("update");
     if (!target) throw new ApiError(404, "Employee not found");
     if (actor.role !== "super_admin" && ["super_admin", "manager"].includes(target.role)) throw new ApiError(403, "Only owners may modify privileged staff");
@@ -30,9 +30,13 @@ export const POST = secureRoute(async req => {
       if (typeof body.isActive !== "boolean") throw new ApiError(400, "isActive must be a boolean");
       if (target.id === actor.id && !body.isActive) throw new ApiError(400, "Cannot deactivate your own account");
       [employee] = await db.update(users).set({ isActive: body.isActive, sessionVersion: sql`${users.sessionVersion} + 1` }).where(eq(users.id, target.id)).returning(fields);
-    } else {
+    } else if (action === "update_pin") {
       if (typeof body.pin !== "string" || !/^\d{4,8}$/.test(body.pin)) throw new ApiError(400, "PIN must contain 4–8 digits");
       [employee] = await db.update(users).set({ pin: hashPassword(body.pin), pinLookup: pinDigest(body.pin), sessionVersion: sql`${users.sessionVersion} + 1` }).where(eq(users.id, target.id)).returning(fields);
+    } else {
+      // Password reset (self or managed account) always revokes existing sessions.
+      if (typeof body.password !== "string" || body.password.length < 12 || body.password.length > 256) throw new ApiError(400, "Password must be 12–256 characters");
+      [employee] = await db.update(users).set({ passwordHash: hashPassword(body.password), sessionVersion: sql`${users.sessionVersion} + 1` }).where(eq(users.id, target.id)).returning(fields);
     }
   } else throw new ApiError(400, "Invalid action");
   await db.insert(auditLogs).values({ userId: actor.id, userName: actor.name, action, entityType: "user", entityId: String(employee.id) });

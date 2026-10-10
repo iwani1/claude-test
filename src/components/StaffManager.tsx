@@ -6,6 +6,7 @@ import {
   Plus,
   ShieldCheck,
   KeyRound,
+  Lock,
   CheckCircle2,
   XCircle,
   Phone,
@@ -19,6 +20,8 @@ export const StaffManager: React.FC = () => {
   const [staff, setStaff] = useState<any[]>([]);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showPinModal, setShowPinModal] = useState<any | null>(null);
+  const [showPasswordModal, setShowPasswordModal] = useState<any | null>(null);
+  const [newPassword, setNewPassword] = useState("");
   const [newPin, setNewPin] = useState("");
 
   // New staff form
@@ -93,6 +96,26 @@ export const StaffManager: React.FC = () => {
         setNewPin("");
         fetchStaff();
       } else { setError(data.error || "Staff update failed"); }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!showPasswordModal || !newPassword) return;
+    try {
+      const res = await fetch("/api/staff", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "reset_password", userId: showPasswordModal.id, password: newPassword }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setShowPasswordModal(null);
+        setNewPassword("");
+        alert(`${showPasswordModal.name}'s password was changed. All existing sessions for this account are now signed out.`);
+      } else { setError(data.error || "Password reset failed"); }
     } catch (e) {
       console.error(e);
     }
@@ -231,16 +254,28 @@ export const StaffManager: React.FC = () => {
                 </div>
 
                 <div className="mt-4 pt-3 border-t border-neutral-800 flex justify-between items-center text-xs">
-                  <button
-                    onClick={() => {
-                      setShowPinModal(u);
-                      setNewPin("");
-                    }}
-                    className="text-amber-400 hover:text-amber-300 font-semibold flex items-center gap-1"
-                  >
-                    <KeyRound className="w-3.5 h-3.5" />
-                    <span>Change PIN</span>
-                  </button>
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => {
+                        setShowPinModal(u);
+                        setNewPin("");
+                      }}
+                      className="text-amber-400 hover:text-amber-300 font-semibold flex items-center gap-1"
+                    >
+                      <KeyRound className="w-3.5 h-3.5" />
+                      <span>Change PIN</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowPasswordModal(u);
+                        setNewPassword("");
+                      }}
+                      className="text-amber-400 hover:text-amber-300 font-semibold flex items-center gap-1"
+                    >
+                      <Lock className="w-3.5 h-3.5" />
+                      <span>Reset Password</span>
+                    </button>
+                  </div>
 
                   <button
                     onClick={() => handleToggleActive(u.id, u.isActive)}
@@ -357,6 +392,49 @@ export const StaffManager: React.FC = () => {
                 className="px-4 py-1.5 text-xs font-semibold bg-amber-500 text-black rounded-lg"
               >
                 Save Employee
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* MODAL: Reset Password */}
+      {showPasswordModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4">
+          <form
+            onSubmit={handleResetPassword}
+            className="bg-neutral-900 border border-neutral-700 rounded-2xl p-6 w-full max-w-xs shadow-2xl space-y-4"
+          >
+            <div className="flex justify-between items-center">
+              <h3 className="text-sm font-bold text-white">Reset Password</h3>
+              <button type="button" onClick={() => setShowPasswordModal(null)} className="text-neutral-400 hover:text-white">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <p className="text-xs text-neutral-400">
+              Setting a new password for {showPasswordModal.name}. Every existing
+              session for this account is signed out immediately.
+            </p>
+            <div>
+              <input
+                type="password"
+                minLength={12}
+                maxLength={256}
+                required
+                autoFocus
+                autoComplete="new-password"
+                placeholder="New password (12+ characters)"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                className="w-full py-2 px-3 bg-neutral-800 border border-neutral-700 rounded-xl text-white text-sm focus:outline-none focus:border-amber-500"
+              />
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <button type="button" onClick={() => setShowPasswordModal(null)} className="px-3 py-1.5 text-xs text-neutral-400 hover:text-white">
+                Cancel
+              </button>
+              <button type="submit" className="px-4 py-1.5 text-xs font-semibold bg-amber-500 text-black rounded-lg">
+                Reset Password
               </button>
             </div>
           </form>
