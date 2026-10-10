@@ -43,7 +43,15 @@ async function main() {
       NODE_ENV: "development", PIN_LOGIN_BRANCH_ID: "", MIGRATION_DATABASE_URL: "", TEST_ADMIN_URL: "",
     };
     console.log("Demo database ready. Owner: user1@test.invalid / Test-password-only-123!");
-    app = spawn("node_modules/.bin/next", ["dev", "--hostname", "0.0.0.0", "--port", "3000"], { env, stdio: "inherit" });
+    // PREVIEW_MODE=production serves the current `next build` output instead of
+    // the dev server (run `npm run build` first). Useful for print/hardware-path
+    // checks that must match a deployed production build.
+    const production = process.env.PREVIEW_MODE === "production";
+    if (production) {
+      Object.assign(env, { NODE_ENV: "production" });
+      console.log("Serving production build on http://localhost:3000");
+    }
+    app = spawn("node_modules/.bin/next", [production ? "start" : "dev", "--hostname", "0.0.0.0", "--port", "3000"], { env, stdio: "inherit" });
     const stop = () => { app?.kill("SIGTERM"); };
     process.once("SIGTERM", stop);
     process.once("SIGINT", stop);

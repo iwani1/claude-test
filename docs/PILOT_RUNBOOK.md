@@ -33,6 +33,23 @@ These are manual-tender simulations; no money moves and no paper prints.
       the new branch-keyed cache does not automatically import old global queues.
 - [ ] Confirm branch mappings, opening stock, prices, opening balances and staff roles.
 
+## Hardware-path software check (run before touching devices)
+
+`tests/hardware-preview.mjs` drives a real headless browser through the exact
+print/drawer flows: login → order → kitchen docket print → receipt print →
+drawer signal → printer test. It asserts the browser print dialog is invoked,
+print output is clean, and no screen overpromises hardware behavior.
+
+```sh
+npm i --no-save playwright-core @sparticuz/chromium
+TARGET_URL=https://pos.lushviewhotel.net POS_EMAIL=you@example.com \
+  POS_PASSWORD=... node tests/hardware-preview.mjs
+```
+
+Latest run (production build, 2026-10-10): **12/12 software-path checks passed**.
+That covers everything the software can guarantee. Only the items below need
+the physical devices.
+
 ## On-site acceptance — record evidence, not just checkmarks
 
 | Scenario | Expected evidence | Responsible party |
@@ -40,6 +57,8 @@ These are manual-tender simulations; no money moves and no paper prints.
 | Sign in / switch / logout | Correct branch and role; old copied session denied after logout | Site manager |
 | Dine-in order | Correct table, quantities, modifiers and total; paper docket delivered | Cashier + kitchen |
 | Thermal printing | Legible text, no clipped columns, correct paper width, one intended print | Operator |
+| Printer driver/OS | Correct thermal printer selected in the print dialog; cutter and paper feed work | Operator |
+| Drawer kick | Drawer pops automatically if printer-linked (or opens with manual key/latch) | Operator |
 | Cash payment | Tender/change correct; actual notes/coins agree with ledger | Cashier |
 | MoMo payment | Provider reference and confirmed receipt agree with manual POS entry | Cashier + finance |
 | Split tender | Cash and confirmed MoMo sum exactly to the bill | Cashier |

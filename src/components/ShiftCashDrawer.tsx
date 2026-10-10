@@ -113,7 +113,7 @@ export const ShiftCashDrawer: React.FC<{ currentUser: any }> = ({ currentUser })
       });
       const data = await res.json();
       if (data.success) {
-        setDrawerMessage("Drawer pop signal sent — the till drawer should now be open.");
+        setDrawerMessage(data.message || "Drawer-open request logged.");
         setTimeout(() => setDrawerMessage(null), 4000);
       } else {
         alert(data.error || "Could not open drawer");
