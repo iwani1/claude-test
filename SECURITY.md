@@ -68,6 +68,16 @@ concurrent order/payment/refund/offline operations, inventory restoration,
 failed-batch rollback, session expiry/revocation, role changes, password/PIN
 rotation with session revocation, and throttling.
 
+## Known residual gaps (explicit)
+
+- Background list loaders (inventory, purchasing, recipes lists) still refresh
+  quietly when a read request fails; every **user-initiated action** now reports
+  success/failure visibly, but a silent stale list during an API outage remains
+  possible on read-only screens.
+- `tests/e2e.mjs` is a legacy manual suite, not part of the CI gate.
+- Development-tool dependency advisories remain documented in
+  `docs/DEPENDENCY_REVIEW.md` pending owner acceptance.
+
 ## Remaining release work
 
 - Rehearse a site-specific migration for any populated legacy installation;
@@ -90,7 +100,7 @@ rotation with session revocation, and throttling.
 
 - Production Next build: passed (Next 16.4.0).
 - TypeScript check: passed, including generated Next route types.
-- Production HTTP regression suite: **128 checks passed** against disposable
+- Production HTTP regression suite: **129 checks passed** against disposable
   PostgreSQL, plus offline-storage isolation/retention assertions, **13 synthetic
   shift reconciliation checks**, and **30 accounting checks** (refund tender
   allocation, retry idempotency, linked drawer movements, refund of old sales

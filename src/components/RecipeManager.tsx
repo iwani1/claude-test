@@ -92,9 +92,12 @@ export const RecipeManager: React.FC = () => {
         setRecipeIngRows([{ ingredientId: "", quantity: "1", unit: "pcs" }]);
         setPrepInstructions("");
         fetchRecipes();
+      } else {
+        alert(data.error || "Recipe was not saved");
       }
     } catch (e) {
       console.error(e);
+      alert("Could not reach the server. Recipe was not saved.");
     }
   };
 

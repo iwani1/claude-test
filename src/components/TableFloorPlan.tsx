@@ -42,14 +42,20 @@ export const TableFloorPlan: React.FC<TableFloorPlanProps> = ({
 
   const handleUpdateStatus = async (tableId: number, status: string) => {
     try {
-      await fetch("/api/tables", {
+      const res = await fetch("/api/tables", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "update_status", tableId, status }),
       });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) {
+        alert(data.error || "Table status was not changed");
+        return;
+      }
       onRefresh();
     } catch (e) {
       console.error(e);
+      alert("Could not reach the server. Table status was not changed.");
     }
   };
 
@@ -96,9 +102,12 @@ export const TableFloorPlan: React.FC<TableFloorPlanProps> = ({
         setShowAddTableModal(false);
         setNewTableNumber("");
         onRefresh();
+      } else {
+        alert(data.error || "Table was not created");
       }
     } catch (e) {
       console.error(e);
+      alert("Could not reach the server. Table was not created.");
     }
   };
 

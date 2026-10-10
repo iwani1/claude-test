@@ -64,6 +64,8 @@ export const RestaurantSettings: React.FC = () => {
       if (data.success) {
         setIsSaved(true);
         setTimeout(() => setIsSaved(false), 3000);
+      } else {
+        alert(data.error || "Settings were not saved");
       }
     } catch {
       alert("Error saving settings");

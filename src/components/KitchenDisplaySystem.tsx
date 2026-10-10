@@ -56,9 +56,12 @@ export const KitchenDisplaySystem: React.FC = () => {
       const data = await res.json();
       if (data.success) {
         fetchTickets();
+      } else {
+        alert(data.error || "Ticket status was not changed");
       }
     } catch (e) {
       console.error(e);
+      alert("Could not reach the server. Ticket status was not changed.");
     }
   };
 

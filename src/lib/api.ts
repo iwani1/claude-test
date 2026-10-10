@@ -69,6 +69,27 @@ export function secureRoute(handler: Handler, permission: Permission | "session"
         if (err.response.status >= 500) return NextResponse.json({ error: "Request failed" }, { status: 500 });
         return err.response;
       }
+      // Database constraint rejections become clear 409/400 explanations,
+      // never anonymous 500s (Drizzle may wrap the driver error).
+      const driver: any = (err as any)?.code ? err : (err as any)?.cause?.code ? (err as any).cause : {};
+      const detail = String(driver.constraint || (err as any)?.message || (err as any)?.cause?.message || "");
+      if (driver.code === "23505" || /duplicate key/i.test(detail)) {
+        const label = /pin/i.test(detail) ? "That PIN is already used by another staff member in this branch. Choose a different PIN."
+          : /email/i.test(detail) ? "That email is already registered."
+          : /recipe/i.test(detail) ? "A recipe already exists for that dish."
+          : /order_number/i.test(detail) ? "Order numbering collided; please retry."
+          : /po_number/i.test(detail) ? "A purchase order with that number already exists."
+          : /grn_number/i.test(detail) ? "A goods receipt with that number already exists."
+          : /settings/i.test(detail) ? "That setting key is already in use."
+          : "That record already exists.";
+        return NextResponse.json({ error: label }, { status: 409 });
+      }
+      if (driver.code === "23503" || /foreign key/i.test(detail)) {
+        return NextResponse.json({ error: "A linked record is missing or belongs to another branch." }, { status: 409 });
+      }
+      if (driver.code === "23514" || /check constraint/i.test(detail)) {
+        return NextResponse.json({ error: "One of the values is not allowed." }, { status: 400 });
+      }
       if (err instanceof ApiError) return NextResponse.json({ error: err.message }, { status: err.status });
       if (err instanceof SyntaxError) return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
       console.error("API request failed", err);

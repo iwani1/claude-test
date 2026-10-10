@@ -92,6 +92,8 @@ export const ShiftCashDrawer: React.FC<{ currentUser: any }> = ({ currentUser })
         setPayoutAmount("");
         setPayoutReason("");
         fetchShifts();
+      } else {
+        alert(data.error || "Payout was not recorded");
       }
     } catch {
       alert("Error recording payout");
@@ -143,6 +145,8 @@ export const ShiftCashDrawer: React.FC<{ currentUser: any }> = ({ currentUser })
         setCountedCashInput("");
         setCloseNotes("");
         fetchShifts();
+      } else {
+        alert(data.error || "Shift was not closed");
       }
     } catch {
       alert("Error closing shift");

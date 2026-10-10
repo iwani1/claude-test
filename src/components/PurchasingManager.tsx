@@ -92,9 +92,12 @@ export const PurchasingManager: React.FC = () => {
         setPoItems([{ ingredientId: "", quantity: "10", unitPrice: "5.00", unit: "kg" }]);
         setPoNotes("");
         fetchData();
+      } else {
+        alert(data.error || "Purchase order was not created");
       }
     } catch (e) {
       console.error(e);
+      alert("Could not reach the server. Purchase order was not created.");
     }
   };
 
@@ -127,9 +130,12 @@ export const PurchasingManager: React.FC = () => {
         setShowGrnModal(null);
         setGrnInvoiceNo("");
         fetchData();
+      } else {
+        alert(data.error || "Goods receipt was not recorded");
       }
     } catch (e) {
       console.error(e);
+      alert("Could not reach the server. Goods were not received.");
     }
   };
 
@@ -155,9 +161,12 @@ export const PurchasingManager: React.FC = () => {
         setSupEmail("");
         setSupPhone("");
         fetchData();
+      } else {
+        alert(data.error || "Supplier was not saved");
       }
     } catch (e) {
       console.error(e);
+      alert("Could not reach the server. Supplier was not saved.");
     }
   };
 

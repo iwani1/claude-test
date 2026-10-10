@@ -137,7 +137,7 @@ export const StaffManager: React.FC<{ currentUser?: any }> = ({ currentUser }) =
 
   const handleToggleActive = async (userId: number, currentActive: boolean) => {
     try {
-      await fetch("/api/staff", {
+      const res = await fetch("/api/staff", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -146,9 +146,15 @@ export const StaffManager: React.FC<{ currentUser?: any }> = ({ currentUser }) =
           isActive: !currentActive,
         }),
       });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) {
+        alert(data.error || "Account status was not changed");
+        return;
+      }
       fetchStaff();
     } catch (e) {
       console.error(e);
+      alert("Could not reach the server. Account status was not changed.");
     }
   };
 

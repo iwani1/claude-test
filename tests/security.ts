@@ -81,6 +81,8 @@ async function main() {
   check(dup.status === 409 && /already used/i.test(dup.body.error), "duplicate branch PIN rejected with clear message");
   const dupCreate = await request("/api/staff", "POST", { action: "create_employee", name: "Dup PIN", email: "duppin@test.invalid", role: "cashier", password: "Dup-pin-password-123!", pin: "6677" }, owner);
   check(dupCreate.status === 409 && /already used/i.test(dupCreate.body.error), "employee creation rejects duplicate PIN with clear message");
+  const dupEmail = await request("/api/staff", "POST", { action: "create_employee", name: "Dup Email", email: "pintest@test.invalid", role: "cashier", password: "Dup-email-password-123!" }, owner);
+  check(dupEmail.status === 409 && /already registered/i.test(dupEmail.body.error), "duplicate email rejected with clear message");
   const pinPad = await request("/api/auth/login", "POST", { pin: "6677" });
   check(pinPad.status === 400 && /email and password/i.test(pinPad.body.error), "login-screen PIN pad explains email/password is required when PIN login is disabled");
   const menu = await request("/api/menu", "GET", undefined, other);

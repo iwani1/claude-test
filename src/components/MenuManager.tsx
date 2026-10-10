@@ -45,36 +45,37 @@ export const MenuManager: React.FC<MenuManagerProps> = ({
   const handleSaveItem = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      if (editingItem) {
-        // Update
-        await fetch(`/api/menu/${editingItem.id}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            name,
-            description,
-            price,
-            costPrice,
-            station,
-            imageUrl,
-          }),
-        });
-      } else {
-        // Create
-        await fetch("/api/menu", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            name,
-            description,
-            sku,
-            price,
-            costPrice,
-            categoryId,
-            station,
-            imageUrl,
-          }),
-        });
+      const res = editingItem
+        ? await fetch(`/api/menu/${editingItem.id}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              name,
+              description,
+              price,
+              costPrice,
+              station,
+              imageUrl,
+            }),
+          })
+        : await fetch("/api/menu", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              name,
+              description,
+              sku,
+              price,
+              costPrice,
+              categoryId,
+              station,
+              imageUrl,
+            }),
+          });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) {
+        alert(data.error || "Menu item was not saved");
+        return;
       }
 
       setShowAddModal(false);
@@ -86,19 +87,26 @@ export const MenuManager: React.FC<MenuManagerProps> = ({
       onRefresh();
     } catch (e) {
       console.error(e);
+      alert("Could not reach the server. Menu item was not saved.");
     }
   };
 
   const handleToggleAvailable = async (item: any) => {
     try {
-      await fetch(`/api/menu/${item.id}`, {
+      const res = await fetch(`/api/menu/${item.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ isAvailable: !item.isAvailable }),
       });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) {
+        alert(data.error || "Availability was not changed");
+        return;
+      }
       onRefresh();
     } catch (e) {
       console.error(e);
+      alert("Could not reach the server. Availability was not changed.");
     }
   };
 

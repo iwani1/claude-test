@@ -51,6 +51,8 @@ export const ReportsDashboard: React.FC = () => {
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+      } else {
+        alert(data.error || "Export produced no data");
       }
     } catch {
       alert("Failed to export accounting CSV");

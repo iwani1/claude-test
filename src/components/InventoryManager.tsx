@@ -86,9 +86,12 @@ export const InventoryManager: React.FC = () => {
         setAdjustDelta("");
         setAdjustReason("");
         fetchInventory();
+      } else {
+        alert(data.error || "Stock adjustment failed");
       }
     } catch (e) {
       console.error(e);
+      alert("Could not reach the server. Stock was not adjusted.");
     }
   };
 
@@ -118,9 +121,12 @@ export const InventoryManager: React.FC = () => {
         setNewStock("");
         setNewCost("");
         fetchInventory();
+      } else {
+        alert(data.error || "Could not create ingredient");
       }
     } catch (e) {
       console.error(e);
+      alert("Could not reach the server. Ingredient was not saved.");
     }
   };
 
@@ -155,6 +161,8 @@ export const InventoryManager: React.FC = () => {
         setAuditItems({});
         setAuditNotes("");
         fetchInventory();
+      } else {
+        alert(data.error || "Count was not saved");
       }
     } catch {
       alert("Error saving count");

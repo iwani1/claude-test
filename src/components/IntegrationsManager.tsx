@@ -20,9 +20,7 @@ export const IntegrationsManager: React.FC = () => {
         }),
       });
       const data = await res.json();
-      if (data.success) {
-        setPrinterStatus(data.message);
-      }
+      setPrinterStatus(data.success ? data.message : data.error || "Printer test could not run");
     } catch {
       setPrinterStatus("Failed to reach printer bridge");
     }
@@ -45,6 +43,8 @@ export const IntegrationsManager: React.FC = () => {
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+      } else {
+        alert(data.error || "Export produced no data");
       }
     } catch {
       alert("Failed to export accounting journal");
