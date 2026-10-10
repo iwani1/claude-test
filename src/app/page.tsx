@@ -253,7 +253,7 @@ export default function App() {
       case "reports":
         return <ReportsDashboard />;
       case "staff":
-        return <StaffManager />;
+        return <StaffManager currentUser={currentUser} />;
       case "audit":
         return <AuditLogsViewer />;
       case "integrations":

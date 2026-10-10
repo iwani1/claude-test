@@ -13,6 +13,7 @@ export const POST = secureRoute(async req => {
   const { action } = body;
   if (body.branchId !== undefined && Number(body.branchId) !== actor.branchId) throw new ApiError(403, "Branch access denied");
   let employee;
+  try {
   if (action === "create_employee") {
     const { name, email, password, pin, role, phone } = body;
     if (typeof name !== "string" || !name.trim() || typeof email !== "string" || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email) ||
@@ -39,6 +40,18 @@ export const POST = secureRoute(async req => {
       [employee] = await db.update(users).set({ passwordHash: hashPassword(body.password), sessionVersion: sql`${users.sessionVersion} + 1` }).where(eq(users.id, target.id)).returning(fields);
     }
   } else throw new ApiError(400, "Invalid action");
+  } catch (err: any) {
+    // Unique violations must not surface as anonymous server failures.
+    // Drizzle may wrap the driver error, so unwrap defensively.
+    const driver = err?.code ? err : err?.cause?.code ? err.cause : {};
+    const detail = String(driver.constraint || err?.message || err?.cause?.message || "");
+    if (driver.code === "23505" || /duplicate key/i.test(detail)) {
+      if (/pin/i.test(detail)) throw new ApiError(409, "That PIN is already used by another staff member in this branch. Choose a different PIN.");
+      if (/email/i.test(detail)) throw new ApiError(409, "That email is already registered.");
+      throw new ApiError(409, "That record already exists.");
+    }
+    throw err;
+  }
   await db.insert(auditLogs).values({ userId: actor.id, userName: actor.name, action, entityType: "user", entityId: String(employee.id) });
   return NextResponse.json({ success: true, employee });
 }, "canManageStaff");

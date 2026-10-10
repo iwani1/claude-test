@@ -65,8 +65,8 @@ manual suite with obsolete demo-login assumptions, not the security gate.
 Checks cover every protected method anonymously, role denial, privilege
 escalation, credential redaction, tenant/branch read and write isolation,
 concurrent order/payment/refund/offline operations, inventory restoration,
-failed-batch rollback, session expiry/revocation, role changes, password
-reset with session revocation, and throttling.
+failed-batch rollback, session expiry/revocation, role changes, password/PIN
+rotation with session revocation, and throttling.
 
 ## Remaining release work
 
@@ -90,7 +90,7 @@ reset with session revocation, and throttling.
 
 - Production Next build: passed (Next 16.4.0).
 - TypeScript check: passed, including generated Next route types.
-- Production HTTP regression suite: **118 checks passed** against disposable
+- Production HTTP regression suite: **128 checks passed** against disposable
   PostgreSQL, plus offline-storage isolation/retention assertions, **13 synthetic
   shift reconciliation checks**, and **30 accounting checks** (refund tender
   allocation, retry idempotency, linked drawer movements, refund of old sales

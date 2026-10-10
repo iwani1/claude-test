@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import { ROLE_PERMISSIONS, UserRole } from "@/lib/permissions";
 
-export const StaffManager: React.FC = () => {
+export const StaffManager: React.FC<{ currentUser?: any }> = ({ currentUser }) => {
   const [staff, setStaff] = useState<any[]>([]);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showPinModal, setShowPinModal] = useState<any | null>(null);
@@ -74,6 +74,7 @@ export const StaffManager: React.FC = () => {
       } else { setError(data.error || "Staff update failed"); }
     } catch (e) {
       console.error(e);
+      setError("Could not reach the server. Please try again.");
     }
   };
 
@@ -94,10 +95,17 @@ export const StaffManager: React.FC = () => {
       if (data.success) {
         setShowPinModal(null);
         setNewPin("");
+        alert(`PIN updated for ${showPinModal.name}. Sessions for this account were signed out; a changed PIN must be used from a fresh sign-in.`);
+        if (data.employee?.id === currentUser?.id) {
+          await fetch("/api/auth/logout", { method: "POST" });
+          window.location.reload();
+          return;
+        }
         fetchStaff();
       } else { setError(data.error || "Staff update failed"); }
     } catch (e) {
       console.error(e);
+      setError("Could not reach the server. Please try again.");
     }
   };
 
@@ -115,9 +123,15 @@ export const StaffManager: React.FC = () => {
         setShowPasswordModal(null);
         setNewPassword("");
         alert(`${showPasswordModal.name}'s password was changed. All existing sessions for this account are now signed out.`);
+        if (data.employee?.id === currentUser?.id) {
+          await fetch("/api/auth/logout", { method: "POST" });
+          window.location.reload();
+          return;
+        }
       } else { setError(data.error || "Password reset failed"); }
     } catch (e) {
       console.error(e);
+      setError("Could not reach the server. Please try again.");
     }
   };
 
@@ -153,7 +167,7 @@ export const StaffManager: React.FC = () => {
         </div>
 
         <button
-          onClick={() => setShowAddModal(true)}
+          onClick={() => { setShowAddModal(true); setError(""); }}
           className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-black font-semibold rounded-xl text-xs shadow-md shadow-amber-500/20 flex items-center gap-1.5 transition"
         >
           <Plus className="w-4 h-4" />
@@ -269,6 +283,7 @@ export const StaffManager: React.FC = () => {
                       onClick={() => {
                         setShowPasswordModal(u);
                         setNewPassword("");
+                        setError("");
                       }}
                       className="text-amber-400 hover:text-amber-300 font-semibold flex items-center gap-1"
                     >
@@ -355,10 +370,10 @@ export const StaffManager: React.FC = () => {
               </div>
 
               <div>
-                <label className="text-neutral-300 block mb-1">4-Digit Quick POS PIN</label>
+                <label className="text-neutral-300 block mb-1">4–8 Digit Quick POS PIN</label>
                 <input
                   type="password"
-                  maxLength={4}
+                  maxLength={8}
                   required
                   placeholder="1234"
                   value={pin}
@@ -415,6 +430,7 @@ export const StaffManager: React.FC = () => {
               Setting a new password for {showPasswordModal.name}. Every existing
               session for this account is signed out immediately.
             </p>
+            {error && <p role="alert" className="text-red-400 text-xs">{error}</p>}
             <div>
               <input
                 type="password"
@@ -449,7 +465,7 @@ export const StaffManager: React.FC = () => {
             className="bg-neutral-900 border border-neutral-700 rounded-2xl p-6 w-full max-w-xs shadow-2xl space-y-4"
           >
             <div className="flex justify-between items-center">
-              <h3 className="text-sm font-bold text-white">Update POS PIN</h3>
+              <h3 className="text-sm font-bold text-white">Update Quick POS PIN</h3>
               <button
                 type="button"
                 onClick={() => setShowPinModal(null)}
@@ -459,15 +475,16 @@ export const StaffManager: React.FC = () => {
               </button>
             </div>
 
-            <p className="text-xs text-neutral-400">Updating PIN for {showPinModal.name}</p>
+            <p className="text-xs text-neutral-400">Updating PIN for {showPinModal.name}. Each staff member must have a unique PIN in this branch.</p>
+            {error && <p role="alert" className="text-red-400 text-xs">{error}</p>}
 
             <div>
               <input
                 type="password"
-                maxLength={4}
+                maxLength={8}
                 required
                 autoFocus
-                placeholder="••••"
+                placeholder="4–8 digits"
                 value={newPin}
                 onChange={(e) => setNewPin(e.target.value)}
                 className="w-full text-center text-3xl font-mono tracking-widest py-2 bg-neutral-800 border border-neutral-700 rounded-xl text-white focus:outline-none focus:border-amber-500"
