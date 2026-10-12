@@ -163,6 +163,7 @@ export default function App() {
     setActiveTab(DEFAULT_TAB[user.role as UserRole] ?? "pos");
   };
 
+
   /** Switching screens always drops any table context from the till. */
   const handleTabChange = useCallback((tab: NavTab) => {
     setActiveTab(tab);
@@ -235,6 +236,29 @@ export default function App() {
       cancelled = true;
     };
   }, [isOnline, queuedOrders, currentUser?.branchId, fetchOperationalData]);
+
+  // The offline label may not outlive the outage: when the connection is back,
+  // ask the server who we are before dropping it. Only a real answer clears it.
+  useEffect(() => {
+    if (!isOnline || !offlineSession) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/auth/me");
+        const data = await res.json();
+        if (cancelled || !data?.authenticated) return;
+        setCurrentUser(data.user);
+        saveIdentity(data.user);
+        setOfflineSession(false);
+        notify("Back online — the till is talking to the server again.", "ok");
+      } catch {
+        /* still unreachable; the strip stays and keeps saying so */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isOnline, offlineSession]);
 
   // Escape closes the drawer, and so does rotating a phone into (or resizing
   // to) a width where the rail is permanently visible again — otherwise the
@@ -442,11 +466,20 @@ export default function App() {
           </span>
           {isOnline && queuedOrders > 0 && (
             <button
-              onClick={() => {
+              onClick={async () => {
+                const { syncOfflineQueueToServer } = await import("@/lib/offline-storage");
+                const result = await syncOfflineQueueToServer(currentUser.branchId);
+                if (result.success && result.count > 0) {
+                  notify(`Sent ${result.count} offline order${result.count === 1 ? "" : "s"} to the server. Collect any payments that were taken on paper.`, "ok");
+                } else if (!result.success) {
+                  notify("Could not reach the server — the offline orders are still on this device.", "error");
+                } else {
+                  notify("Nothing waiting to sync.", "ok");
+                }
                 setQueuedOrders(getOfflineQueue(currentUser.branchId).length);
                 fetchOperationalData();
               }}
-              className="shrink-0 h-9 px-3 rounded-xl bg-white/10 hover:bg-white/20 font-bold"
+              className="shrink-0 h-11 px-4 rounded-xl bg-white/10 hover:bg-white/20 font-bold"
             >
               Sync now
             </button>
