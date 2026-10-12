@@ -39,7 +39,6 @@ sudo -u pos npx tsx scripts/import-restpos.ts --source /tmp/restpos.db --report
 
 # 2. Apply (safe to re-run; nothing existing is overwritten)
 export MIGRATION_DATABASE_URL='postgresql://pos_owner:OWNER_PASSWORD@127.0.0.1:5432/pos'
-export AUTH_SECRET='…same value as .env…'
 sudo -E -u pos npx tsx scripts/import-restpos.ts \
   --source /tmp/restpos.db --apply --credentials-out /root/imported-pins.csv
 

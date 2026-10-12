@@ -20,6 +20,7 @@
  *    never charged — totals carry tax = 0.00).
  *  - Everything runs in one transaction under a maintenance role (RLS FORCE).
  */
+import "dotenv/config";
 import { randomBytes, randomInt } from "node:crypto";
 import { writeFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
