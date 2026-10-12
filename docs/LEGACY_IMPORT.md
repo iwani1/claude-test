@@ -52,6 +52,24 @@ On **switch day** (after the last sale on the old system), export a fresh
 `restpos.db` and repeat steps 1–3 — everything new is added, everything already
 imported is skipped.
 
+## Bar stock setup (optional, after the import)
+
+`scripts/setup-bar-stock.ts` switches on stock tracking for the bar: one
+ingredient (unit: bottle) per DRINKS menu item, a 1:1 recipe so each sale
+deducts one unit, and opening quantities seeded from the legacy counters
+(seeded once — later runs never clobber counts you have adjusted or audited).
+
+```sh
+sudo -u pos npx tsx scripts/setup-bar-stock.ts --report --source /tmp/restpos.db
+export MIGRATION_DATABASE_URL='postgresql://pos_owner:OWNER_PASSWORD@127.0.0.1:5432/pos'
+sudo -E -u pos npx tsx scripts/setup-bar-stock.ts --apply --source /tmp/restpos.db
+unset MIGRATION_DATABASE_URL
+```
+
+Then confirm the real bar levels with **Inventory → Stock Audit**. Buy drinks
+by the crate? Adjust the ingredient's cost/min level in Inventory; the recipe
+still deducts per bottle sold.
+
 ## After the cutover checklist
 
 - [ ] Review the 10 OPEN legacy orders (imported as drafts) — complete or cancel.

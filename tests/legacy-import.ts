@@ -49,7 +49,8 @@ function buildFixture(path: string) {
     CREATE TABLE inventory_category (id INTEGER, name TEXT);
     CREATE TABLE inventory_vendor (id INTEGER, contactPerson TEXT, companyName TEXT, phone TEXT, email TEXT, address TEXT);
     CREATE TABLE rest_customer (id INTEGER, name TEXT, tel TEXT, memberTypeId INTEGER);
-    CREATE TABLE rest_member_type (id INTEGER, name TEXT);`);
+    CREATE TABLE rest_member_type (id INTEGER, name TEXT);
+    CREATE TABLE rest_item_qty (id INTEGER, qty REAL);`);
   const ins = (sql: string, rows: unknown[][]) => { for (const r of rows) db.prepare(sql).run(...(r as never[])); };
   ins("INSERT INTO rest_company VALUES (1,'Test Lodge')", [[]]);
   ins("INSERT INTO rest_category VALUES (?,?,?,1)", [[1, "MAIN", 1], [2, "DRINKS ", 2]]);
@@ -84,6 +85,7 @@ function buildFixture(path: string) {
   ins("INSERT INTO inventory_vendor VALUES (?,?,?,?,?,?)", [[1, "Mr. Supplier", "Demo Supplier", "123", "v@x.com", "Addr"]]);
   ins("INSERT INTO rest_customer VALUES (?,?,?,?)", [[1, "Steven", "233", 1]]);
   ins("INSERT INTO rest_member_type VALUES (?,?)", [[1, "Reward Card"]]);
+  ins("INSERT INTO rest_item_qty VALUES (?,?)", [[10, 0], [11, 12]]);
   db.close();
 }
 
@@ -171,6 +173,21 @@ async function main() {
       && (await one("SELECT COUNT(*)::int n FROM payments")).n === 3
       && (await one("SELECT COUNT(*)::int n FROM order_items")).n === 5);
     check("re-run writes no second audit entry", (await one("SELECT COUNT(*)::int n FROM audit_logs WHERE action='legacy_import'")).n === 1);
+
+    console.log("Setting up bar stock…");
+    await run("node_modules/.bin/tsx", ["scripts/setup-bar-stock.ts", "--apply", "--source", fixture], env);
+    check("bar ingredient created for drink", (await one("SELECT COUNT(*)::int n FROM ingredients WHERE name='Water' AND unit='bottle' AND category='beverage'")).n === 1);
+    check("opening stock seeded from legacy counter", (await one("SELECT current_stock FROM ingredients WHERE name='Water'")).current_stock === "12.000");
+    check("no bar ingredient for food item", (await one("SELECT COUNT(*)::int n FROM ingredients WHERE name='Jollof'")).n === 0);
+    check("1:1 recipe linked to drink menu item", (await one("SELECT COUNT(*)::int n FROM recipe_ingredients ri JOIN recipes r ON r.id=ri.recipe_id JOIN menu_items m ON m.id=r.menu_item_id WHERE m.name='Water' AND ri.quantity='1.000'")).n === 1);
+    check("menu item flagged has_recipe", (await one("SELECT has_recipe FROM menu_items WHERE name='Water'")).has_recipe === true);
+    await run("node_modules/.bin/tsx", ["scripts/setup-bar-stock.ts", "--apply", "--source", fixture], env);
+    const barCounts = {
+      ingredients: (await one("SELECT COUNT(*)::int n FROM ingredients WHERE category='beverage'")).n,
+      recipes: (await one("SELECT COUNT(*)::int n FROM recipes")).n,
+      lines: (await one("SELECT COUNT(*)::int n FROM recipe_ingredients")).n,
+    };
+    check("bar setup re-run is idempotent", barCounts.ingredients === 1 && barCounts.recipes === 1 && barCounts.lines === 1, barCounts);
 
     await writeFile(join(dir, "ok"), "ok");
   } finally {
