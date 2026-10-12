@@ -46,6 +46,10 @@ One layout serves every screen; nothing is feature-limited on a smaller device.
   wait stations use.
 - **Laptops and desktops** — unchanged: full rail, full tables, keyboard focus
   rings, and the POS quick-jump bar.
+- **The five screens a shift lives in** — Till, Tables, Kitchen, Orders and
+  Drawer — also sit in a **bottom tab bar** on phones, within thumb reach, with
+  the open-table count and the drawer's Open/Closed state as badges. The drawer
+  keeps the full menu, so nothing becomes unreachable.
 - **Rotation and resizing** are handled live: a phone rotated into a width that
   can hold the rail closes the drawer instead of leaving a dimmed overlay.
 - **Notches and home indicators** are respected (`viewport-fit=cover` plus
@@ -60,6 +64,39 @@ One layout serves every screen; nothing is feature-limited on a smaller device.
 (tables scroll or become cards, dialogs scroll on short screens, no `h-screen` /
 `w-screen` in an app that lives inside mobile browser chrome). It exits non-zero
 if a new screen breaks one of them.
+
+### Working with no signal (offline)
+
+The floor loses signal; a shift cannot. The app is built so that losing the
+network slows the writing down, never the truth.
+
+- **The app itself opens offline.** A small service worker (`public/sw.js`)
+  stores the app shell and the build's scripts after the first visit, so a
+  reload with no signal still loads the till. It is registered in production
+  builds only — in development it would fight hot reload.
+- **What carries over**: the menu, the floor plan, the room charge and VAT last
+  confirmed by the server, and the drawer open/closed state. What never does:
+  stock levels, live orders, other people's data, and anything to do with money.
+  `/api/` responses are never cached — a stale price or a stale payment is worse
+  than no answer.
+- **Orders queue on the device** (localStorage, scoped per branch) when the
+  connection drops mid-service, and **sync automatically** the moment the server
+  is reachable again — the top bar has a manual **Sync** button as well. Whether
+  the order actually landed on the device is verified before the till clears the
+  ticket, so "saved" is never claimed on a device that could not store it.
+- **An order is queued UNPAID, always.** Only the server may mark money as
+  collected, and the offline sync endpoint rejects anything already flagged as
+  paid. If you take cash while offline, record the payment from **Order History**
+  after the sync, or the drawer will not reconcile.
+- **Payments never happen offline.** Tapping *Pay* with no connection queues the
+  order instead and says so, including the amount you are holding.
+- **One ticket, one order identity.** Retrying a send that died halfway cannot
+  ring the same food twice: the server de-duplicates on the ticket's id key.
+- **Retries and notices** appear as in-app notices (they never block the screen —
+  a phone mid-service cannot wait for an "OK" tap).
+- **Session restore**: a device that signed in within the last 12 hours reopens
+  the till offline; after that, or after signing out, it asks for the network,
+  because a local copy of who you are is not proof of who you are.
 
 ### Editing a saved order (owner only)
 

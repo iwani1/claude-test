@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 import "./globals.css";
+import { ServiceWorkerRegistrar } from "@/components/ServiceWorkerRegistrar";
 
 export const metadata: Metadata = {
   title: "Lush View Hotel | Restaurant, Bar & Hospitality POS",
@@ -41,6 +42,8 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       </head>
       <body className="h-full bg-neutral-950 text-neutral-100 antialiased overflow-hidden select-none">
         {children}
+        {/* Registers the offline app shell in production builds only. */}
+        <ServiceWorkerRegistrar />
       </body>
     </html>
   );

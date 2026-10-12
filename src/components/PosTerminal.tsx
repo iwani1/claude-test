@@ -1,7 +1,7 @@
 "use client";
 import Image from "next/image";
 
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import {
   Search,
   Plus,
@@ -27,7 +27,12 @@ import { ReceiptModal } from "./ReceiptModal";
 import { KitchenTicketModal } from "./KitchenTicketModal";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { saveTicketDraft, readTicketDraft } from "@/lib/active-ticket";
-import { queueOfflineOrder } from "@/lib/offline-storage";
+import {
+  queueOfflineOrder,
+  saveBillingConfigToCache,
+  getCachedBillingConfig,
+} from "@/lib/offline-storage";
+import { notify } from "@/lib/notify";
 import { priceOrder, fromCents, toCents } from "@/lib/pricing-core";
 import type { BillingConfig } from "@/lib/pricing-core";
 
@@ -69,6 +74,26 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
    * exists (no duplicated state, no second set of handlers).
    */
   const [cartOpen, setCartOpen] = useState(false);
+
+  /**
+   * One stable order identity per ticket.
+   *
+   * The server de-duplicates on this key, so a connection that dies between the
+   * request and its answer can be retried safely: the replay returns the order
+   * that already exists instead of creating a second one for the same food. It
+   * is dropped whenever the ticket itself changes, because a changed ticket is
+   * a different order.
+   */
+  const orderIdentityRef = useRef<string | null>(null);
+  const orderIdentity = () => {
+    if (!orderIdentityRef.current) {
+      orderIdentityRef.current = `ORD-${Date.now()}-${Math.random()}`;
+    }
+    return orderIdentityRef.current;
+  };
+  useEffect(() => {
+    orderIdentityRef.current = null;
+  }, [cart]);
 
   /* Destructive taps (discard ticket, remove a line) ask first. Busy-bar
      fingers miss; the toast-light confirm costs half a second and saves the
@@ -136,28 +161,40 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
   }
 
   // Load the live room charge + VAT so the till never shows a stale amount
-  // after management changes the charge in Settings.
+  // after management changes the charge in Settings. The last answer from the
+  // server is kept on the device: with the signal gone, pricing continues on
+  // the confirmed rate instead of silently reverting to a built-in guess.
   useEffect(() => {
     let cancelled = false;
+    const branchId = currentUser?.branchId;
     (async () => {
       try {
         const res = await fetch("/api/billing-config");
         const data = await res.json();
-        if (!cancelled && res.ok && data) {
-          setBillingConfig({
-            roomChargeCents: Number(data.roomChargeCents ?? 3000),
-            taxRatePercent: Number(data.taxRatePercent ?? 15),
-            compBreakfastEnabled: data.compBreakfastEnabled !== false,
-          });
-        }
+        if (cancelled || !res.ok || !data) return;
+        setBillingConfig({
+          roomChargeCents: Number(data.roomChargeCents ?? 3000),
+          taxRatePercent: Number(data.taxRatePercent ?? 15),
+          compBreakfastEnabled: data.compBreakfastEnabled !== false,
+        });
+        if (branchId) saveBillingConfigToCache(data, branchId);
       } catch {
-        /* keep the GH₵30 / 15% defaults already in state */
+        if (cancelled) return;
+        const cached = branchId ? getCachedBillingConfig(branchId) : null;
+        if (cached) {
+          setBillingConfig({
+            roomChargeCents: Number(cached.roomChargeCents ?? 3000),
+            taxRatePercent: Number(cached.taxRatePercent ?? 15),
+            compBreakfastEnabled: cached.compBreakfastEnabled !== false,
+          });
+          notify("Offline — using the room charge and VAT last confirmed by the server.", "warn");
+        }
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [currentUser?.branchId]);
 
   // Post-payment receipt modal
   const [lastCompletedOrder, setLastCompletedOrder] = useState<any | null>(null);
@@ -249,6 +286,7 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
   };
 
   const clearCart = () => {
+    orderIdentityRef.current = null;
     setCart([]);
     setDiscountPercent(0);
     setDiscountAmount(0);
@@ -363,13 +401,13 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
       sendToKitchen: true,
       isComplimentary,
       complimentaryReason: isComplimentary ? compReason : undefined,
-      idempotencyKey: `ORD-${Date.now()}-${Math.random()}`,
+      idempotencyKey: orderIdentity(),
     };
 
     try {
       if (!navigator.onLine) {
-        // Offline PWA Mode!
-        queueOfflineOrder({
+        // No signal: the order goes onto this device's queue.
+        const stored = queueOfflineOrder({
           ...payload,
           clientTimestamp: Date.now(),
           paidAmount: 0,
@@ -382,8 +420,20 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
           tipAmount,
           totalAmount,
         });
-        alert("System is currently offline. Order safely buffered in offline queue and will auto-sync upon reconnection!");
-        clearCart();
+        if (stored) {
+          notify(
+            "No connection. The order is saved on this device and goes to the kitchen as soon as the server is reachable — start the ticket on paper now so the line is not waiting.",
+            "warn"
+          );
+          clearCart();
+        } else {
+          // Saying "saved" here would be a lie: the ticket is still the only
+          // record of this sale, so it stays on screen.
+          notify(
+            "No connection, and this device could not store the order. The ticket is still on screen — write it down and send it again once there is signal.",
+            "error"
+          );
+        }
         setIsSubmitting(false);
         return;
       }
@@ -406,7 +456,35 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
         alert(data.error || "Failed to create order");
       }
     } catch {
-      alert("Network error: buffered locally");
+      // The connection died somewhere between the tap and the answer. The order
+      // identity travels with the payload, so queueing it here is safe even if
+      // the server did receive it: the replay returns the existing order rather
+      // than ringing the food twice.
+      const stored = queueOfflineOrder({
+        ...payload,
+        clientTimestamp: Date.now(),
+        paidAmount: 0,
+        paymentMethod: "unpaid",
+        paymentStatus: "unpaid",
+        subtotal,
+        taxAmount,
+        serviceCharge,
+        discountAmount: calculatedDiscount,
+        tipAmount,
+        totalAmount,
+      });
+      if (stored) {
+        notify(
+          "Connection lost while sending. The order is saved on this device and syncs automatically — nothing was sent to the kitchen yet, so start the ticket on paper now.",
+          "warn"
+        );
+        clearCart();
+      } else {
+        notify(
+          "Connection lost, and this device could not store the order. The ticket is still on screen — write it down, then send it again when there is signal.",
+          "error"
+        );
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -416,7 +494,7 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
   const handleProcessPayment = async () => {
     if (cart.length === 0) return;
     if (orderType === "room_service" && !roomNumber.trim()) {
-      alert("Enter the hotel room number before settling a Room Service order.");
+      notify("Enter the hotel room number before settling a Room Service order.", "warn");
       return;
     }
     setIsSubmitting(true);
@@ -447,6 +525,7 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
     // The server re-prices from the menu database + live settings; these
     // totals are a preview only and are deliberately not sent as authoritative.
     const orderPayload = {
+      idempotencyKey: orderIdentity(),
       branchId: currentUser.branchId,
       tableId: orderType === "dine_in" ? selectedTableId : null,
       roomNumber: orderType === "room_service" ? roomNumber.trim() : null,
@@ -462,8 +541,14 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
       sendToKitchen: true,
       isComplimentary,
       complimentaryReason: isComplimentary ? compReason : undefined,
-      idempotencyKey: `ORD-${Date.now()}-${Math.random()}`,
     };
+
+    /**
+     * The bill exists on the server the moment this is set. It matters in the
+     * catch below: if the order was created and only the payment failed, we must
+     * retry the payment, never re-create the order or fake the money.
+     */
+    let createdOrder: any = null;
 
     try {
       const resOrder = await fetch("/api/orders", {
@@ -474,12 +559,12 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
       const orderData = await resOrder.json();
 
       if (!orderData.success) {
-        alert(orderData.error || "Failed to create order");
+        notify(orderData.error || "Failed to create order", "error");
         setIsSubmitting(false);
         return;
       }
 
-      const createdOrder = orderData.order;
+      createdOrder = orderData.order;
 
       // A complimentary order is already settled by the server at GH₵0.00 —
       // there is no tender to record, so skip the payment call entirely and
@@ -561,10 +646,45 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
           setShowReceipt(true);
         }
       } else {
-        alert(payData.error || "Payment failed");
+        // Nothing was recorded, so nothing is claimed. The order stays open and
+        // the till keeps its ticket, ready to take the tender again.
+        notify(payData.error || "Payment failed — no money was recorded.", "error");
       }
     } catch (e: any) {
-      alert("Payment processing error: " + e.message);
+      if (!createdOrder) {
+        // The order never reached the server (or the answer never came back).
+        // It is queued through the same de-duplicating path as a menu order, so
+        // the kitchen still gets it and the sale cannot be lost. It is queued
+        // UNPAID on purpose: only the server may mark money as collected.
+        const stored = queueOfflineOrder({
+          ...orderPayload,
+          clientTimestamp: Date.now(),
+          paidAmount: 0,
+          paymentMethod: "unpaid",
+          paymentStatus: "unpaid",
+          subtotal,
+          taxAmount,
+          serviceCharge,
+          discountAmount: calculatedDiscount,
+          tipAmount,
+          totalAmount,
+        });
+        notify(
+          stored
+            ? `No connection. The order is saved on this device as UNPAID and syncs automatically. You are holding GH₵${totalAmount.toFixed(2)} — record that payment from Orders once the server is back, or the drawer will not match.`
+            : `No connection, and this device could not store the order. The ticket is still on screen — you are holding GH₵${totalAmount.toFixed(2)}; write the order down and re-ring it when there is signal.`,
+          stored ? "warn" : "error"
+        );
+        if (stored) {
+          clearCart();
+          setShowPayModal(false);
+        }
+      } else {
+        notify(
+          `The bill was created but the payment was NOT recorded (${e?.message || "connection lost"}). The order is still open and unpaid — take the tender again to settle it. It will not be charged twice.`,
+          "error"
+        );
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -586,8 +706,10 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden bg-neutral-950">
       {/* POS COMPUTER QUICK NAV — one-tap jumps between the 5 till screens.
-          Big 56px targets designed for touchscreen terminals. */}
-      <div className="shrink-0 bg-neutral-900 border-b border-neutral-800 px-3 py-2 flex items-center gap-2 overflow-x-auto custom-scrollbar">
+          Hidden on phones: the bottom tab bar does this job there without
+          spending 72px of a small screen, and New Ticket / Clear stay on the
+          order panel itself. */}
+      <div className="hidden md:flex shrink-0 bg-neutral-900 border-b border-neutral-800 px-3 py-2 items-center gap-2 overflow-x-auto custom-scrollbar">
         <button
           onClick={requestNewTicket}
           className="h-14 px-5 shrink-0 rounded-2xl bg-amber-500 hover:bg-amber-400 active:bg-amber-600 text-black font-bold text-sm flex items-center gap-2 shadow-md transition active:scale-[0.97]"
@@ -698,7 +820,7 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
         </div>
 
         {/* Item Cards Grid */}
-        <div className="flex-1 overflow-y-auto p-4 pb-28 md:pb-4 custom-scrollbar">
+        <div className="flex-1 overflow-y-auto p-4 pb-44 md:pb-4 custom-scrollbar">
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5 gap-4">
             {filteredItems.map((item) => (
               <div
@@ -775,7 +897,7 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
           panel lives in a sheet. */}
       <button
         onClick={() => setCartOpen(true)}
-        className={`md:hidden fixed inset-x-0 bottom-0 z-20 min-h-16 pb-safe px-4 flex items-center gap-3 bg-neutral-900/95 backdrop-blur border-t border-neutral-700 shadow-[0_-8px_24px_rgba(0,0,0,0.55)] transition-transform ${
+        className={`md:hidden fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom,0px))] z-20 min-h-16 px-4 flex items-center gap-3 bg-neutral-900/95 backdrop-blur border-t border-neutral-700 shadow-[0_-8px_24px_rgba(0,0,0,0.55)] transition-transform ${
           cartOpen ? "translate-y-full" : "translate-y-0"
         }`}
         aria-label={`Open the order: ${cartCount} items, GH₵${totalAmount.toFixed(2)}`}
@@ -815,7 +937,7 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
           md and up: the in-flow right-hand column. Below md: a slide-up sheet
           with its own grab handle and close button. Same element either way. */}
       <div
-        className={`bg-neutral-900 flex flex-col shrink-0 transition-all duration-200 md:h-full md:w-96 md:border-l md:border-neutral-800 max-md:fixed max-md:inset-x-0 max-md:bottom-0 max-md:z-30 max-md:rounded-t-3xl max-md:border-t max-md:border-neutral-700 max-md:max-h-[85dvh] max-md:pb-safe max-md:shadow-2xl ${
+        className={`bg-neutral-900 flex flex-col shrink-0 transition-all duration-200 md:h-full md:w-96 md:border-l md:border-neutral-800 max-md:fixed max-md:inset-x-0 max-md:bottom-[calc(4rem+env(safe-area-inset-bottom,0px))] max-md:z-30 max-md:rounded-t-3xl max-md:border-t max-md:border-neutral-700 max-md:max-h-[85dvh] max-md:shadow-2xl ${
           cartOpen ? "max-md:translate-y-0 max-md:visible" : "max-md:translate-y-full max-md:invisible max-md:pointer-events-none"
         }`}
       >

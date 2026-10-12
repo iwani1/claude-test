@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { Loader2, Store, ShieldAlert } from "lucide-react";
 import { Navbar } from "@/components/Navbar";
 import { Sidebar, NavTab } from "@/components/Sidebar";
+import { MobileTabBar } from "@/components/MobileTabBar";
 import { LoginScreen } from "@/components/LoginScreen";
 import { PosTerminal } from "@/components/PosTerminal";
 import { TableFloorPlan } from "@/components/TableFloorPlan";
@@ -21,7 +22,21 @@ import { RestaurantSettings } from "@/components/RestaurantSettings";
 import { DeploymentHub } from "@/components/DeploymentHub";
 import { OwnerDashboard } from "@/components/OwnerDashboard";
 import { MenuManager } from "@/components/MenuManager";
-import { saveMenuToCache, getCachedMenu } from "@/lib/offline-storage";
+import {
+  saveMenuToCache,
+  getCachedMenu,
+  saveTablesToCache,
+  getCachedTables,
+  saveShiftToCache,
+  getCachedShift,
+  saveIdentity,
+  readIdentity,
+  clearIdentity,
+  getOfflineQueue,
+} from "@/lib/offline-storage";
+import { useOnlineStatus } from "@/lib/use-terminal-status";
+import { Toaster } from "@/components/Toaster";
+import { notify } from "@/lib/notify";
 import { ROLE_PERMISSIONS, UserRole } from "@/lib/permissions";
 import { readTicketDraft, clearTicketDraft } from "@/lib/active-ticket";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
@@ -40,6 +55,12 @@ export default function App() {
   const [authState, setAuthState] = useState<"checking" | "out" | "in">("checking");
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [activeTab, setActiveTab] = useState<NavTab>("pos");
+  /**
+   * True when the shell is running from this device's last sign-in because the
+   * server could not be reached. Nothing is pretended: the banner says so, and
+   * every action that needs the server still fails loudly.
+   */
+  const [offlineSession, setOfflineSession] = useState(false);
 
   const [categories, setCategories] = useState<any[]>([]);
   const [menuItems, setMenuItems] = useState<any[]>([]);
@@ -69,11 +90,23 @@ export default function App() {
         setCategories(menuData.categories); setMenuItems(menuData.items);
         saveMenuToCache(menuData, currentBranchId);
       }
-      setAreas(tablesData.areas || []); setTables(tablesData.tables || []);
-      setOpenShift(shiftsData.activeShift || null); setLowStockCount(invData.lowStockCount || 0);
+      const areas = tablesData.areas || [];
+      const tables = tablesData.tables || [];
+      setAreas(areas); setTables(tables);
+      setOpenShift(shiftsData.activeShift || null);
+      setLowStockCount(invData.lowStockCount || 0);
+      // Remembered from the server's own answers so a lost signal cannot empty
+      // the till: the floor plan, the room charge and the drawer state survive.
+      saveTablesToCache(areas, tables, currentBranchId);
+      saveShiftToCache(shiftsData.activeShift || null, currentBranchId);
     }).catch(() => {
-      const cached = getCachedMenu(currentBranchId);
-      if (cached) { setCategories(cached.categories || []); setMenuItems(cached.items || []); }
+      // Offline, or the server is down: work from the last known context.
+      const cachedMenu = getCachedMenu(currentBranchId);
+      if (cachedMenu) { setCategories(cachedMenu.categories || []); setMenuItems(cachedMenu.items || []); }
+      const cachedTables = getCachedTables(currentBranchId);
+      if (cachedTables) { setAreas(cachedTables.areas || []); setTables(cachedTables.tables || []); }
+      const cachedShift = getCachedShift(currentBranchId);
+      if (cachedShift) setOpenShift(cachedShift.activeShift ?? null);
     });
   }, [currentBranchId]);
 
@@ -87,11 +120,26 @@ export default function App() {
           setCurrentUser(data.user);
           setActiveTab(DEFAULT_TAB[data.user.role as UserRole] ?? "pos");
           setAuthState("in");
+          saveIdentity(data.user);
+          setOfflineSession(false);
         } else {
+          clearIdentity();
           setAuthState("out");
         }
       } catch {
-        setAuthState("out");
+        // The request never reached the server — that is the offline case, not
+        // a rejected session. A device that signed in within the last 12h gets
+        // its till back; anything else must connect, because we will not invent
+        // a user or a permission set.
+        const remembered = readIdentity();
+        if (remembered) {
+          setCurrentUser(remembered.user);
+          setActiveTab(DEFAULT_TAB[remembered.user.role as UserRole] ?? "pos");
+          setOfflineSession(true);
+          setAuthState("in");
+        } else {
+          setAuthState("out");
+        }
       }
     })();
   }, []);
@@ -102,6 +150,7 @@ export default function App() {
   }, [authState, fetchOperationalData]);
 
   const handleAuthenticated = (user: any) => {
+    saveIdentity(user);
     setCurrentUser(user);
     setActiveTab(DEFAULT_TAB[user.role as UserRole] ?? "pos");
     setAuthState("in");
@@ -109,9 +158,16 @@ export default function App() {
 
   /** Switching users via PIN re-points the landing tab to the new role. */
   const handleUserChange = (user: any) => {
+    saveIdentity(user);
     setCurrentUser(user);
     setActiveTab(DEFAULT_TAB[user.role as UserRole] ?? "pos");
   };
+
+  /** Switching screens always drops any table context from the till. */
+  const handleTabChange = useCallback((tab: NavTab) => {
+    setActiveTab(tab);
+    if (tab !== "pos") setActiveTableId(null);
+  }, []);
 
   const handleLogout = async () => {
     try {
@@ -120,6 +176,8 @@ export default function App() {
       /* clearing local state regardless */
     }
     setCategories([]); setMenuItems([]); setAreas([]); setTables([]); setOpenShift(null);
+    clearIdentity();
+    setOfflineSession(false);
     setCurrentUser(null);
     setAuthState("out");
   };
@@ -142,6 +200,41 @@ export default function App() {
   // < md the sidebar is a slide-in drawer, so it needs its own open/closed
   // state. md and up ignore it entirely (the rail is always in flow).
   const [menuOpen, setMenuOpen] = useState(false);
+  const [queuedOrders, setQueuedOrders] = useState(0);
+  const isOnline = useOnlineStatus();
+
+  // The queue lives in localStorage and can grow while the app is open; poll it
+  // so the banner and the tab bar never under-report what is waiting to sync.
+  useEffect(() => {
+    const branchId = currentUser?.branchId;
+    if (!branchId) return;
+    const sync = () => setQueuedOrders(getOfflineQueue(branchId).length);
+    sync();
+    const timer = setInterval(sync, 2000);
+    return () => clearInterval(timer);
+  }, [currentUser?.branchId]);
+
+  // A queued order is only truly safe once the server has it. Send it the
+  // moment the connection returns, and say plainly what still has to be done
+  // by hand (the money: offline orders are deliberately unpaid).
+  useEffect(() => {
+    const branchId = currentUser?.branchId;
+    if (!isOnline || !branchId || queuedOrders === 0) return;
+    let cancelled = false;
+    (async () => {
+      const { syncOfflineQueueToServer } = await import("@/lib/offline-storage");
+      const result = await syncOfflineQueueToServer(branchId);
+      if (cancelled) return;
+      if (result.success && result.count > 0) {
+        notify(`Sent ${result.count} offline order${result.count === 1 ? "" : "s"} to the server. Collect any payments that were taken on paper.`, "ok");
+      }
+      setQueuedOrders(getOfflineQueue(branchId).length);
+      fetchOperationalData();
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isOnline, queuedOrders, currentUser?.branchId, fetchOperationalData]);
 
   // Escape closes the drawer, and so does rotating a phone into (or resizing
   // to) a width where the rail is permanently visible again — otherwise the
@@ -327,6 +420,40 @@ export default function App() {
         currentTab={activeTab}
       />
 
+      {/* Connection state, always visible while it matters. Offline is not an
+          error here: the till keeps working, so the strip says what still works
+          and what is waiting, instead of blocking the screen. */}
+      {(!isOnline || offlineSession || queuedOrders > 0) && (
+        <div
+          className={`shrink-0 px-3 py-2 flex items-center gap-2 text-xs sm:text-sm font-semibold border-b ${
+            isOnline
+              ? "bg-sky-500/10 border-sky-500/30 text-sky-200"
+              : "bg-amber-500/10 border-amber-500/30 text-amber-100"
+          }`}
+          role="status"
+        >
+          <span className={`w-2 h-2 rounded-full shrink-0 ${isOnline ? "bg-sky-400" : "bg-amber-400 animate-pulse"}`} />
+          <span className="flex-1 leading-snug">
+            {offlineSession && isOnline
+              ? "Server unreachable — running offline from this device's last sign-in."
+              : isOnline
+                ? `${queuedOrders} offline order${queuedOrders === 1 ? "" : "s"} waiting to sync.`
+                : `Offline — orders are saved on this device${queuedOrders > 0 ? ` (${queuedOrders} waiting)` : ""}. Payments are recorded once the server is reachable.`}
+          </span>
+          {isOnline && queuedOrders > 0 && (
+            <button
+              onClick={() => {
+                setQueuedOrders(getOfflineQueue(currentUser.branchId).length);
+                fetchOperationalData();
+              }}
+              className="shrink-0 h-9 px-3 rounded-xl bg-white/10 hover:bg-white/20 font-bold"
+            >
+              Sync now
+            </button>
+          )}
+        </div>
+      )}
+
       <div className="flex flex-1 min-h-0 overflow-hidden relative">
         {/* Backdrop for the phone drawer. Hidden from md up, where the rail is
             part of the layout instead of an overlay. */}
@@ -341,10 +468,7 @@ export default function App() {
           mobileOpen={menuOpen}
           onCloseMobile={() => setMenuOpen(false)}
           activeTab={activeTab}
-          onTabChange={(tab) => {
-            setActiveTab(tab);
-            if (tab !== "pos") setActiveTableId(null);
-          }}
+          onTabChange={handleTabChange}
           onNewOrder={handleStartNewOrder}
           openTableCount={openTableCount}
           shiftOpen={!!openShift}
@@ -355,6 +479,17 @@ export default function App() {
           {renderTab()}
         </main>
       </div>
+
+      {/* Phones: the five screens a shift lives in, within thumb reach. */}
+      <MobileTabBar
+        activeTab={activeTab}
+        onTabChange={handleTabChange}
+        userRole={currentUser?.role}
+        openTableCount={openTableCount}
+        shiftOpen={!!openShift}
+      />
+
+      <Toaster />
 
       <ConfirmDialog
         open={!!lostTicket}

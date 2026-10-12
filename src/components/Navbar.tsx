@@ -23,6 +23,7 @@ import {
 import { ROLE_PERMISSIONS, UserRole, hasTerminalAccess } from "@/lib/permissions";
 import { getOfflineQueue, syncOfflineQueueToServer } from "@/lib/offline-storage";
 import { DisplaySizeControl } from "@/components/DisplaySizeControl";
+import { notify } from "@/lib/notify";
 
 interface NavbarProps {
   currentUser: any;
@@ -65,7 +66,11 @@ export const Navbar: React.FC<NavbarProps> = ({
     const res = await syncOfflineQueueToServer(currentUser.branchId);
     setIsSyncing(false);
     if (res.success && res.count > 0) {
-      alert(`Successfully synchronized ${res.count} offline orders to the server!`);
+      notify(`Sent ${res.count} offline order${res.count === 1 ? "" : "s"} to the server. Collect any payments that were taken on paper.`, "ok");
+    } else if (!res.success) {
+      notify("Could not reach the server — the offline orders are still on this device.", "error");
+    } else {
+      notify("Nothing waiting to sync.", "ok");
     }
   };
 
