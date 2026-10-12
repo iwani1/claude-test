@@ -40,10 +40,10 @@ sudo -u pos npx tsx scripts/import-restpos.ts --source /tmp/restpos.db --report
 # 2. Apply (safe to re-run; nothing existing is overwritten)
 export MIGRATION_DATABASE_URL='postgresql://pos_owner:OWNER_PASSWORD@127.0.0.1:5432/pos'
 sudo -E -u pos npx tsx scripts/import-restpos.ts \
-  --source /tmp/restpos.db --apply --credentials-out /root/imported-pins.csv
+  --source /tmp/restpos.db --apply --credentials-out /home/pos/imported-pins.csv
 
 # 3. Sign in and spot-check: menu, an old receipt in history, staff list.
-# 4. Distribute the fresh PINs from /root/imported-pins.csv, then delete the file.
+# 4. Distribute the fresh PINs from /home/pos/imported-pins.csv, then delete the file.
 # 5. Reset staff passwords (Staff Manager → Reset password) — imported accounts
 #    cannot sign in with a password until you do.
 ```
