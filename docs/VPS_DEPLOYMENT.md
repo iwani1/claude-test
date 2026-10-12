@@ -203,6 +203,10 @@ unset MIGRATION_DATABASE_URL BOOTSTRAP_PASSWORD BOOTSTRAP_PIN
 Revoke `pos_owner`'s LOGIN when maintenance is done if you want maximum
 hardening (keep the role for future migrations; you can re-enable LOGIN briefly).
 
+Importing data from an older POS system (menu, staff, full sales history) is
+covered separately in `docs/LEGACY_IMPORT.md` — it runs with the same
+`MIGRATION_DATABASE_URL` maintenance connection and is safe to re-run at cutover.
+
 ---
 
 ## Phase 7 — Build and run under systemd

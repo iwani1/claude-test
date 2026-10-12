@@ -17,5 +17,6 @@ jobs:
       - run: npm ci
       - run: npm run lint -- --max-warnings=0
       - run: npm run typecheck
+      - run: npm run test:legacy-import
       - run: npm run test:security
       - run: npm audit --omit=dev

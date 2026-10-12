@@ -8,6 +8,8 @@
     "lint": "eslint .",
     "typecheck": "next typegen && tsc --noEmit",
     "db:migrate": "tsx scripts/migrate.ts",
+    "import:legacy": "tsx scripts/import-restpos.ts",
+    "test:legacy-import": "tsx tests/legacy-import.ts",
     "test:security": "tsx tests/run-security.ts",
     "test": "npm run test:security",
     "db:bootstrap": "tsx src/db/seed.ts"
