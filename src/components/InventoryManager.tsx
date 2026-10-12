@@ -296,7 +296,74 @@ export const InventoryManager: React.FC = () => {
         {/* VIEW 1: Ingredient Stock Table */}
         {activeSubTab === "stock" && (
           <div className="bg-neutral-900 border border-neutral-800 rounded-2xl overflow-hidden shadow-xl">
-            <div className="overflow-x-auto">
+            {/* Phones: one card per ingredient so "Adjust Stock" is a real tap
+                target. md and up keep the full table. */}
+            <div className="md:hidden divide-y divide-neutral-800/70">
+              {filteredIngredients.length === 0 ? (
+                <div className="p-8 text-center text-neutral-500 text-sm">
+                  No ingredients match this list.
+                </div>
+              ) : (
+                filteredIngredients.map((ing) => {
+                  const isLow = ing.isLowStock;
+                  return (
+                    <div key={ing.id} className={`p-4 space-y-3 ${isLow ? "bg-rose-950/10" : ""}`}>
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-semibold text-white">{ing.name}</span>
+                            {isLow && (
+                              <span className="px-1.5 py-0.5 rounded-xs bg-rose-500/20 text-rose-300 text-[0.5625rem] font-bold uppercase tracking-wider border border-rose-500/40">
+                                Low
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-[0.6875rem] text-neutral-400 font-mono">
+                            {ing.sku || "—"} · <span className="capitalize">{ing.category}</span> · {ing.location || "Storage"}
+                          </div>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <div className="font-mono font-bold text-white">
+                            {Number(ing.currentStock).toFixed(3)} {ing.unit}
+                          </div>
+                          <div className="text-[0.6875rem] text-neutral-400">on hand</div>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-2 text-[0.6875rem]">
+                        <div className="bg-neutral-850 rounded-lg px-2.5 py-2">
+                          <div className="text-neutral-500">Min</div>
+                          <div className="font-mono text-neutral-300">
+                            {Number(ing.minStockLevel).toFixed(1)} {ing.unit}
+                          </div>
+                        </div>
+                        <div className="bg-neutral-850 rounded-lg px-2.5 py-2">
+                          <div className="text-neutral-500">Unit cost</div>
+                          <div className="font-mono text-neutral-300">GH₵{Number(ing.costPerUnit).toFixed(2)}</div>
+                        </div>
+                        <div className="bg-neutral-850 rounded-lg px-2.5 py-2">
+                          <div className="text-neutral-500">Value</div>
+                          <div className="font-mono text-emerald-400 font-semibold">GH₵{ing.valuation}</div>
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={() => {
+                          setShowAdjustModal(ing);
+                          setAdjustDelta("");
+                          setAdjustType("adjustment");
+                        }}
+                        className="w-full h-12 rounded-xl bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 text-amber-400 font-bold text-sm transition active:scale-[0.98]"
+                      >
+                        Adjust Stock
+                      </button>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            <div className="hidden md:block overflow-x-auto">
               <table className="w-full text-left text-xs">
                 <thead className="bg-neutral-850 text-neutral-400 uppercase text-[0.625rem] tracking-wider border-b border-neutral-800">
                   <tr>
@@ -376,7 +443,63 @@ export const InventoryManager: React.FC = () => {
               </span>
               <span className="text-neutral-400">Showing latest 50 movements</span>
             </div>
-            <div className="overflow-x-auto">
+            <div className="md:hidden divide-y divide-neutral-800/70">
+              {movements.length === 0 ? (
+                <div className="p-8 text-center text-neutral-500 text-sm">No stock movements yet.</div>
+              ) : (
+                movements.map((m) => {
+                  const delta = Number(m.quantityDelta);
+                  const isPositive = delta > 0;
+                  return (
+                    <div key={m.id} className="p-4 space-y-2">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="font-semibold text-white">
+                            {ingredients.find((i) => i.id === m.ingredientId)?.name || `#${m.ingredientId}`}
+                          </div>
+                          <div className="text-[0.6875rem] text-neutral-400">
+                            {new Date(m.createdAt).toLocaleString()}
+                          </div>
+                        </div>
+                        <div
+                          className={`shrink-0 font-mono font-bold text-base ${
+                            isPositive ? "text-emerald-400" : "text-amber-400"
+                          }`}
+                        >
+                          {isPositive ? `+${delta.toFixed(3)}` : delta.toFixed(3)}
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-1.5 text-[0.6875rem]">
+                        <span
+                          className={`px-2 py-1 rounded-md font-bold capitalize ${
+                            m.movementType === "order_deduction"
+                              ? "bg-amber-500/10 text-amber-300"
+                              : m.movementType === "purchase_receipt"
+                              ? "bg-emerald-500/10 text-emerald-300"
+                              : m.movementType === "waste_spoilage"
+                              ? "bg-rose-500/10 text-rose-300"
+                              : "bg-neutral-800 text-neutral-300"
+                          }`}
+                        >
+                          {m.movementType.replace("_", " ")}
+                        </span>
+                        <span className="px-2 py-1 rounded-md bg-neutral-850 text-neutral-400 font-mono">
+                          {Number(m.previousStock).toFixed(3)} → {Number(m.newStock).toFixed(3)}
+                        </span>
+                      </div>
+                      {(m.referenceId || m.reason) && (
+                        <div className="text-[0.6875rem] text-neutral-400 break-words">
+                          {m.referenceId && <span className="font-mono text-neutral-300 mr-2">{m.referenceId}:</span>}
+                          {m.reason}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            <div className="hidden md:block overflow-x-auto">
               <table className="w-full text-left text-xs">
                 <thead className="bg-neutral-850 text-neutral-400 uppercase text-[0.625rem] tracking-wider border-b border-neutral-800">
                   <tr>
@@ -471,7 +594,79 @@ export const InventoryManager: React.FC = () => {
               </div>
             </div>
 
-            <div className="overflow-x-auto">
+            <div className="md:hidden divide-y divide-neutral-800/70">
+              {ingredients.map((ing) => {
+                const physicalVal =
+                  auditItems[ing.id] !== undefined ? auditItems[ing.id] : String(Number(ing.currentStock));
+                const systemNum = Number(ing.currentStock);
+                const physicalNum = Number(physicalVal);
+                const hasCount = physicalVal !== "" && Number.isFinite(physicalNum);
+                const diff = hasCount ? physicalNum - systemNum : 0;
+                const valDiff = diff * Number(ing.costPerUnit || 0);
+                return (
+                  <div key={ing.id} className="p-4 space-y-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="font-semibold text-white">{ing.name}</div>
+                        <div className="text-[0.6875rem] text-neutral-400 capitalize">
+                          {ing.category} · system {systemNum.toFixed(3)} {ing.unit}
+                        </div>
+                      </div>
+                      <div className="text-right shrink-0 text-[0.6875rem]">
+                        <div
+                          className={`font-mono font-bold ${
+                            !hasCount || Math.abs(diff) < 0.001
+                              ? "text-neutral-500"
+                              : diff > 0
+                              ? "text-emerald-400"
+                              : "text-rose-400"
+                          }`}
+                        >
+                          {hasCount ? `${diff > 0 ? "+" : ""}${diff.toFixed(3)} ${ing.unit}` : "—"}
+                        </div>
+                        <div className="text-neutral-500">variance</div>
+                      </div>
+                    </div>
+
+                    <label className="block">
+                      <span className="text-[0.6875rem] text-neutral-400 font-medium block mb-1">
+                        Physical count ({ing.unit})
+                      </span>
+                      <input
+                        type="number"
+                        step="0.001"
+                        inputMode="decimal"
+                        value={physicalVal}
+                        onChange={(e) =>
+                          setAuditItems({
+                            ...auditItems,
+                            [ing.id]: e.target.value,
+                          })
+                        }
+                        className="w-full h-12 bg-neutral-800 border border-neutral-700 rounded-xl px-3 text-white text-base focus:outline-none focus:border-amber-500 font-mono font-bold"
+                      />
+                    </label>
+
+                    <div className="text-[0.6875rem] text-neutral-400">
+                      Value difference:{" "}
+                      <span
+                        className={`font-mono font-bold ${
+                          Math.abs(valDiff) < 0.01
+                            ? "text-neutral-500"
+                            : valDiff > 0
+                            ? "text-emerald-400"
+                            : "text-rose-400"
+                        }`}
+                      >
+                        GH₵{valDiff.toFixed(2)}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="hidden md:block overflow-x-auto">
               <table className="w-full text-left text-xs">
                 <thead className="bg-neutral-850 text-neutral-400 uppercase text-[0.625rem] tracking-wider border-b border-neutral-800">
                   <tr>
@@ -501,6 +696,7 @@ export const InventoryManager: React.FC = () => {
                         <td className="px-4 py-2.5 text-right">
                           <input
                             type="number"
+                        inputMode="decimal"
                             step="0.001"
                             value={physicalVal}
                             onChange={(e) =>
@@ -546,10 +742,10 @@ export const InventoryManager: React.FC = () => {
 
       {/* MODAL 1: Adjust Stock */}
       {showAdjustModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4">
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/70 backdrop-blur-xs p-4 overflow-y-auto">
           <form
             onSubmit={handleAdjustStock}
-            className="bg-neutral-900 border border-neutral-700 rounded-2xl p-5 w-full max-w-sm shadow-2xl space-y-4"
+            className="bg-neutral-900 border border-neutral-700 rounded-2xl p-5 w-full max-w-sm shadow-2xl space-y-4 max-h-[92dvh] overflow-y-auto my-auto"
           >
             <div className="flex justify-between items-start">
               <div>
@@ -588,6 +784,7 @@ export const InventoryManager: React.FC = () => {
                 </label>
                 <input
                   type="number"
+                        inputMode="decimal"
                   step="0.001"
                   required
                   placeholder="e.g. 5 or -2.5"
@@ -631,10 +828,10 @@ export const InventoryManager: React.FC = () => {
 
       {/* MODAL 2: Add Ingredient */}
       {showAddModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4">
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/70 backdrop-blur-xs p-4 overflow-y-auto">
           <form
             onSubmit={handleAddIngredient}
-            className="bg-neutral-900 border border-neutral-700 rounded-2xl p-6 w-full max-w-md shadow-2xl space-y-4"
+            className="bg-neutral-900 border border-neutral-700 rounded-2xl p-6 w-full max-w-md shadow-2xl space-y-4 max-h-[92dvh] overflow-y-auto my-auto"
           >
             <div className="flex justify-between items-center">
               <h3 className="text-sm font-bold text-white">Create New Ingredient</h3>
@@ -690,6 +887,7 @@ export const InventoryManager: React.FC = () => {
                 <label className="text-neutral-300 block mb-1">Starting Stock</label>
                 <input
                   type="number"
+                        inputMode="decimal"
                   step="0.01"
                   placeholder="20"
                   value={newStock}
@@ -719,6 +917,7 @@ export const InventoryManager: React.FC = () => {
                 <label className="text-neutral-300 block mb-1">Unit Cost ($)</label>
                 <input
                   type="number"
+                        inputMode="decimal"
                   step="0.01"
                   placeholder="12.50"
                   value={newCost}
@@ -731,6 +930,7 @@ export const InventoryManager: React.FC = () => {
                 <label className="text-neutral-300 block mb-1">Min Alert Stock</label>
                 <input
                   type="number"
+                        inputMode="decimal"
                   step="0.1"
                   value={newMinStock}
                   onChange={(e) => setNewMinStock(e.target.value)}

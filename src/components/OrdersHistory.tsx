@@ -237,7 +237,141 @@ export const OrdersHistory: React.FC<{ currentUser: any }> = ({ currentUser }) =
       {/* Orders Table */}
       <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
         <div className="bg-neutral-900 border border-neutral-800 rounded-2xl overflow-hidden shadow-xl">
-          <div className="overflow-x-auto">
+          {/* Phones: one card per order, every action a full-width-height tap
+              target instead of a 26px icon. md and up keep the table below. */}
+          <div className="md:hidden divide-y divide-neutral-800/70">
+            {loading && orders.length === 0 ? (
+              <div className="p-8 text-center text-neutral-500 text-sm">Loading orders…</div>
+            ) : loadError ? (
+              <div className="p-6 text-center">
+                <div className="text-rose-300 font-medium mb-3 text-sm">Could not load orders: {loadError}</div>
+                <button
+                  onClick={() => fetchOrders(0, false)}
+                  className="h-12 px-4 rounded-xl bg-amber-500 text-neutral-900 font-bold"
+                >
+                  Retry
+                </button>
+              </div>
+            ) : filteredOrders.length === 0 ? (
+              <div className="p-8 text-center text-neutral-500 text-sm">
+                {orders.length === 0
+                  ? "No orders found for this date range."
+                  : "No orders match your search or filter."}
+              </div>
+            ) : (
+              filteredOrders.map((ord) => {
+                const isCompleted = ord.status === "completed";
+                const isRefunded = ord.status === "refunded";
+                const isCancelled = ord.status === "cancelled";
+                return (
+                  <div key={ord.id} className="p-4 space-y-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="font-mono font-bold text-white text-sm break-all">{ord.orderNumber}</div>
+                        <div className="text-[0.6875rem] text-neutral-400">
+                          {new Date(ord.createdAt).toLocaleString()}
+                        </div>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <div className="font-mono font-bold text-white text-base">
+                          GH₵{Number(ord.totalAmount).toFixed(2)}
+                        </div>
+                        <div className="text-[0.6875rem] text-neutral-400">
+                          {ord.items?.length || 0} item{(ord.items?.length || 0) === 1 ? "" : "s"}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-1.5 text-[0.6875rem] font-bold">
+                      <span className="px-2 py-1 rounded-md bg-neutral-800 text-neutral-300 capitalize">
+                        {ord.orderType?.replace("_", " ")}
+                        {ord.tableId ? ` · T-#${ord.tableId}` : ""}
+                      </span>
+                      <span className="px-2 py-1 rounded-md bg-neutral-800 text-neutral-300 font-medium max-w-[11rem] truncate">
+                        {ord.customerName}
+                      </span>
+                      <span
+                        className={`px-2 py-1 rounded-md capitalize ${
+                          ord.paymentStatus === "paid"
+                            ? "bg-emerald-500/10 text-emerald-300"
+                            : ord.paymentStatus === "refunded"
+                            ? "bg-rose-500/10 text-rose-300"
+                            : "bg-amber-500/10 text-amber-300"
+                        }`}
+                      >
+                        {ord.paymentStatus}
+                      </span>
+                      <span
+                        className={`px-2 py-1 rounded-md capitalize ${
+                          isCompleted
+                            ? "bg-emerald-500/20 text-emerald-300"
+                            : isRefunded
+                            ? "bg-rose-500/20 text-rose-300"
+                            : isCancelled
+                            ? "bg-neutral-800 text-neutral-400"
+                            : "bg-amber-500/20 text-amber-300"
+                        }`}
+                      >
+                        {ord.status}
+                      </span>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        onClick={() => {
+                          setDocketOrder(ord);
+                          setShowDocketModal(true);
+                        }}
+                        className="h-12 px-3.5 rounded-xl bg-orange-600/20 border border-orange-600/40 text-orange-300 font-semibold text-xs flex items-center gap-1.5 transition active:scale-[0.97]"
+                      >
+                        <ChefHat className="w-4 h-4" /> Docket
+                      </button>
+                      <button
+                        onClick={() => {
+                          setReceiptOrder(ord);
+                          setShowReceiptModal(true);
+                        }}
+                        className="h-12 px-3.5 rounded-xl bg-neutral-800 border border-neutral-700 text-neutral-200 font-semibold text-xs flex items-center gap-1.5 transition active:scale-[0.97]"
+                      >
+                        <Printer className="w-4 h-4" /> Receipt
+                      </button>
+                      {Number(ord.paidAmount) > 0 && ord.paymentStatus !== "refunded" && (
+                        <button
+                          onClick={() => openRefund(ord)}
+                          className="h-12 px-3.5 rounded-xl bg-neutral-800 border border-neutral-700 text-neutral-200 font-semibold text-xs flex items-center gap-1.5 transition active:scale-[0.97]"
+                        >
+                          <RotateCcw className="w-4 h-4 text-rose-400" /> Refund
+                        </button>
+                      )}
+                      {currentUser?.role === "super_admin" && (
+                        <button
+                          onClick={() => setEditTarget(ord)}
+                          className="h-12 px-3.5 rounded-xl bg-neutral-800 border border-neutral-700 text-neutral-200 font-semibold text-xs flex items-center gap-1.5 transition active:scale-[0.97]"
+                          aria-label={`Edit order ${ord.orderNumber}`}
+                        >
+                          <Pencil className="w-4 h-4" /> Edit
+                        </button>
+                      )}
+                      {currentUser?.role === "super_admin" && (
+                        <button
+                          onClick={() => {
+                            setDeleteError("");
+                            setDeleteTarget(ord);
+                          }}
+                          className="h-12 px-3.5 rounded-xl bg-rose-600/20 border border-rose-500/50 text-rose-300 font-semibold text-xs flex items-center gap-1.5 transition active:scale-[0.97]"
+                          aria-label={`Delete order ${ord.orderNumber}`}
+                        >
+                          <Trash2 className="w-4 h-4" /> Delete
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-left text-xs">
               <thead className="bg-neutral-850 text-neutral-400 uppercase text-[0.625rem] tracking-wider border-b border-neutral-800">
                 <tr>
@@ -437,10 +571,10 @@ export const OrdersHistory: React.FC<{ currentUser: any }> = ({ currentUser }) =
 
       {/* MODAL 1: Refund Processing with Manager Authorization */}
       {refundOrderTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4">
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/70 backdrop-blur-xs p-4 overflow-y-auto">
           <form
             onSubmit={handleProcessRefund}
-            className="bg-neutral-900 border border-neutral-700 rounded-2xl p-6 w-full max-w-md shadow-2xl space-y-4"
+            className="bg-neutral-900 border border-neutral-700 rounded-2xl p-6 w-full max-w-md shadow-2xl space-y-4 max-h-[92dvh] overflow-y-auto my-auto"
           >
             <div className="flex justify-between items-start">
               <div>
@@ -465,10 +599,12 @@ export const OrdersHistory: React.FC<{ currentUser: any }> = ({ currentUser }) =
               <p className="text-amber-300">Record money actually returned. Cash is automatically deducted from the current drawer; do not create another payout. MoMo transfers must be completed and verified separately.</p>
               <div className="grid grid-cols-2 gap-3">
                 <label>Cash returned (max GH₵{refundLimits.cashRemaining})
-                  <input aria-label="Cash refund" type="number" min="0" step="0.01" max={refundLimits.cashRemaining} required disabled={refundLocked} value={refundCash} onChange={e => setRefundCash(e.target.value)} className="w-full bg-neutral-800 p-2 rounded mt-1" />
+                  <input aria-label="Cash refund" type="number"
+                        inputMode="decimal" min="0" step="0.01" max={refundLimits.cashRemaining} required disabled={refundLocked} value={refundCash} onChange={e => setRefundCash(e.target.value)} className="w-full bg-neutral-800 p-2 rounded mt-1" />
                 </label>
                 <label>MoMo returned (max GH₵{refundLimits.momoRemaining})
-                  <input aria-label="MoMo refund" type="number" min="0" step="0.01" max={refundLimits.momoRemaining} required disabled={refundLocked} value={refundMomo} onChange={e => setRefundMomo(e.target.value)} className="w-full bg-neutral-800 p-2 rounded mt-1" />
+                  <input aria-label="MoMo refund" type="number"
+                        inputMode="decimal" min="0" step="0.01" max={refundLimits.momoRemaining} required disabled={refundLocked} value={refundMomo} onChange={e => setRefundMomo(e.target.value)} className="w-full bg-neutral-800 p-2 rounded mt-1" />
                 </label>
               </div>
               {refundLocked && !refundBusy && <p role="alert" className="text-amber-300">Retry the unchanged request to resolve its status before starting another refund.</p>}

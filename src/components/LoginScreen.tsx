@@ -64,7 +64,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onAuthenticated }) => 
   };
 
   return (
-    <div className="h-screen w-screen flex bg-neutral-950 overflow-hidden">
+    <div className="h-dvh w-full flex bg-neutral-950 overflow-hidden">
       {/* Left brand panel */}
       <div className="hidden lg:flex w-1/2 relative flex-col justify-between p-12 overflow-hidden">
         <div

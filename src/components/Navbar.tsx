@@ -3,6 +3,7 @@ import { useOnlineStatus, useOfflineQueueCount } from "@/lib/use-terminal-status
 
 import React, { useState, useEffect } from "react";
 import {
+  Menu,
   Store,
   Wifi,
   WifiOff,
@@ -34,6 +35,8 @@ interface NavbarProps {
   onGoTables?: () => void;
   onGoOrders?: () => void;
   currentTab?: string;
+  /** Phones only: opens the slide-in navigation drawer. */
+  onOpenMenu?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -47,6 +50,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onGoTables,
   onGoOrders,
   currentTab,
+  onOpenMenu,
 }) => {
   const isOnline = useOnlineStatus();
   const offlineCount = useOfflineQueueCount(currentUser.branchId);
@@ -110,13 +114,25 @@ export const Navbar: React.FC<NavbarProps> = ({
   return (
     <>
       {/* 72px bar keeps every control above comfortable finger size */}
-      <header className="h-[72px] bg-neutral-900 border-b border-neutral-800 text-white flex items-center justify-between px-4 lg:px-5 select-none shrink-0 z-40">
-        {/* Left: Brand & Branch Context */}
-        <div className="flex items-center gap-3.5 min-w-0">
-          <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center shadow-lg shadow-orange-500/20 shrink-0">
+      <header className="h-[72px] bg-neutral-900 border-b border-neutral-800 text-white flex items-center justify-between px-2 sm:px-4 lg:px-5 select-none shrink-0 z-40">
+        {/* Left: drawer trigger (phones), brand & branch context */}
+        <div className="flex items-center gap-2 sm:gap-3.5 flex-1 min-w-0">
+          {onOpenMenu && (
+            <button
+              onClick={onOpenMenu}
+              className="md:hidden h-11 w-11 shrink-0 rounded-xl bg-neutral-800 hover:bg-neutral-750 active:bg-neutral-700 border border-neutral-700 text-neutral-200 flex items-center justify-center transition"
+              aria-label="Open navigation menu"
+            >
+              <Menu className="w-6 h-6" />
+            </button>
+          )}
+          {/* The mark yields to the controls on phones: at the largest display
+              size a 320px-wide bar cannot hold branding *and* every control.
+              The brand still appears in the drawer and on the sign-in screen. */}
+          <div className="hidden sm:flex w-11 h-11 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 items-center justify-center shadow-lg shadow-orange-500/20 shrink-0">
             <Store className="w-6 h-6 text-white" />
           </div>
-          <div className="min-w-0">
+          <div className="min-w-0 hidden sm:block">
             <div className="flex items-center gap-2">
               <span className="font-bold text-[0.9375rem] tracking-tight text-neutral-100 truncate">
                 Lush View Hotel
@@ -134,7 +150,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         </div>
 
         {/* Right: Actions, Network Status & Profile */}
-        <div className="flex items-center gap-2 sm:gap-2.5">
+        <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
           {/* Per-terminal text & touch size — each screen can differ. */}
           <DisplaySizeControl />
           {/* POS quick jumps — New Order / Tables / Orders / Drawer always visible */}
@@ -206,8 +222,28 @@ export const Navbar: React.FC<NavbarProps> = ({
             </div>
           )}
 
-          {/* Network status */}
-          <div className="flex items-center gap-1.5 px-3 h-11 rounded-xl bg-neutral-800/80 border border-neutral-700/60 text-[0.75rem]">
+          {/* Register state — the brand block that carries it is hidden on
+              phones, and whether the drawer is open is the one thing a cashier
+              must never have to guess. */}
+          <div
+            className={`md:hidden flex items-center gap-1.5 px-2 h-11 rounded-xl border text-[0.75rem] font-medium ${
+              openShift
+                ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
+                : "bg-amber-500/10 border-amber-500/30 text-amber-400"
+            }`}
+            title={openShift ? "Register open" : "Register closed"}
+          >
+            <span className={`w-2 h-2 rounded-full ${openShift ? "bg-emerald-400" : "bg-amber-400"}`} />
+            <span className="hidden sm:inline">{openShift ? "Open" : "Closed"}</span>
+          </div>
+
+          {/* Network status — only shown when it matters: a phone's top bar has
+              no room for a permanent "online" badge. */}
+          <div
+            className={`${
+              isOnline && offlineCount === 0 ? "hidden sm:flex" : "flex"
+            } items-center gap-1.5 px-2 sm:px-3 h-11 rounded-xl bg-neutral-800/80 border border-neutral-700/60 text-[0.75rem]`}
+          >
             {isOnline ? (
               <span className="flex items-center gap-1.5 text-emerald-400 font-medium">
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
@@ -254,18 +290,18 @@ export const Navbar: React.FC<NavbarProps> = ({
           {/* Fast PIN switch */}
           <button
             onClick={() => setShowPinModal(true)}
-            className="h-11 px-3.5 text-neutral-200 hover:text-white hover:bg-neutral-800 rounded-xl border border-neutral-700/60 flex items-center gap-2 text-[0.75rem] font-semibold transition active:bg-neutral-750"
+            className="h-11 px-2.5 sm:px-3.5 text-neutral-200 hover:text-white hover:bg-neutral-800 rounded-xl border border-neutral-700/60 flex items-center gap-2 text-[0.75rem] font-semibold transition active:bg-neutral-750"
             title="Switch employee with PIN"
           >
             <KeyRound className="w-5 h-5 text-amber-400" />
-            <span className="hidden lg:inline">Switch Staff</span>
+            <span className="hidden xl:inline">Switch Staff</span>
           </button>
 
           {/* User profile & Role switcher */}
           <div className="relative">
             <button
               onClick={() => setShowRoleDropdown(!showRoleDropdown)}
-              className="flex items-center gap-2.5 h-11 pl-2 pr-3 rounded-xl bg-neutral-800 hover:bg-neutral-750 border border-neutral-700 transition active:bg-neutral-750"
+              className="flex items-center gap-2.5 h-11 pl-1.5 pr-2 sm:pl-2 sm:pr-3 rounded-xl bg-neutral-800 hover:bg-neutral-750 border border-neutral-700 transition active:bg-neutral-750"
             >
               <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-amber-600 to-orange-500 flex items-center justify-center text-[0.8125rem] font-bold text-white shadow-xs">
                 {currentUser?.name ? currentUser.name.charAt(0) : "U"}
@@ -278,17 +314,17 @@ export const Navbar: React.FC<NavbarProps> = ({
                   {currentRoleInfo?.label || currentUser?.role || "Staff"}
                 </div>
               </div>
-              <ChevronDown className="w-4 h-4 text-neutral-400 shrink-0" />
+              <ChevronDown className="w-4 h-4 text-neutral-400 shrink-0 hidden sm:block" />
             </button>
 
             {/* User Profile dropdown */}
             {showRoleDropdown && (
               <>
                 <div
-                  className="fixed inset-0 z-40"
+                  className="items-start justify-center fixed inset-0 z-40 overflow-y-auto"
                   onClick={() => setShowRoleDropdown(false)}
                 />
-                <div className="absolute right-0 mt-2 w-[280px] bg-neutral-800 border border-neutral-700 rounded-2xl shadow-2xl py-2 z-50">
+                <div className="absolute right-0 mt-2 w-[280px] max-w-[calc(100vw-1rem)] bg-neutral-800 border border-neutral-700 rounded-2xl shadow-2xl py-2 z-50">
                   <div className="px-4 py-2.5 border-b border-neutral-700/80">
                     <div className="text-sm font-bold text-white truncate">
                       {currentUser?.name || "Active Staff"}
@@ -337,8 +373,8 @@ export const Navbar: React.FC<NavbarProps> = ({
 
       {/* PIN Switch Modal */}
       {showPinModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4">
-          <div className="bg-neutral-900 border border-neutral-700 rounded-2xl p-6 w-full max-w-sm shadow-2xl text-center">
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/70 backdrop-blur-xs p-4 overflow-y-auto">
+          <div className="bg-neutral-900 border border-neutral-700 rounded-2xl p-6 w-full max-w-sm shadow-2xl text-center max-h-[92dvh] overflow-y-auto my-auto">
             <div className="w-14 h-14 rounded-2xl bg-amber-500/20 border border-amber-500/40 text-amber-400 flex items-center justify-center mx-auto mb-3">
               <KeyRound className="w-7 h-7" />
             </div>

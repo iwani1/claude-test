@@ -181,6 +181,7 @@ export const RestaurantSettings: React.FC = () => {
                 <label className="text-neutral-300 block mb-1">GRA Standard VAT (%)</label>
                 <input
                   type="number"
+                        inputMode="decimal"
                   step="0.01"
                   value={restaurant.defaultTaxRate || "15.00"}
                   onChange={(e) => setRestaurant({ ...restaurant, defaultTaxRate: e.target.value })}
@@ -192,6 +193,7 @@ export const RestaurantSettings: React.FC = () => {
                 <label className="text-neutral-300 block mb-1">Service Charge (%)</label>
                 <input
                   type="number"
+                        inputMode="decimal"
                   step="0.01"
                   value={restaurant.defaultServiceCharge || "0.00"}
                   onChange={(e) =>
@@ -223,6 +225,7 @@ export const RestaurantSettings: React.FC = () => {
                 </label>
                 <input
                   type="number"
+                        inputMode="decimal"
                   step="0.50"
                   min="0"
                   value={roomCharge}
@@ -238,7 +241,7 @@ export const RestaurantSettings: React.FC = () => {
                 <label className="text-neutral-300 block mb-1 font-semibold">
                   Quick amounts
                 </label>
-                <div className="grid grid-cols-4 gap-1.5">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
                   {["0", "20", "30", "50"].map((amt) => (
                     <button
                       key={amt}

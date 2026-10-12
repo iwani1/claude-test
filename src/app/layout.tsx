@@ -14,8 +14,15 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
+  // Phones and tablets are first-class clients now, so pinch-zoom stays
+  // available (a terminal can run this at arm's length; a phone user may need
+  // to zoom). Double-tap zoom is already suppressed in globals.css, which is
+  // what kept taps feeling immediate on the terminals.
+  maximumScale: 5,
+  userScalable: true,
+  // Lets the shell paint edge-to-edge on notched phones; the safe-area insets
+  // are honoured where the drawer, cart bar and bottom sheets sit.
+  viewportFit: "cover",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

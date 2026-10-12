@@ -58,6 +58,34 @@ export const AuditLogsViewer: React.FC = () => {
 
       <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
         <div className="bg-neutral-900 border border-neutral-800 rounded-2xl overflow-hidden shadow-xl">
+          <div className="md:hidden divide-y divide-neutral-800/70">
+            {filteredLogs.length === 0 ? (
+              <div className="p-8 text-center text-neutral-500 text-sm">
+                No audit entries match this filter.
+              </div>
+            ) : (
+              filteredLogs.map((log) => (
+                <div key={log.id} className="p-4 space-y-2">
+                  <div className="flex items-start justify-between gap-3">
+                    <span className="px-2 py-1 rounded-md bg-neutral-800 text-[0.6875rem] font-mono font-semibold text-amber-400">
+                      {log.action}
+                    </span>
+                    <span className="text-[0.6875rem] text-neutral-400 font-mono shrink-0">
+                      {new Date(log.createdAt).toLocaleString()}
+                    </span>
+                  </div>
+                  <div className="text-[0.6875rem] text-neutral-300">
+                    <span className="font-semibold text-white">{log.userName || "System"}</span>
+                    <span className="text-neutral-500"> · </span>
+                    <span className="capitalize">{log.entityType}</span>
+                  </div>
+                  <div className="text-[0.6875rem] text-neutral-400 break-words">{log.details}</div>
+                </div>
+              ))
+            )}
+          </div>
+
+          <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead className="bg-neutral-850 text-neutral-400 uppercase text-[0.625rem] tracking-wider border-b border-neutral-800">
               <tr>
@@ -88,6 +116,7 @@ export const AuditLogsViewer: React.FC = () => {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       </div>
     </div>

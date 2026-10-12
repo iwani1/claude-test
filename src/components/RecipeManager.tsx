@@ -235,10 +235,10 @@ export const RecipeManager: React.FC = () => {
 
       {/* MODAL: New / Edit Recipe */}
       {showAddModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4">
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/70 backdrop-blur-xs p-4 overflow-y-auto">
           <form
             onSubmit={handleSaveRecipe}
-            className="bg-neutral-900 border border-neutral-700 rounded-2xl p-6 w-full max-w-xl shadow-2xl space-y-4 max-h-[90vh] flex flex-col"
+            className="bg-neutral-900 border border-neutral-700 rounded-2xl p-6 w-full max-w-xl shadow-2xl space-y-4 max-h-[90dvh] flex flex-col my-auto"
           >
             <div className="flex justify-between items-center">
               <h3 className="text-base font-bold text-white">Formulate Dish Recipe</h3>
@@ -274,6 +274,7 @@ export const RecipeManager: React.FC = () => {
                   <label className="text-neutral-300 block mb-1">Portion Yield</label>
                   <input
                     type="number"
+                        inputMode="decimal"
                     min={1}
                     value={yieldCount}
                     onChange={(e) => setYieldCount(Number(e.target.value))}
@@ -315,6 +316,7 @@ export const RecipeManager: React.FC = () => {
 
                     <input
                       type="number"
+                        inputMode="decimal"
                       step="0.001"
                       placeholder="Qty"
                       value={row.quantity}

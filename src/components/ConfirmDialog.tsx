@@ -38,12 +38,12 @@ export function ConfirmDialog({
   if (!open) return null;
   return (
     <div
-      className="fixed inset-0 z-[120] flex items-center justify-center p-5 bg-black/75 backdrop-blur-sm"
+      className="fixed inset-0 z-[120] flex items-start justify-center p-5 bg-black/75 backdrop-blur-sm overflow-y-auto"
       role="alertdialog"
       aria-modal="true"
       aria-label={title}
     >
-      <div className="w-full max-w-lg bg-neutral-900 border border-neutral-700 rounded-3xl shadow-2xl">
+      <div className="w-full max-w-lg bg-neutral-900 border border-neutral-700 rounded-3xl shadow-2xl max-h-[92dvh] overflow-y-auto my-auto">
         <div className="px-6 pt-7 pb-5 flex flex-col items-center text-center gap-3">
           <div className="w-16 h-16 rounded-2xl bg-rose-500/15 border border-rose-500/40 flex items-center justify-center">
             <AlertTriangle className="w-8 h-8 text-rose-400" />

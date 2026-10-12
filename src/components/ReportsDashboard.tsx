@@ -311,7 +311,32 @@ export const ReportsDashboard: React.FC = () => {
             <span className="text-[0.6875rem] text-neutral-400 font-mono">Volume Rank</span>
           </div>
 
-          <div className="overflow-x-auto">
+          <div className="md:hidden divide-y divide-neutral-800/70">
+            {topItems.length === 0 ? (
+              <div className="p-8 text-center text-neutral-500 text-sm">
+                No sales in this period yet.
+              </div>
+            ) : (
+              topItems.map((item: any, idx: number) => (
+                <div key={idx} className="p-4 flex items-center justify-between gap-3">
+                  <div className="min-w-0 flex items-center gap-3">
+                    <span className="shrink-0 w-8 h-8 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-400 font-bold font-mono flex items-center justify-center text-xs">
+                      #{idx + 1}
+                    </span>
+                    <div className="min-w-0">
+                      <div className="font-semibold text-white truncate">{item.name}</div>
+                      <div className="text-[0.6875rem] text-neutral-400">{item.quantity} sold</div>
+                    </div>
+                  </div>
+                  <div className="shrink-0 font-mono font-bold text-emerald-400">
+                    GH₵{item.revenue.toFixed(2)}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-left text-xs">
               <thead className="bg-neutral-850 text-neutral-400 uppercase text-[0.625rem] tracking-wider border-b border-neutral-800">
                 <tr>
@@ -349,7 +374,31 @@ export const ReportsDashboard: React.FC = () => {
                 {Number(summary.totalCompValue || 0).toFixed(2)} value given free
               </span>
             </div>
-            <div className="overflow-x-auto">
+            <div className="md:hidden divide-y divide-neutral-800/70">
+              {compOrders.map((c: any) => (
+                <div key={c.id} className="p-4 space-y-2">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="font-mono font-bold text-white text-sm break-all">{c.orderNumber}</div>
+                      <div className="text-[0.6875rem] text-neutral-400">
+                        {new Date(c.createdAt).toLocaleString()}
+                      </div>
+                    </div>
+                    <div className="shrink-0 font-mono font-bold text-amber-400">
+                      GH₵{Number(c.compValue || 0).toFixed(2)}
+                    </div>
+                  </div>
+                  <div className="text-[0.6875rem] text-neutral-300">
+                    <span className="text-neutral-500">Guest:</span> {c.customerName || "—"}
+                  </div>
+                  <div className="text-[0.6875rem] text-amber-300/90">
+                    <span className="text-neutral-500">Reason:</span> {c.reason || "—"}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="hidden md:block overflow-x-auto">
               <table className="w-full text-left text-xs">
                 <thead className="bg-neutral-850 text-neutral-400 uppercase text-[0.625rem] tracking-wider border-b border-neutral-800">
                   <tr>

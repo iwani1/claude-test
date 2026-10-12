@@ -63,13 +63,12 @@ export function DisplaySizeControl() {
   return (
     <button
       onClick={cycle}
-      className="h-11 px-3.5 font-bold rounded-xl bg-neutral-800 hover:bg-neutral-750 border border-neutral-700 text-white flex items-center gap-2 transition active:scale-[0.97] text-[0.8125rem]"
+      className="h-11 w-11 sm:w-auto justify-center sm:justify-start px-0 sm:px-3.5 font-bold rounded-xl bg-neutral-800 hover:bg-neutral-750 border border-neutral-700 text-white flex items-center gap-2 transition active:scale-[0.97] text-[0.8125rem]"
       title={`Text & touch size: ${DISPLAY_SIZE_LABEL[size]} — tap to change`}
       aria-label={`Display size: ${DISPLAY_SIZE_LABEL[size]}. Tap to change.`}
     >
-      <Type className="w-5 h-5" />
+      <Type className="w-5 h-5 shrink-0" />
       <span className="hidden lg:inline">{DISPLAY_SIZE_LABEL[size]}</span>
-      <span className="lg:hidden">Aa</span>
     </button>
   );
 }

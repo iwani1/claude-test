@@ -19,6 +19,9 @@ import {
   Smartphone,
   Printer,
   Coins,
+  ShoppingCart,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import { ReceiptModal } from "./ReceiptModal";
 import { KitchenTicketModal } from "./KitchenTicketModal";
@@ -58,6 +61,14 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
      Tables/Orders/Drawer (or a crash/restart) no longer destroys a
      half-taken order. */
   const [cart, setCart] = useState<any[]>(() => readTicketDraft(currentUser?.id ?? "anon"));
+  /**
+   * Phones and small tablets show the open order as a slide-up sheet — the
+   * pattern chosen for this app — so the menu keeps the full screen and the
+   * bar along the bottom carries the running total. md and up render the very
+   * same panel in flow as the right-hand column, so only one copy of the cart
+   * exists (no duplicated state, no second set of handlers).
+   */
+  const [cartOpen, setCartOpen] = useState(false);
 
   /* Destructive taps (discard ticket, remove a line) ask first. Busy-bar
      fingers miss; the toast-light confirm costs half a second and saves the
@@ -302,6 +313,17 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
   const roomCharge = pricing.roomChargeCents / 100;
   const serviceCharge = 0;
   const totalAmount = pricing.totalCents / 100;
+  const cartCount = cart.reduce((n, it) => n + it.quantity, 0);
+
+  // Back closes the cart sheet, matching the drawer on tablet/phone widths.
+  useEffect(() => {
+    if (!cartOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setCartOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [cartOpen]);
 
   /** Builds the printable kitchen docket from whatever we know locally. */
   const buildKitchenTicket = (order: any, items: any[]) => {
@@ -378,6 +400,7 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
         if (onOrderCreated) onOrderCreated();
         // The kitchen has no screen, so the printed docket IS the order.
         setKitchenTicketOrder(buildKitchenTicket(data.order, cart));
+        setCartOpen(false);
         setShowKitchenTicket(true);
       } else {
         alert(data.error || "Failed to create order");
@@ -476,6 +499,7 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
         if (onOrderCreated) onOrderCreated();
         setKitchenTicketOrder(buildKitchenTicket(createdOrder, docketItems));
         setPendingReceipt(compReceipt);
+        setCartOpen(false);
         setShowKitchenTicket(true);
         setIsSubmitting(false);
         return;
@@ -530,7 +554,8 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
         if (cart.length > 0) {
           setKitchenTicketOrder(buildKitchenTicket(createdOrder, cart));
           setPendingReceipt(receiptOrder);
-          setShowKitchenTicket(true);
+          setCartOpen(false);
+        setShowKitchenTicket(true);
         } else {
           setLastCompletedOrder(receiptOrder);
           setShowReceipt(true);
@@ -607,7 +632,7 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
         </div>
       </div>
 
-      <div className="flex-1 flex flex-col lg:flex-row min-h-0 overflow-hidden">
+      <div className="flex-1 flex flex-col md:flex-row min-h-0 overflow-hidden relative">
       {/* LEFT/CENTER: Ghanaian Menu Items & Categories */}
       <div className="flex-1 flex flex-col h-full border-r border-neutral-800 overflow-hidden">
         {/* Top search & Filter bar */}
@@ -673,7 +698,7 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
         </div>
 
         {/* Item Cards Grid */}
-        <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
+        <div className="flex-1 overflow-y-auto p-4 pb-28 md:pb-4 custom-scrollbar">
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5 gap-4">
             {filteredItems.map((item) => (
               <div
@@ -745,13 +770,82 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
         </div>
       </div>
 
-      {/* RIGHT: Active Order Cart & Totals Panel */}
-      <div className="w-full lg:w-96 bg-neutral-900 border-l border-neutral-800 flex flex-col h-full shrink-0">
+      {/* PHONE CART BAR — the running total is the number a cashier must never
+          have to hunt for, and it is the only way into the order panel when the
+          panel lives in a sheet. */}
+      <button
+        onClick={() => setCartOpen(true)}
+        className={`md:hidden fixed inset-x-0 bottom-0 z-20 min-h-16 pb-safe px-4 flex items-center gap-3 bg-neutral-900/95 backdrop-blur border-t border-neutral-700 shadow-[0_-8px_24px_rgba(0,0,0,0.55)] transition-transform ${
+          cartOpen ? "translate-y-full" : "translate-y-0"
+        }`}
+        aria-label={`Open the order: ${cartCount} items, GH₵${totalAmount.toFixed(2)}`}
+      >
+        <span className="relative shrink-0 w-11 h-11 rounded-xl bg-amber-500 text-black flex items-center justify-center">
+          <ShoppingCart className="w-5 h-5" strokeWidth={2.5} />
+          {cartCount > 0 && (
+            <span className="absolute -top-1.5 -right-1.5 min-w-5 h-5 px-1 rounded-full bg-rose-500 text-white text-[0.6875rem] font-bold flex items-center justify-center">
+              {cartCount}
+            </span>
+          )}
+        </span>
+        <span className="flex-1 text-left min-w-0">
+          <span className="block text-[0.6875rem] font-bold tracking-[0.12em] text-neutral-500 uppercase">
+            Open order
+          </span>
+          <span className="block text-base font-bold text-white truncate">
+            {cartCount === 0 ? "No items yet" : `${cartCount} item${cartCount === 1 ? "" : "s"}`}
+            {cartCount > 0 ? ` · GH₵${totalAmount.toFixed(2)}` : ""}
+          </span>
+        </span>
+        <span className="shrink-0 h-11 px-3.5 rounded-xl bg-neutral-800 border border-neutral-700 text-white font-bold text-sm flex items-center gap-1.5">
+          View <ChevronUp className="w-4 h-4" />
+        </span>
+      </button>
+
+      {/* Backdrop for the phone sheet. Sits under the sheet, over the bar. */}
+      {cartOpen && (
+        <div
+          className="md:hidden fixed inset-0 z-30 bg-black/60 backdrop-blur-[2px]"
+          onClick={() => setCartOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+
+      {/* RIGHT: Active Order Cart & Totals Panel.
+          md and up: the in-flow right-hand column. Below md: a slide-up sheet
+          with its own grab handle and close button. Same element either way. */}
+      <div
+        className={`bg-neutral-900 flex flex-col shrink-0 transition-all duration-200 md:h-full md:w-96 md:border-l md:border-neutral-800 max-md:fixed max-md:inset-x-0 max-md:bottom-0 max-md:z-30 max-md:rounded-t-3xl max-md:border-t max-md:border-neutral-700 max-md:max-h-[85dvh] max-md:pb-safe max-md:shadow-2xl ${
+          cartOpen ? "max-md:translate-y-0 max-md:visible" : "max-md:translate-y-full max-md:invisible max-md:pointer-events-none"
+        }`}
+      >
+        {/* Sheet header — phones only. */}
+        <div className="md:hidden shrink-0 px-4 pt-2.5 pb-2 border-b border-neutral-800">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setCartOpen(false)}
+              className="h-11 w-11 rounded-xl bg-neutral-800 border border-neutral-700 text-neutral-200 flex items-center justify-center transition active:bg-neutral-700"
+              aria-label="Close the order panel"
+            >
+              <ChevronDown className="w-5 h-5" />
+            </button>
+            <div className="flex-1 min-w-0 text-center">
+              <div className="text-[0.6875rem] font-bold tracking-[0.12em] text-neutral-500 uppercase">
+                Open order
+              </div>
+              <div className="text-sm font-bold text-white truncate">
+                {cartCount} item{cartCount === 1 ? "" : "s"} · GH₵{totalAmount.toFixed(2)}
+              </div>
+            </div>
+            <div className="w-11" />
+          </div>
+          <div className="mt-1.5 h-1.5 w-12 mx-auto rounded-full bg-neutral-700" />
+        </div>
         {/* Order Meta Header */}
         <div className="p-4 border-b border-neutral-800 space-y-3">
           {/* Order Type Selector — Room Service is distinct from restaurant
               table dining because the GH₵ room charge applies only there. */}
-          <div className="grid grid-cols-4 gap-1.5 bg-neutral-950 p-1.5 rounded-xl border border-neutral-800 text-xs font-bold">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 bg-neutral-950 p-1.5 rounded-xl border border-neutral-800 text-xs font-bold">
             {([
               ["dine_in", "Table"],
               ["room_service", "Room Service"],
@@ -948,7 +1042,10 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
           {/* Quick Discount & Tip Triggers */}
           <div className="flex gap-2 text-xs">
             <button
-              onClick={() => setShowDiscountModal(true)}
+              onClick={() => {
+                setCartOpen(false);
+                setShowDiscountModal(true);
+              }}
               className={`flex-1 h-11 px-2 rounded-xl border flex items-center justify-center gap-1.5 font-semibold text-[0.78125rem] transition active:scale-95 ${
                 calculatedDiscount > 0
                   ? "bg-amber-500/10 border-amber-500/40 text-amber-400"
@@ -986,7 +1083,10 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
           {/* Complimentary breakfast toggle */}
           {orderType === "room_service" && billingConfig.compBreakfastEnabled && (
             <button
-              onClick={() => (isComplimentary ? setIsComplimentary(false) : setShowCompModal(true))}
+              onClick={() => {
+                  setCartOpen(false);
+                  return isComplimentary ? setIsComplimentary(false) : setShowCompModal(true);
+                }}
               className={`w-full h-11 rounded-xl border text-[0.78125rem] font-bold flex items-center justify-center gap-2 transition active:scale-[0.98] ${
                 isComplimentary
                   ? "bg-sky-500/20 border-sky-400 text-sky-200"
@@ -1076,6 +1176,7 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
                   setSplitMomoAmount((totalAmount - Number(half)).toFixed(2));
                   setSplitCashTendered(half);
                   setMomoRef("");
+                  setCartOpen(false);
                   setShowPayModal(true);
                 }}
                 disabled={cart.length === 0 || isSubmitting}
@@ -1132,8 +1233,8 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
 
       {/* MODAL 1: Modifier & Add-on Selection */}
       {selectedItemForMod && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4">
-          <div className="bg-neutral-900 border border-neutral-700 rounded-2xl w-full max-w-lg p-6 shadow-2xl flex flex-col max-h-[90vh]">
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/70 backdrop-blur-xs p-4 overflow-y-auto">
+          <div className="bg-neutral-900 border border-neutral-700 rounded-2xl w-full max-w-lg p-6 shadow-2xl flex flex-col max-h-[90dvh] my-auto">
             <div className="flex justify-between items-start mb-4">
               <div>
                 <h3 className="text-base font-bold text-white">{selectedItemForMod.name}</h3>
@@ -1220,8 +1321,8 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
 
       {/* MODAL 2: Discount Modal */}
       {showDiscountModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4">
-          <div className="bg-neutral-900 border border-neutral-700 rounded-2xl w-full max-w-sm p-5 shadow-2xl space-y-4">
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/70 backdrop-blur-xs p-4 overflow-y-auto">
+          <div className="bg-neutral-900 border border-neutral-700 rounded-2xl w-full max-w-sm p-5 shadow-2xl space-y-4 max-h-[92dvh] overflow-y-auto my-auto">
             <h3 className="text-sm font-bold text-white flex items-center gap-2">
               <Percent className="w-4 h-4 text-amber-400" />
               <span>Apply Order Discount</span>
@@ -1230,6 +1331,8 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
             <div className="space-y-3 text-xs">
               <div>
                 <label className="text-neutral-400 block mb-1">Discount %</label>
+                {/* responsive-ok: single-number labels ("5%") stay readable in
+                    four columns even at 320px, and bigger presets suit fingers. */}
                 <div className="grid grid-cols-4 gap-1.5">
                   {[5, 10, 15, 20].map((pct) => (
                     <button
@@ -1255,6 +1358,7 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
                 <label className="text-neutral-400 block mb-1">Fixed GH₵ Amount</label>
                 <input
                   type="number"
+                        inputMode="decimal"
                   step="1.0"
                   value={discountAmount || ""}
                   onChange={(e) => {
@@ -1302,8 +1406,8 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
 
       {/* MODAL 2b: Complimentary Breakfast confirmation */}
       {showCompModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4">
-          <div className="bg-neutral-900 border border-neutral-700 rounded-2xl w-full max-w-sm p-5 shadow-2xl space-y-4">
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/70 backdrop-blur-xs p-4 overflow-y-auto">
+          <div className="bg-neutral-900 border border-neutral-700 rounded-2xl w-full max-w-sm p-5 shadow-2xl space-y-4 max-h-[92dvh] overflow-y-auto my-auto">
             <div className="flex items-center gap-3">
               <div className="w-11 h-11 rounded-xl bg-sky-500/20 border border-sky-500/40 text-sky-300 flex items-center justify-center shrink-0">
                 <Coffee className="w-6 h-6" />
@@ -1377,8 +1481,8 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
 
       {/* MODAL 3: Pay & Settle Modal (Cash, MoMo, or Split) */}
       {showPayModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4">
-          <div className="bg-neutral-900 border border-neutral-700 rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-4">
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/70 backdrop-blur-xs p-4 overflow-y-auto">
+          <div className="bg-neutral-900 border border-neutral-700 rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-4 max-h-[92dvh] overflow-y-auto my-auto">
             <div className="flex justify-between items-center">
               <div>
                 <h3 className="text-base font-bold text-white">Settle Bill</h3>
@@ -1449,6 +1553,7 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
                   <label className="text-neutral-300 block mb-1 font-semibold">Cash Tendered by Customer (GH₵)</label>
                   <input
                     type="number"
+                        inputMode="decimal"
                     step="1.00"
                     value={cashTendered}
                     onChange={(e) => setCashTendered(e.target.value)}
@@ -1456,8 +1561,9 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
                   />
                 </div>
 
-                {/* Quick tender pills in Ghanaian Cedi notes */}
-                <div className="grid grid-cols-4 gap-1.5">
+                {/* Quick tender pills in Ghanaian Cedi notes.
+                    Two columns on phones so each note is a full finger target. */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
                   <button
                     type="button"
                     onClick={() => setCashTendered(totalAmount.toFixed(2))}
@@ -1557,6 +1663,7 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
                     </label>
                     <input
                       type="number"
+                        inputMode="decimal"
                       step="0.50"
                       value={splitCashAmount}
                       onChange={(e) => {
@@ -1577,6 +1684,7 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
                     </label>
                     <input
                       type="number"
+                        inputMode="decimal"
                       step="0.50"
                       value={splitMomoAmount}
                       onChange={(e) => {
@@ -1599,6 +1707,7 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
                   </label>
                   <input
                     type="number"
+                        inputMode="decimal"
                     step="1.00"
                     value={splitCashTendered}
                     onChange={(e) => setSplitCashTendered(e.target.value)}

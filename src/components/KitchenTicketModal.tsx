@@ -86,7 +86,7 @@ export const KitchenTicketModal: React.FC<KitchenTicketModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-[60] flex items-start justify-center bg-black/70 backdrop-blur-xs p-4 overflow-y-auto">
-      <div className="bg-white text-black w-full max-w-sm rounded-lg shadow-2xl overflow-hidden flex flex-col my-6">
+      <div className="bg-white text-black w-full max-w-sm rounded-lg shadow-2xl overflow-hidden flex flex-col my-auto">
         {/* Action bar */}
         <div className="flex items-center justify-between px-4 py-3 bg-neutral-900 text-white print:hidden">
           <div className="flex items-center gap-2 text-sm font-bold">

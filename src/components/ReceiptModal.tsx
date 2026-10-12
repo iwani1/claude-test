@@ -52,8 +52,8 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
   const currency = restaurantInfo?.currencySymbol || "GH₵";
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 overflow-y-auto">
-      <div className="bg-white text-black w-full max-w-md rounded-xl shadow-2xl overflow-hidden flex flex-col my-8">
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/60 backdrop-blur-xs p-4 overflow-y-auto">
+      <div className="bg-white text-black w-full max-w-md rounded-xl shadow-2xl overflow-hidden flex flex-col my-auto">
         {/* Header Actions */}
         <div className="flex items-center justify-between px-4 py-3 bg-neutral-900 text-white print:hidden">
           <div className="flex items-center gap-2 text-sm font-semibold">

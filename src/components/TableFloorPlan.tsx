@@ -314,8 +314,8 @@ export const TableFloorPlan: React.FC<TableFloorPlanProps> = ({
 
       {/* MODAL: Move Table */}
       {movingTable && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4">
-          <div className="bg-neutral-900 border border-neutral-700 rounded-2xl p-5 w-full max-w-sm shadow-2xl space-y-4">
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/70 backdrop-blur-xs p-4 overflow-y-auto">
+          <div className="bg-neutral-900 border border-neutral-700 rounded-2xl p-5 w-full max-w-sm shadow-2xl space-y-4 max-h-[92dvh] overflow-y-auto my-auto">
             <h3 className="text-sm font-bold text-white flex items-center gap-2">
               <ArrowRightLeft className="w-4 h-4 text-amber-400" />
               <span>Move Table {movingTable.tableNumber}</span>
@@ -363,10 +363,10 @@ export const TableFloorPlan: React.FC<TableFloorPlanProps> = ({
 
       {/* MODAL: Add Table */}
       {showAddTableModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4">
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/70 backdrop-blur-xs p-4 overflow-y-auto">
           <form
             onSubmit={handleAddTable}
-            className="bg-neutral-900 border border-neutral-700 rounded-2xl p-5 w-full max-w-sm shadow-2xl space-y-4"
+            className="bg-neutral-900 border border-neutral-700 rounded-2xl p-5 w-full max-w-sm shadow-2xl space-y-4 max-h-[92dvh] overflow-y-auto my-auto"
           >
             <div className="flex justify-between items-center">
               <h3 className="text-sm font-bold text-white">Add New Table</h3>
@@ -411,6 +411,7 @@ export const TableFloorPlan: React.FC<TableFloorPlanProps> = ({
                 <label className="text-neutral-300 block mb-1">Seating Capacity</label>
                 <input
                   type="number"
+                        inputMode="decimal"
                   min={1}
                   max={24}
                   value={newTableCapacity}

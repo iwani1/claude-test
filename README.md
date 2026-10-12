@@ -32,6 +32,35 @@ the shift's running sales/cash/MoMo totals are rolled back so the drawer still
 reconciles to the sales that remain. There is no undo, and no other role —
 including managers — can reach it.
 
+### Devices — phone, tablet, laptop, desktop
+
+One layout serves every screen; nothing is feature-limited on a smaller device.
+
+- **Phones (under 768px)** — the navigation rail becomes a slide-in drawer behind
+  the **Menu** button, the till shows the open order as a **slide-up sheet** with a
+  running `Cart · n items · GH₵…` bar along the bottom, and every data table
+  (Order History, Ingredient Stock, Menu Items, Shifts, Reports, Audit Logs)
+  becomes a **card list** with full-size buttons instead of 26px icons.
+- **Tablets (768px and up)** — the icon rail is permanently visible and the till
+  is side-by-side again (menu + order panel), which is the layout the bar and
+  wait stations use.
+- **Laptops and desktops** — unchanged: full rail, full tables, keyboard focus
+  rings, and the POS quick-jump bar.
+- **Rotation and resizing** are handled live: a phone rotated into a width that
+  can hold the rail closes the drawer instead of leaving a dimmed overlay.
+- **Notches and home indicators** are respected (`viewport-fit=cover` plus
+  safe-area padding on the drawer, cart bar and bottom sheets), and the shell
+  uses `dvh` so mobile browser toolbars never clip the till.
+- **Zoom is allowed** on phones and tablets (double-tap zoom stays suppressed so
+  taps remain immediate), and the per-device **display size** control in the top
+  bar still scales the whole UI — pick *Standard* on a phone for the most
+  content per screen.
+
+`npm run audit:responsive` re-checks the structural rules this depends on
+(tables scroll or become cards, dialogs scroll on short screens, no `h-screen` /
+`w-screen` in an app that lives inside mobile browser chrome). It exits non-zero
+if a new screen breaks one of them.
+
 ### Editing a saved order (owner only)
 
 The same account gets a pencil button on each row of **Order History**. The

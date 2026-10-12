@@ -19,6 +19,7 @@ import {
   Server,
   Cable,
   Plus,
+  X,
 } from "lucide-react";
 import { UserRole, ROLE_PERMISSIONS } from "@/lib/permissions";
 
@@ -51,6 +52,13 @@ interface SidebarProps {
   /** Whether a cash shift is currently open (drives the Drawer badge). */
   shiftOpen?: boolean;
   isCollapsed?: boolean;
+  /**
+   * Phones and small tablets (below md) show this rail as a slide-in drawer
+   * over the screen instead of a permanent column — a 264px column is a third
+   * of a phone. md and up keep the in-flow rail.
+   */
+  mobileOpen?: boolean;
+  onCloseMobile?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -61,6 +69,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   openTableCount = 0,
   shiftOpen = false,
   isCollapsed = false,
+  mobileOpen = false,
+  onCloseMobile,
 }) => {
   const perms = ROLE_PERMISSIONS[userRole] ?? ROLE_PERMISSIONS.cashier;
 
@@ -131,15 +141,37 @@ export const Sidebar: React.FC<SidebarProps> = ({
   return (
     <aside
       className={`bg-neutral-900 border-r border-neutral-800 text-neutral-300 flex flex-col shrink-0 select-none transition-all duration-200 ${
-        isCollapsed ? "w-[76px]" : "w-[264px]"
+        mobileOpen
+          ? "max-md:translate-x-0 max-md:visible"
+          : "max-md:-translate-x-full max-md:invisible max-md:pointer-events-none"
+      } max-md:fixed max-md:inset-y-0 max-md:left-0 max-md:z-50 max-md:w-[280px] max-md:max-w-[85vw] max-md:shadow-2xl ${
+        isCollapsed ? "md:w-[76px]" : "md:w-[264px]"
       }`}
     >
+      {/* Drawer header — phones only. The drawer covers the screen, so it needs
+          an obvious way back to the till that is not "tap somewhere". */}
+      <div className="md:hidden flex items-center justify-between pl-4 pr-2.5 pt-3">
+        <span className="text-[0.6875rem] font-bold tracking-[0.12em] text-neutral-500 uppercase">
+          Menu
+        </span>
+        <button
+          onClick={onCloseMobile}
+          className="h-11 w-11 rounded-xl bg-neutral-800 hover:bg-neutral-750 active:bg-neutral-700 border border-neutral-700 text-neutral-300 flex items-center justify-center transition"
+          aria-label="Close menu"
+        >
+          <X className="w-5 h-5" />
+        </button>
+      </div>
+
       {/* Primary action — the single most-used control on a POS terminal.
           Oversized so it can be hit without looking away from the customer. */}
       {showNewOrder && (
         <div className="p-3 pb-1">
           <button
-            onClick={onNewOrder}
+            onClick={() => {
+              onNewOrder?.();
+              onCloseMobile?.();
+            }}
             className={`w-full h-14 rounded-2xl bg-amber-500 hover:bg-amber-400 active:bg-amber-600 text-black font-bold shadow-lg shadow-amber-500/25 flex items-center justify-center gap-2.5 transition active:scale-[0.98] ${
               isCollapsed ? "px-0" : "px-4"
             }`}
@@ -171,7 +203,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
               return (
                 <button
                   key={it.id}
-                  onClick={() => onTabChange(it.id as NavTab)}
+                  onClick={() => {
+                    onTabChange(it.id as NavTab);
+                    onCloseMobile?.();
+                  }}
                   // 52px row height keeps every target comfortably above the
                   // ~44px minimum for reliable finger taps.
                   className={`relative w-full flex items-center gap-3.5 rounded-xl transition-all group ${

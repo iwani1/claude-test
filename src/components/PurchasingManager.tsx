@@ -352,10 +352,10 @@ export const PurchasingManager: React.FC = () => {
 
       {/* MODAL 1: Create PO */}
       {showNewPoModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4">
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/70 backdrop-blur-xs p-4 overflow-y-auto">
           <form
             onSubmit={handleCreatePO}
-            className="bg-neutral-900 border border-neutral-700 rounded-2xl p-6 w-full max-w-xl shadow-2xl space-y-4 max-h-[90vh] flex flex-col"
+            className="bg-neutral-900 border border-neutral-700 rounded-2xl p-6 w-full max-w-xl shadow-2xl space-y-4 max-h-[90dvh] flex flex-col my-auto"
           >
             <div className="flex justify-between items-center">
               <h3 className="text-base font-bold text-white">Create Purchase Order</h3>
@@ -428,6 +428,7 @@ export const PurchasingManager: React.FC = () => {
 
                     <input
                       type="number"
+                        inputMode="decimal"
                       step="0.1"
                       placeholder="Qty"
                       value={row.quantity}
@@ -441,6 +442,7 @@ export const PurchasingManager: React.FC = () => {
 
                     <input
                       type="number"
+                        inputMode="decimal"
                       step="0.01"
                       placeholder="Price"
                       value={row.unitPrice}
@@ -494,10 +496,10 @@ export const PurchasingManager: React.FC = () => {
 
       {/* MODAL 2: Goods Received Note (GRN) */}
       {showGrnModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4">
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/70 backdrop-blur-xs p-4 overflow-y-auto">
           <form
             onSubmit={handleProcessGRN}
-            className="bg-neutral-900 border border-neutral-700 rounded-2xl p-6 w-full max-w-lg shadow-2xl space-y-4"
+            className="bg-neutral-900 border border-neutral-700 rounded-2xl p-6 w-full max-w-lg shadow-2xl space-y-4 max-h-[92dvh] overflow-y-auto my-auto"
           >
             <div className="flex justify-between items-start">
               <div>
@@ -547,6 +549,7 @@ export const PurchasingManager: React.FC = () => {
                       <span className="text-[0.625rem] text-neutral-500">Recv:</span>
                       <input
                         type="number"
+                        inputMode="decimal"
                         step="0.1"
                         defaultValue={it.orderedQuantity}
                         onChange={(e) =>
@@ -585,10 +588,10 @@ export const PurchasingManager: React.FC = () => {
 
       {/* MODAL 3: Add Supplier */}
       {showAddSupplierModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4">
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/70 backdrop-blur-xs p-4 overflow-y-auto">
           <form
             onSubmit={handleAddSupplier}
-            className="bg-neutral-900 border border-neutral-700 rounded-2xl p-6 w-full max-w-sm shadow-2xl space-y-4"
+            className="bg-neutral-900 border border-neutral-700 rounded-2xl p-6 w-full max-w-sm shadow-2xl space-y-4 max-h-[92dvh] overflow-y-auto my-auto"
           >
             <div className="flex justify-between items-center">
               <h3 className="text-sm font-bold text-white">Add New Supplier</h3>

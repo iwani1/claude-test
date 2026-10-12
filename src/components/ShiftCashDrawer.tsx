@@ -303,7 +303,76 @@ export const ShiftCashDrawer: React.FC<{ currentUser: any }> = ({ currentUser })
           <div className="p-4 bg-neutral-850 border-b border-neutral-800">
             <h4 className="font-bold text-white text-xs">Shift History & Reconciliation Ledger</h4>
           </div>
-          <div className="overflow-x-auto">
+          <div className="md:hidden divide-y divide-neutral-800/70">
+            {shiftHistory.length === 0 ? (
+              <div className="p-8 text-center text-neutral-500 text-sm">No shifts recorded yet.</div>
+            ) : (
+              shiftHistory.map((s) => {
+                const diff = Number(s.cashDifference || 0);
+                const isClosed = s.status === "closed";
+                return (
+                  <div key={s.id} className="p-4 space-y-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="font-bold text-white">Shift #{s.id}</div>
+                        <div className="text-[0.6875rem] text-neutral-400">
+                          {s.userName} ·{" "}
+                          {new Date(s.openedAt).toLocaleDateString()}{" "}
+                          {new Date(s.openedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                          {s.closedAt
+                            ? ` → ${new Date(s.closedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
+                            : " → still open"}
+                        </div>
+                      </div>
+                      <span
+                        className={`shrink-0 px-2 py-1 rounded-md text-[0.6875rem] font-bold capitalize ${
+                          isClosed ? "bg-neutral-800 text-neutral-400" : "bg-emerald-500/20 text-emerald-300"
+                        }`}
+                      >
+                        {s.status}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-2 text-[0.6875rem]">
+                      <div className="bg-neutral-850 rounded-lg px-2.5 py-2">
+                        <div className="text-neutral-500">Float</div>
+                        <div className="font-mono text-neutral-300">GH₵{Number(s.openingCash).toFixed(2)}</div>
+                      </div>
+                      <div className="bg-neutral-850 rounded-lg px-2.5 py-2">
+                        <div className="text-neutral-500">Sales</div>
+                        <div className="font-mono text-emerald-400 font-bold">GH₵{Number(s.totalSales).toFixed(2)}</div>
+                      </div>
+                      <div className="bg-neutral-850 rounded-lg px-2.5 py-2">
+                        <div className="text-neutral-500">Counted</div>
+                        <div className="font-mono text-neutral-300">
+                          {s.actualClosingCash ? `GH₵${Number(s.actualClosingCash).toFixed(2)}` : "—"}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="text-[0.6875rem]">
+                      <span className="text-neutral-500">Over / short: </span>
+                      <span
+                        className={`font-mono font-bold ${
+                          !isClosed
+                            ? "text-neutral-500"
+                            : Math.abs(diff) < 0.01
+                            ? "text-neutral-500"
+                            : diff > 0
+                            ? "text-emerald-400"
+                            : "text-rose-400"
+                        }`}
+                      >
+                        {isClosed ? (diff > 0 ? `+GH₵${diff.toFixed(2)}` : `GH₵${diff.toFixed(2)}`) : "—"}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-left text-xs">
               <thead className="bg-neutral-850 text-neutral-400 uppercase text-[0.625rem] tracking-wider border-b border-neutral-800">
                 <tr>
@@ -373,10 +442,10 @@ export const ShiftCashDrawer: React.FC<{ currentUser: any }> = ({ currentUser })
 
       {/* MODAL 1: Open Shift */}
       {showOpenModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4">
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/70 backdrop-blur-xs p-4 overflow-y-auto">
           <form
             onSubmit={handleOpenShift}
-            className="bg-neutral-900 border border-neutral-700 rounded-2xl p-6 w-full max-w-sm shadow-2xl space-y-4"
+            className="bg-neutral-900 border border-neutral-700 rounded-2xl p-6 w-full max-w-sm shadow-2xl space-y-4 max-h-[92dvh] overflow-y-auto my-auto"
           >
             <h3 className="text-base font-bold text-white flex items-center gap-2">
               <Unlock className="w-5 h-5 text-amber-400" />
@@ -388,6 +457,7 @@ export const ShiftCashDrawer: React.FC<{ currentUser: any }> = ({ currentUser })
                 <label className="text-neutral-300 block mb-1">Starting Cash Float (GH₵)</label>
                 <input
                   type="number"
+                        inputMode="decimal"
                   step="10.00"
                   required
                   value={openingCashInput}
@@ -429,10 +499,10 @@ export const ShiftCashDrawer: React.FC<{ currentUser: any }> = ({ currentUser })
 
       {/* MODAL 2: Record Cash Payout */}
       {showPayoutModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4">
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/70 backdrop-blur-xs p-4 overflow-y-auto">
           <form
             onSubmit={handleRecordPayout}
-            className="bg-neutral-900 border border-neutral-700 rounded-2xl p-6 w-full max-w-sm shadow-2xl space-y-4"
+            className="bg-neutral-900 border border-neutral-700 rounded-2xl p-6 w-full max-w-sm shadow-2xl space-y-4 max-h-[92dvh] overflow-y-auto my-auto"
           >
             <h3 className="text-base font-bold text-white flex items-center gap-2">
               <ArrowDownRight className="w-5 h-5 text-rose-400" />
@@ -444,6 +514,7 @@ export const ShiftCashDrawer: React.FC<{ currentUser: any }> = ({ currentUser })
                 <label className="text-neutral-300 block mb-1">Payout Amount (GH₵)</label>
                 <input
                   type="number"
+                        inputMode="decimal"
                   step="1.00"
                   required
                   placeholder="0.00"
@@ -487,10 +558,10 @@ export const ShiftCashDrawer: React.FC<{ currentUser: any }> = ({ currentUser })
 
       {/* MODAL 3: Close Shift & Reconciliation */}
       {showCloseModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4">
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/70 backdrop-blur-xs p-4 overflow-y-auto">
           <form
             onSubmit={handleCloseShift}
-            className="bg-neutral-900 border border-neutral-700 rounded-2xl p-6 w-full max-w-md shadow-2xl space-y-4"
+            className="bg-neutral-900 border border-neutral-700 rounded-2xl p-6 w-full max-w-md shadow-2xl space-y-4 max-h-[92dvh] overflow-y-auto my-auto"
           >
             <h3 className="text-base font-bold text-white flex items-center gap-2">
               <Lock className="w-5 h-5 text-rose-400" />
@@ -523,6 +594,7 @@ export const ShiftCashDrawer: React.FC<{ currentUser: any }> = ({ currentUser })
                 </label>
                 <input
                   type="number"
+                        inputMode="decimal"
                   step="1.00"
                   required
                   value={countedCashInput}

@@ -6,6 +6,10 @@
        browser's double-tap zoom delay and preventing accidental text
        selection makes every control feel immediate. */
     touch-action: manipulation;
+    /* iOS inflates body text on narrow screens unless told not to, which
+       would fight the per-device display size chosen in the top bar. */
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
     -webkit-tap-highlight-color: transparent;
     /* Display size, chosen per terminal with the Navbar control and applied
        before first paint by layout.tsx. Every Tailwind size is rem-based, so
@@ -33,6 +37,9 @@
   body {
     background-color: #09090b;
     color: #f4f4f5;
+    /* The shell owns the scrollable regions; without this a phone browser
+       rubber-bands the whole page (and pull-to-refresh can interrupt a sale). */
+    overscroll-behavior: none;
     /* Staff tap quickly between screens; highlighting accidental text
        drags is noise on a terminal. */
     -webkit-user-select: none;
@@ -45,6 +52,16 @@
   select {
     -webkit-user-select: text;
     user-select: text;
+  }
+
+  /* Notched phones: the drawer, cart bar and bottom sheets keep clear of the
+     home indicator and rounded corners. Harmless (0px) everywhere else. */
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  .pt-safe {
+    padding-top: env(safe-area-inset-top, 0px);
   }
 
   /* Consistent, obvious focus ring for keyboard/scan-gun navigation. */

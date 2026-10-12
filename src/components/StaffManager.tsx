@@ -321,10 +321,10 @@ export const StaffManager: React.FC<{ currentUser?: any }> = ({ currentUser }) =
 
       {/* MODAL 1: Add Employee */}
       {showAddModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4">
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/70 backdrop-blur-xs p-4 overflow-y-auto">
           <form
             onSubmit={handleAddEmployee}
-            className="bg-neutral-900 border border-neutral-700 rounded-2xl p-6 w-full max-w-sm shadow-2xl space-y-4"
+            className="bg-neutral-900 border border-neutral-700 rounded-2xl p-6 w-full max-w-sm shadow-2xl space-y-4 max-h-[92dvh] overflow-y-auto my-auto"
           >
             <div className="flex justify-between items-center">
               <h3 className="text-sm font-bold text-white">Add New Employee</h3>
@@ -429,10 +429,10 @@ export const StaffManager: React.FC<{ currentUser?: any }> = ({ currentUser }) =
 
       {/* MODAL: Reset Password */}
       {showPasswordModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4">
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/70 backdrop-blur-xs p-4 overflow-y-auto">
           <form
             onSubmit={handleResetPassword}
-            className="bg-neutral-900 border border-neutral-700 rounded-2xl p-6 w-full max-w-xs shadow-2xl space-y-4"
+            className="bg-neutral-900 border border-neutral-700 rounded-2xl p-6 w-full max-w-xs shadow-2xl space-y-4 max-h-[92dvh] overflow-y-auto my-auto"
           >
             <div className="flex justify-between items-center">
               <h3 className="text-sm font-bold text-white">Reset Password</h3>
@@ -473,10 +473,10 @@ export const StaffManager: React.FC<{ currentUser?: any }> = ({ currentUser }) =
 
       {/* MODAL 2: Change PIN */}
       {showPinModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4">
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/70 backdrop-blur-xs p-4 overflow-y-auto">
           <form
             onSubmit={handleUpdatePin}
-            className="bg-neutral-900 border border-neutral-700 rounded-2xl p-6 w-full max-w-xs shadow-2xl space-y-4"
+            className="bg-neutral-900 border border-neutral-700 rounded-2xl p-6 w-full max-w-xs shadow-2xl space-y-4 max-h-[92dvh] overflow-y-auto my-auto"
           >
             <div className="flex justify-between items-center">
               <h3 className="text-sm font-bold text-white">Update Quick POS PIN</h3>

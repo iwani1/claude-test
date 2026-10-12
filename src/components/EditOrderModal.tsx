@@ -209,8 +209,8 @@ export function EditOrderModal({ order, onClose, onSaved }: EditOrderModalProps)
   const money = (cents: number) => `GH₵${fromCents(Math.max(0, cents))}`;
 
   return (
-    <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label={`Edit order ${order.orderNumber}`}>
-      <div className="w-full max-w-3xl max-h-[92vh] flex flex-col bg-neutral-900 border border-neutral-700 rounded-3xl shadow-2xl overflow-hidden">
+    <div className="fixed inset-0 z-[110] flex items-start justify-center p-4 bg-black/75 backdrop-blur-sm overflow-y-auto" role="dialog" aria-modal="true" aria-label={`Edit order ${order.orderNumber}`}>
+      <div className="w-full max-w-3xl max-h-[92dvh] flex flex-col bg-neutral-900 border border-neutral-700 rounded-3xl shadow-2xl overflow-hidden my-auto">
         {/* Header */}
         <div className="px-5 py-4 border-b border-neutral-800 flex items-center justify-between gap-3 shrink-0">
           <div>
@@ -241,7 +241,7 @@ export function EditOrderModal({ order, onClose, onSaved }: EditOrderModalProps)
               {/* Order type */}
               <div>
                 <p className="text-[0.6875rem] font-bold tracking-[0.12em] text-neutral-500 uppercase mb-2">Order type</p>
-                <div className="grid grid-cols-4 gap-1.5 bg-neutral-950 p-1.5 rounded-xl border border-neutral-800 text-xs font-bold">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 bg-neutral-950 p-1.5 rounded-xl border border-neutral-800 text-xs font-bold">
                   {([
                     ["dine_in", "Table"],
                     ["room_service", "Room Service"],

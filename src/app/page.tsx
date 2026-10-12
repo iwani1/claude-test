@@ -139,6 +139,29 @@ export default function App() {
    *  whatever ticket the till is holding. When a ticket has items we ask
    *  first — a misplaced finger should never silently destroy a sale. */
   const [lostTicket, setLostTicket] = useState<{ items: number; total: number } | null>(null);
+  // < md the sidebar is a slide-in drawer, so it needs its own open/closed
+  // state. md and up ignore it entirely (the rail is always in flow).
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  // Escape closes the drawer, and so does rotating a phone into (or resizing
+  // to) a width where the rail is permanently visible again — otherwise the
+  // backdrop would be left covering a layout that no longer has a drawer.
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMenuOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    const mq = window.matchMedia("(min-width: 768px)");
+    const onChange = () => {
+      if (mq.matches) setMenuOpen(false);
+    };
+    mq.addEventListener("change", onChange);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      mq.removeEventListener("change", onChange);
+    };
+  }, [menuOpen]);
 
   const beginNewOrder = () => {
     clearTicketDraft(currentUser?.id ?? "anon");
@@ -169,7 +192,7 @@ export default function App() {
   // --- Session boot states -------------------------------------------------
   if (authState === "checking") {
     return (
-      <div className="h-screen w-screen flex flex-col items-center justify-center bg-neutral-950 gap-4">
+      <div className="h-dvh w-full flex flex-col items-center justify-center bg-neutral-950 gap-4">
         <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center shadow-xl shadow-orange-500/20">
           <Store className="w-7 h-7 text-white" />
         </div>
@@ -289,8 +312,9 @@ export default function App() {
   };
 
   return (
-    <div className="flex flex-col h-screen w-screen overflow-hidden bg-neutral-950 text-white font-sans">
+    <div className="flex flex-col h-dvh w-full pt-safe overflow-hidden bg-neutral-950 text-white font-sans">
       <Navbar
+        onOpenMenu={() => setMenuOpen(true)}
         currentUser={currentUser}
         onUserChange={handleUserChange}
         onLogout={handleLogout}
@@ -303,8 +327,19 @@ export default function App() {
         currentTab={activeTab}
       />
 
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 min-h-0 overflow-hidden relative">
+        {/* Backdrop for the phone drawer. Hidden from md up, where the rail is
+            part of the layout instead of an overlay. */}
+        {menuOpen && (
+          <div
+            className="md:hidden fixed inset-0 z-40 bg-black/60 backdrop-blur-[2px]"
+            onClick={() => setMenuOpen(false)}
+            aria-hidden="true"
+          />
+        )}
         <Sidebar
+          mobileOpen={menuOpen}
+          onCloseMobile={() => setMenuOpen(false)}
           activeTab={activeTab}
           onTabChange={(tab) => {
             setActiveTab(tab);

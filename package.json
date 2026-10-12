@@ -10,6 +10,7 @@
     "db:migrate": "tsx scripts/migrate.ts",
     "import:legacy": "tsx scripts/import-restpos.ts",
     "setup:bar-stock": "tsx scripts/setup-bar-stock.ts",
+    "audit:responsive": "python3 scripts/audit-responsive.py",
     "test:legacy-import": "tsx tests/legacy-import.ts",
     "test:security": "tsx tests/run-security.ts",
     "test": "npm run test:security",
