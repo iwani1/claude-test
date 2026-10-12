@@ -226,13 +226,24 @@ if [[ "$DRY_RUN" == "1" ]]; then
   info "[dry-run] would wait for $POS_URL/api/health"
 else
   printf '    Waiting for %s/api/health ' "$POS_URL"
-  HEALTHY=0
+  HEALTHY=0; BEHIND=0
   for _ in $(seq 1 30); do
-    if curl -fsS --max-time 5 "$POS_URL/api/health" >/tmp/pos-health.json 2>/dev/null; then
-      HEALTHY=1; printf ' ok\n'; break
+    # No -f: a 503 still carries a body, and that body says whether the
+    # database is simply behind this release (migrations not applied yet).
+    if curl -sS --max-time 5 "$POS_URL/api/health" -o /tmp/pos-health.json 2>/dev/null; then
+      if grep -q '"ok":true' /tmp/pos-health.json; then HEALTHY=1; printf ' ok\n'; break; fi
+      if grep -q 'schema-behind' /tmp/pos-health.json; then BEHIND=1; printf ' schema-behind\n'; break; fi
     fi
     printf '.'; sleep 2
   done
+  if [[ "$BEHIND" == "1" ]]; then
+    info "Health: $(cat /tmp/pos-health.json)"
+    die "The app is up but the database is behind this release — do not roll the code back.
+    Apply the migrations, then restart:
+      cd $POS_DIR && sudo -E -u $POS_USER env MIGRATION_DATABASE_URL='postgresql://pos_owner:PASSWORD@127.0.0.1:5432/$POS_DB' npm run db:migrate
+      sudo systemctl restart $POS_SERVICE
+    /api/health names the missing piece. Backup from this run: $DUMP"
+  fi
   [[ "$HEALTHY" == "1" ]] || {
     printf '\n'
     systemctl --no-pager --lines=30 status "$POS_SERVICE" || true

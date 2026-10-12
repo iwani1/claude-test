@@ -391,18 +391,61 @@ chowns `/opt/pos` to `pos` whenever it installs dependencies. If you later run
 
 ### The long way — every step by hand
 
+Run these as an admin user with `sudo`. Each line is written so the account
+that actually needs the permission is the one that gets it.
+
 ```sh
-sudo -u postgres pg_dump -Fc pos > /root/backups/pos-before-update-$(date +%F-%H%M).dump
-cd /opt/pos && git pull          # or upload the new 11claude-fixed.zip
-sudo -u pos npm ci               # only needed when package-lock.json changed
-sudo -u pos npm run build
-export MIGRATION_DATABASE_URL='postgresql://pos_owner:...@127.0.0.1:5432/pos'
-sudo -u pos npm run db:migrate   # safe to re-run; new files apply in order
-unset MIGRATION_DATABASE_URL
-# If a new migration created tables, re-apply the pos_runtime grants (Phase 6).
-systemctl restart pos
-curl -sS https://pos.example.com/api/health
+# 0. What is deployed?
+sudo -u pos git -C /opt/pos status -sb | head -2
+sudo -u pos git -C /opt/pos log --oneline -1
+
+# 1. Backup. The redirection must be root: `sudo -u postgres pg_dump > /root/...`
+#    still redirects as *you*, which is what "Permission denied" on the dump is.
+sudo mkdir -p /root/backups
+sudo -u postgres pg_dump -Fc pos | sudo tee /root/backups/pos-before-$(date +%F-%H%M).dump > /dev/null
+sudo ls -lh /root/backups | tail -2          # a non-zero file, or stop here
+
+# 2. Code. /opt/pos belongs to the service account, so pull as that account —
+#    a plain `git pull` answers "cannot open '.git/FETCH_HEAD': Permission denied".
+sudo -u pos git -C /opt/pos pull             # or upload the new 11claude-fixed.zip
+
+# 3. Dependencies, only when package-lock.json moved
+sudo -u pos npm --prefix /opt/pos ci
+
+# 4. Migrations, as the schema owner with its real password (never the runtime
+#    login, and "PASSWORD" in this document is a placeholder, not a value).
+sudo -E -u pos env MIGRATION_DATABASE_URL='postgresql://pos_owner:REAL_PASSWORD@127.0.0.1:5432/pos' \
+  npm --prefix /opt/pos run db:migrate       # safe to re-run; new files apply in order
+
+# 5. Build and restart. The restart needs its own sudo: without it systemd
+#    raises a polkit prompt ("Authentication is required to restart 'pos.service'")
+#    that normally denies the unit.
+sudo -u pos npm --prefix /opt/pos run build
+sudo systemctl restart pos
+
+# 6. Verify
+curl -sS http://127.0.0.1:3000/api/health; echo
+systemctl status pos --no-pager | head -5
 ```
+
+Notes
+
+- **Lost the `pos_owner` password?** Reset it from the database superuser and use
+  the new value in step 4:
+  `sudo -u postgres psql -c "ALTER ROLE pos_owner WITH PASSWORD 'new-long-password';"`
+  Pick one without `@ : / ?` so the URL needs no escaping, and keep it out of chat
+  and out of shell history (`set -o history -o histexpand` / prefix with a space
+  if `HISTCONTROL=ignorespace`).
+- **Skipped a step by accident?** The app now says so itself: `/api/health`
+  reports `{"ok":false,"reason":"schema-behind","missing":[…]}` and every screen
+  answers *"The database is missing an update this version needs (…)"* instead of
+  failing obscurely. Re-run step 4 and restart.
+- **Prefer one command?** `sudo MIGRATION_DATABASE_URL='postgresql://pos_owner:…' ./scripts/deploy-vps.sh`
+  does steps 1, 2, 4, 5 and 6 for you (backup, fetch, migration gate, build,
+  restart, health) and prints the rollback line. Add
+  `git config --system --add safe.directory /opt/pos` once if root's git ever
+  reports "detected dubious ownership".
+- If a new migration created tables, re-apply the `pos_runtime` grants (Phase 6).
 
 ---
 
@@ -413,12 +456,17 @@ curl -sS https://pos.example.com/api/health
 | `AUTH_SECRET must contain at least 32 random characters` | Missing/short value in `.env` |
 | App refuses DB connection mentioning privileged/superuser/BYPASSRLS | `DATABASE_URL` is using `pos_owner` or a superuser — use `pos_runtime` |
 | `Changed migration: 000X_...` | Never edit an applied migration; add a new file instead |
+| Permission denied writing the `pg_dump` file | The shell redirected as your login user. Use `sudo -u postgres pg_dump -Fc pos \| sudo tee /root/backups/… > /dev/null`, or let `scripts/deploy-vps.sh` do it |
+| `cannot open '.git/FETCH_HEAD': Permission denied` | The checkout belongs to the service account: `sudo -u pos git -C /opt/pos pull` |
+| `Authentication is required to restart 'pos.service'` / polkit denied | The restart needs its own `sudo`: `sudo systemctl restart pos` |
+| `password authentication failed for user "pos_owner"` | The real owner password, not the placeholder. Reset it with `sudo -u postgres psql -c "ALTER ROLE pos_owner WITH PASSWORD '…'"` and use that in `MIGRATION_DATABASE_URL` |
 | `EADDRINUSE` | Another process on port 3000: `ss -lntp \| grep 3000` |
 | nginx `502 Bad Gateway` | `systemctl status pos`, `journalctl -u pos -n 50` |
 | Login works on server but not from browsers | `APP_ORIGIN` mismatch or not HTTPS |
 | `429 Too many attempts` | Login/refund throttles are working; wait 15 minutes |
 | A deploy stopped half-way | Re-run `sudo ./scripts/deploy-vps.sh`; it sees `/var/backups/pos/deploy-incomplete` and finishes the job |
 | The app answers 503 *"The database is missing an update this version needs (…)"* | The code is newer than the database. Run `sudo -E -u pos env MIGRATION_DATABASE_URL='postgresql://pos_owner:…@127.0.0.1:5432/pos' npm run db:migrate` in `/opt/pos`, then `systemctl restart pos`. `/api/health` reports the same thing as `{"ok":false,"reason":"schema-behind"}` |
+| `scripts/deploy-vps.sh` stops with *"The app is up but the database is behind this release — do not roll the code back"* | The fetched release needs its migrations and they were not applied (for example the checkout already held the new migration file, so the run saw no *new* file to gate on). Run the `db:migrate` command it prints, then `sudo systemctl restart pos` |
 | `/api/health` says `{"ok":false,"reason":"schema-behind"}` | Same fix as above. The check exists because an unapplied migration used to surface as a bare "Request failed" in the middle of a deletion or a payment |
 | Staff PINs suddenly rejected ("Invalid manager approval", "Invalid PIN") | `AUTH_SECRET` was changed. PIN digests are keyed on it, so every stored PIN must be set again: each staff member signs in with their password and sets a new PIN (Staff → Set PIN). Sessions are invalidated too, so everyone signs in again |
 | Tests wanted on the server | `npm run test:security` needs ports 15432 + 3100 free and ignores `.env` — prefer running tests before deploying |
