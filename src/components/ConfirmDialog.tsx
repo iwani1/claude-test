@@ -8,6 +8,11 @@ export interface ConfirmDialogProps {
   message: string;
   confirmLabel?: string;
   cancelLabel?: string;
+  /** True while the confirmed action is running — both buttons lock. */
+  busy?: boolean;
+  busyLabel?: string;
+  /** Failure from the server, shown inside the dialog instead of vanishing. */
+  error?: string;
   onConfirm: () => void;
   onCancel: () => void;
 }
@@ -24,6 +29,9 @@ export function ConfirmDialog({
   message,
   confirmLabel = "Yes, continue",
   cancelLabel = "Go back",
+  busy = false,
+  busyLabel = "Working…",
+  error,
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
@@ -42,19 +50,22 @@ export function ConfirmDialog({
           </div>
           <h2 className="text-xl font-bold text-white">{title}</h2>
           <p className="text-sm text-neutral-400 leading-relaxed">{message}</p>
+          {error && <p className="text-sm font-semibold text-rose-400">{error}</p>}
         </div>
         <div className="px-5 pb-5 grid grid-cols-2 gap-3.5">
           <button
             onClick={onCancel}
-            className="h-14 rounded-2xl bg-neutral-800 hover:bg-neutral-700 active:bg-neutral-600 border border-neutral-700 text-white text-base font-bold transition active:scale-[0.98]"
+            disabled={busy}
+            className="h-14 rounded-2xl bg-neutral-800 hover:bg-neutral-700 active:bg-neutral-600 border border-neutral-700 text-white text-base font-bold transition active:scale-[0.98] disabled:opacity-40"
           >
             {cancelLabel}
           </button>
           <button
             onClick={onConfirm}
-            className="h-14 rounded-2xl bg-rose-600 hover:bg-rose-500 active:bg-rose-700 text-white text-base font-bold transition active:scale-[0.98]"
+            disabled={busy}
+            className="h-14 rounded-2xl bg-rose-600 hover:bg-rose-500 active:bg-rose-700 text-white text-base font-bold transition active:scale-[0.98] disabled:opacity-40"
           >
-            {confirmLabel}
+            {busy ? busyLabel : confirmLabel}
           </button>
         </div>
       </div>

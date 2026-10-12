@@ -22,7 +22,17 @@ npm start
 Branding (name, logo, titles, export filenames) lives in `src/lib/brand.ts`
 and `public/logo.svg`; receipt business details are managed in Restaurant Settings.
 
-### Touch terminals (finger-driven use)
+### Order deletion (owner only)
+
+The super-admin account gets a trash button on each row of **Order History**,
+confirmed by a two-button dialog. Deletion **erases** the order: its lines,
+payments, refunds (+ their drawer movements), kitchen tickets and any audit
+entries pointing at it. Stock the order had deducted returns to inventory, and
+the shift's running sales/cash/MoMo totals are rolled back so the drawer still
+reconciles to the sales that remain. There is no undo, and no other role —
+including managers — can reach it.
+
+
 
 - **Display size** — the control in the top bar cycles **Standard (16px)** →
   **Large (18px, default)** → **Extra large (20px)**. The whole UI is rem-based,

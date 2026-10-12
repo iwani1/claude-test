@@ -23,6 +23,16 @@ async function api(path: string, body?: unknown) {
   if (response.headers.has("set-cookie")) cookie = response.headers.get("set-cookie")!.split(";")[0];
   return data;
 }
+/** Raw request for the cases whose whole point is a non-200 answer. */
+async function raw(path: string, method: string, body?: unknown, asCookie = cookie) {
+  const response = await fetch(`http://127.0.0.1:3100/api/${path}`, {
+    method,
+    headers: { "Content-Type": "application/json", Cookie: asCookie },
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+  });
+  const data = await response.json().catch(() => ({}));
+  return { status: response.status, data };
+}
 async function main() {
   await api("auth/login", { email: "user1@test.invalid", password: "Test-password-only-123!" });
   const startingStock = Number((await admin.query("SELECT current_stock FROM ingredients WHERE id=1")).rows[0].current_stock);
@@ -55,6 +65,36 @@ async function main() {
   const offline = { idempotencyKey: "pilot-offline-001", orderType: "takeaway", items: [{ menuItemId: 1, quantity: 1 }], paidAmount: 0, paymentStatus: "unpaid" };
   check((await api("sync/offline", { offlineOrders: [offline] })).syncedCount, 1, "offline order replay accepted");
   check((await api("sync/offline", { offlineOrders: [offline] })).duplicateCount, 1, "offline replay retry is deduplicated");
+
+  // --- Owner-only order erasure ------------------------------------------
+  // The owner asked for orders to vanish completely. What the system still
+  // guarantees: only owner role may do it, other branches cannot see it,
+  // the order's children die with it, its stock comes back, and the shift
+  // totals roll back so the drawer never shows money for a sale that no
+  // longer exists.
+  const stockBeforeDelete = Number((await admin.query("SELECT current_stock FROM ingredients WHERE id=1")).rows[0].current_stock);
+  const { order: doomed } = await api("orders", { idempotencyKey: "pilot-delete-001", orderType: "takeaway", items: [{ menuItemId: 1, quantity: 1 }] });
+  check(Number((await admin.query("SELECT current_stock FROM ingredients WHERE id=1")).rows[0].current_stock), stockBeforeDelete - 2, "deletion target consumed recipe stock");
+  check((await raw(`orders/${doomed.id}`, "DELETE")).status, 200, "owner deletes the order");
+  check((await raw(`orders/${doomed.id}`, "GET")).status, 404, "deleted order is gone from the API");
+  check(Number((await admin.query("SELECT count(*)::int AS c FROM order_items WHERE order_id=$1", [doomed.id])).rows[0].c), 0, "order lines erased with the order");
+  check(Number((await admin.query("SELECT count(*)::int AS c FROM kitchen_tickets WHERE order_id=$1", [doomed.id])).rows[0].c), 0, "kitchen tickets erased with the order");
+  check(Number((await admin.query("SELECT current_stock FROM ingredients WHERE id=1")).rows[0].current_stock), stockBeforeDelete, "stock returns to inventory after deletion");
+  check((await raw(`orders/${doomed.id}`, "DELETE")).status, 404, "deleting an already-deleted order is a clean 404");
+  check(Number((await admin.query("SELECT count(*)::int AS c FROM audit_logs WHERE entity_type='order' AND entity_id=$1", [String(doomed.id)])).rows[0].c), 0, "no audit trace of the erased order");
+
+  // --- Paid order deletion rolls the shift maths back ---------------------
+  const { shift: rollbackShift } = await api("shifts", { action: "open_shift", openingCash: "50.00", notes: "Delete-rollback probe" });
+  const { order: paidDoomed } = await api("orders", { idempotencyKey: "pilot-delete-002", orderType: "takeaway", items: [{ menuItemId: 1, quantity: 1 }] });
+  await api(`orders/${paidDoomed.id}/pay`, { paymentMethod: "cash", amount: "10.00", cashTendered: "10.00" });
+  check((await api("shifts")).activeShift.totalSales, "10.00", "rollback probe recorded the sale on the shift");
+  check((await raw(`orders/${paidDoomed.id}`, "DELETE")).status, 200, "owner deletes a paid order");
+  const rolledBack = (await api("shifts")).activeShift;
+  check(rolledBack.totalSales, "0.00", "shift sales total rolled back after deletion");
+  check(rolledBack.totalCashSales, "0.00", "shift cash total rolled back after deletion");
+  check(Number((await admin.query("SELECT count(*)::int AS c FROM payments WHERE order_id=$1", [paidDoomed.id])).rows[0].c), 0, "payments erased with the order");
+  const rollbackClose = await api("shifts", { action: "close_shift", shiftId: rollbackShift.id, actualClosingCash: "50.00" });
+  check(rollbackClose.difference, "0.00", "drawer still reconciles after the deleted sale");
   console.log(`\n${checks} synthetic shift/pilot checks passed. No physical payment, printer, or backup test was performed.`);
 }
 main().catch(error => { console.error(error); process.exitCode = 1; }).finally(() => admin.end());

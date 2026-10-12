@@ -99,6 +99,21 @@ async function main() {
   check(Number(repeated[0].body.order.totalAmount) === 10, "server ignores tampered prices");
   check(Number((await admin.query("SELECT current_stock FROM ingredients WHERE id=1")).rows[0].current_stock) === 98, "concurrent order deducted stock once");
   check((await request("/api/orders", "POST", order("concurrent-order-1", { items: [{ menuItemId: 1, quantity: 2 }] }), cashier)).status === 409, "idempotency key cannot identify a different payload");
+
+  // Owner-only permanent delete. Nobody below owner may reach the handler,
+  // another branch cannot even see the order, and a denied attempt must
+  // leave the order exactly where it was.
+  const stockBeforeTarget = Number((await admin.query("SELECT current_stock FROM ingredients WHERE id=1")).rows[0].current_stock);
+  const deleteTarget = await request("/api/orders", "POST", order("delete-permission-target"), owner);
+  const deleteTargetId = deleteTarget.body.order.id;
+  check((await request(`/api/orders/${deleteTargetId}`, "DELETE", {}, cashier)).status === 403, "cashier cannot delete orders");
+  check((await request(`/api/orders/${deleteTargetId}`, "DELETE", {}, manager)).status === 403, "manager cannot delete orders (owner only)");
+  check((await request(`/api/orders/${deleteTargetId}`, "DELETE", {}, accountant)).status === 403, "accountant cannot delete orders");
+  check((await request(`/api/orders/${deleteTargetId}`, "DELETE", {}, otherOwner)).status === 404, "another branch's owner cannot delete this branch's order");
+  check((await admin.query("SELECT count(*)::int AS c FROM orders WHERE id=$1", [deleteTargetId])).rows[0].c === 1, "denied deletes leave the order untouched");
+  check((await request(`/api/orders/${deleteTargetId}`, "DELETE", {}, owner)).status === 200, "owner deletes the order");
+  check((await admin.query("SELECT count(*)::int AS c FROM orders WHERE id=$1", [deleteTargetId])).rows[0].c === 0, "deleted order row is gone");
+  check(Number((await admin.query("SELECT current_stock FROM ingredients WHERE id=1")).rows[0].current_stock) === stockBeforeTarget, "deleting the order returns its stock");
   check((await request(`/api/orders/${id}`, "GET", undefined, other)).status === 404, "cross-branch direct order lookup denied");
   check((await request(`/api/orders/${id}/pay`, "POST", { paymentMethod: "cash", amount: "10" }, other)).status === 404, "cross-branch payment denied");
   const pay = await Promise.all([1,2].map(() => request(`/api/orders/${id}/pay`, "POST", { paymentMethod: "split", amount: "10", cashAmount: "4", momoAmount: "6" }, cashier)));

@@ -14,9 +14,11 @@ import {
   X,
   ShieldCheck,
   ChefHat,
+  Trash2,
 } from "lucide-react";
 import { ReceiptModal } from "./ReceiptModal";
 import { KitchenTicketModal } from "./KitchenTicketModal";
+import { ConfirmDialog } from "./ConfirmDialog";
 
 export const OrdersHistory: React.FC<{ currentUser: any }> = ({ currentUser }) => {
   const [orders, setOrders] = useState<any[]>([]);
@@ -61,6 +63,13 @@ export const OrdersHistory: React.FC<{ currentUser: any }> = ({ currentUser }) =
   const [docketOrder, setDocketOrder] = useState<any | null>(null);
   const [showDocketModal, setShowDocketModal] = useState(false);
 
+  // Owner-only hard delete. The confirm dialog stays open while the request
+  // runs, and a server failure is shown inside it — never swallowed.
+  const [deleteTarget, setDeleteTarget] = useState<any | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
+  const [notice, setNotice] = useState("");
+
   const PAGE_SIZE = 100;
   const fetchOrders = useCallback((offset = 0, append = false) => {
     setLoading(true);
@@ -78,6 +87,25 @@ export const OrdersHistory: React.FC<{ currentUser: any }> = ({ currentUser }) =
       .catch(err => setLoadError(err?.message || "Could not load orders"))
       .finally(() => setLoading(false));
   }, [from, to]);
+
+  const confirmDeleteOrder = async () => {
+    if (!deleteTarget) return;
+    setDeleteBusy(true);
+    setDeleteError("");
+    try {
+      const res = await fetch(`/api/orders/${deleteTarget.id}`, { method: "DELETE" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || `Delete failed (${res.status})`);
+      const number = deleteTarget.orderNumber;
+      setDeleteTarget(null);
+      setNotice(`Order ${number} was permanently deleted.`);
+      fetchOrders(0, false);
+    } catch (err: any) {
+      setDeleteError(err?.message || "Delete failed");
+    } finally {
+      setDeleteBusy(false);
+    }
+  };
 
   // Load on the first tick (deferred so effects never setState synchronously),
   // then keep the list live: refresh on an interval and whenever the tab regains focus.
@@ -327,6 +355,20 @@ export const OrdersHistory: React.FC<{ currentUser: any }> = ({ currentUser }) =
                               <span>Refund</span>
                             </button>
                           )}
+
+                          {currentUser?.role === "super_admin" && (
+                            <button
+                              onClick={() => {
+                                setDeleteError("");
+                                setDeleteTarget(ord);
+                              }}
+                              className="p-1.5 bg-neutral-800 hover:bg-rose-600 text-neutral-400 hover:text-white rounded-lg transition border border-neutral-700 hover:border-rose-500"
+                              title="Delete this order permanently (owner only)"
+                              aria-label={`Delete order ${ord.orderNumber}`}
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -336,6 +378,15 @@ export const OrdersHistory: React.FC<{ currentUser: any }> = ({ currentUser }) =
             </table>
           </div>
         </div>
+
+        {notice && (
+          <div className="mt-3 px-4 py-2.5 rounded-xl bg-rose-500/10 border border-rose-500/40 text-rose-300 text-xs font-semibold flex items-center justify-between gap-3">
+            <span>{notice}</span>
+            <button onClick={() => setNotice("")} className="text-rose-300 hover:text-white" aria-label="Dismiss">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
 
         {/* Live count + pagination — the list must never fail silently */}
         <div className="mt-3 flex flex-col items-center gap-2">
@@ -465,6 +516,27 @@ export const OrdersHistory: React.FC<{ currentUser: any }> = ({ currentUser }) =
           order={receiptOrder}
         />
       )}
+      {/* OWNER-ONLY PERMANENT DELETE */}
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title={deleteTarget ? `Delete order ${deleteTarget.orderNumber}?` : "Delete order?"}
+        message={
+          deleteTarget
+            ? `Permanent: GH₵${Number(deleteTarget.totalAmount || 0).toFixed(2)} disappears from history, reports and collections, and any stock it used goes back to inventory. This cannot be undone.`
+            : ""
+        }
+        confirmLabel="Delete forever"
+        cancelLabel="Keep it"
+        busy={deleteBusy}
+        busyLabel="Deleting…"
+        error={deleteError}
+        onCancel={() => {
+          setDeleteTarget(null);
+          setDeleteError("");
+        }}
+        onConfirm={confirmDeleteOrder}
+      />
+
       {/* KITCHEN DOCKET REPRINT */}
       {showDocketModal && docketOrder && (
         <KitchenTicketModal

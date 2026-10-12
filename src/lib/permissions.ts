@@ -13,6 +13,9 @@ export const ROLE_PERMISSIONS: Record<UserRole, {
   canAccessKds: boolean;
   canManageMenu: boolean;
   canManageSettings: boolean;
+  /** Hard-delete orders. Owner only: this erases the order and its whole
+   *  financial trail, so it is deliberately not delegable to managers. */
+  canDeleteOrders: boolean;
 }> = {
   super_admin: {
     label: "Super Admin / Owner",
@@ -25,6 +28,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, {
     canAccessKds: true,
     canManageMenu: true,
     canManageSettings: true,
+    canDeleteOrders: true,
   },
   manager: {
     label: "Restaurant Manager",
@@ -37,6 +41,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, {
     canAccessKds: true,
     canManageMenu: true,
     canManageSettings: false,
+    canDeleteOrders: false,
   },
   cashier: {
     label: "Cashier / Front-of-House",
@@ -50,6 +55,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, {
     canAccessKds: true,
     canManageMenu: false,
     canManageSettings: false,
+    canDeleteOrders: false,
   },
   cook: {
     label: "Kitchen Staff (No Terminal Access)",
@@ -63,6 +69,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, {
     canAccessKds: false,
     canManageMenu: false,
     canManageSettings: false,
+    canDeleteOrders: false,
   },
   inventory_officer: {
     label: "Inventory Officer",
@@ -75,6 +82,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, {
     canAccessKds: false,
     canManageMenu: true,
     canManageSettings: false,
+    canDeleteOrders: false,
   },
   accountant: {
     terminalAccess: true,
@@ -87,6 +95,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, {
     canAccessKds: false,
     canManageMenu: false,
     canManageSettings: false,
+    canDeleteOrders: false,
   },
 };
 
