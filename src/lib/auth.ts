@@ -27,7 +27,10 @@ export function verifyPassword(password: string, stored: string): boolean {
       ? crypto.scryptSync(password, parts[1], 64, { N: 32768, r: 8, p: 1, maxmem: 64 * 1024 * 1024 })
       : crypto.pbkdf2Sync(password, parts[0], 10000, 64, "sha512");
     return actual.length === expected.length && crypto.timingSafeEqual(actual, expected);
-  } catch { return false; }
+  } catch {
+    /* audit-ok: fails closed — an unverifiable comparison is not a pass */
+    return false;
+  }
 }
 export function pinDigest(pin: string): string {
   return crypto.createHmac("sha256", authSecret()).update(`pin:${pin}`).digest("hex");
@@ -53,7 +56,10 @@ export function verifyToken(token: string): TokenClaims | null {
         !Number.isSafeInteger(payload.exp) || !Number.isSafeInteger(payload.iat) || payload.iat > now ||
         payload.exp <= now || payload.exp <= payload.iat || payload.exp - payload.iat > SESSION_SECONDS) return null;
     return payload;
-  } catch { return null; }
+  } catch {
+    /* audit-ok: fails closed — an unverifiable token is no session */
+    return null;
+  }
 }
 export function publicUser(user: SessionUser) {
   const { sessionVersion: _version, ...safe } = user;

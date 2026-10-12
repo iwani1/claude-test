@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadFailure } from "./LoadFailure";
+
 import React, { useState, useEffect, useCallback } from "react";
 import {
   ChefHat,
@@ -28,14 +30,17 @@ export const KitchenDisplaySystem: React.FC = () => {
   const [showReprintModal, setShowReprintModal] = useState(false);
 
   // Polling every 5 seconds
+  const [loadError, setLoadError] = useState<string | null>(null);
+
   const fetchTickets = useCallback(() => fetch(`/api/kds?station=${stationFilter}`)
     .then(res => { if (!res.ok) throw new Error("Request failed"); return res.json(); })
     .then(data => {
+    setLoadError(null);
       if (data.tickets) {
         setTickets(data.tickets);
       }
 
-    }).catch(console.error), [stationFilter]);
+    }).catch(() => setLoadError("Kitchen tickets could not be loaded. What is shown may be out of date.")), [stationFilter]);
 
   useEffect(() => {
     fetchTickets();
@@ -72,6 +77,7 @@ export const KitchenDisplaySystem: React.FC = () => {
 
   return (
     <div className="flex-1 flex flex-col h-full bg-neutral-950 overflow-hidden">
+      <LoadFailure message={loadError} onRetry={fetchTickets} />
       {/* KDS Header */}
       <div className="p-4 bg-neutral-900 border-b border-neutral-800 flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
         <div className="flex items-center gap-3">

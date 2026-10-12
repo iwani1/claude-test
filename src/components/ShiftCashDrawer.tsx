@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadFailure } from "./LoadFailure";
+
 import React, { useState, useEffect, useCallback } from "react";
 import {
   Coins,
@@ -34,13 +36,16 @@ export const ShiftCashDrawer: React.FC<{ currentUser: any }> = ({ currentUser })
   const [payoutReason, setPayoutReason] = useState("");
   const [drawerMessage, setDrawerMessage] = useState<string | null>(null);
 
+  const [loadError, setLoadError] = useState<string | null>(null);
+
   const fetchShifts = useCallback(() => fetch("/api/shifts")
     .then(res => { if (!res.ok) throw new Error("Request failed"); return res.json(); })
     .then(data => {
+    setLoadError(null);
       setActiveShift(data.activeShift);
       setShiftHistory(data.history || []);
 
-    }).catch(console.error), []);
+    }).catch(() => setLoadError("Drawer and shifts could not be loaded. What is shown may be out of date.")), []);
 
   useEffect(() => {
     fetchShifts();
@@ -163,6 +168,7 @@ export const ShiftCashDrawer: React.FC<{ currentUser: any }> = ({ currentUser })
 
   return (
     <div className="flex-1 flex flex-col h-full bg-neutral-950 overflow-hidden">
+      <LoadFailure message={loadError} onRetry={fetchShifts} />
       {/* Header */}
       <div className="p-4 bg-neutral-900 border-b border-neutral-800 flex flex-col sm:flex-row gap-3 justify-between items-start sm:items-center">
         <div>

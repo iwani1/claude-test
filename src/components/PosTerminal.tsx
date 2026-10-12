@@ -85,6 +85,21 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
    * a different order.
    */
   const orderIdentityRef = useRef<string | null>(null);
+  /**
+   * One key per payment attempt.
+   *
+   * The server replays a repeated key instead of recording the money twice, so
+   * a till that lost the answer can safely retry the *same* tender. Changing
+   * what is being tendered (amount, method, cash handed over) starts a new
+   * attempt with a new key, because that is a different payment.
+   */
+  const payAttemptRef = useRef<string | null>(null);
+  const payAttemptKey = () => {
+    if (!payAttemptRef.current) {
+      payAttemptRef.current = `PAY-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    }
+    return payAttemptRef.current;
+  };
   const orderIdentity = () => {
     if (!orderIdentityRef.current) {
       orderIdentityRef.current = `ORD-${Date.now()}-${Math.random()}`;
@@ -94,6 +109,8 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
   useEffect(() => {
     orderIdentityRef.current = null;
   }, [cart]);
+
+
 
   /* Destructive taps (discard ticket, remove a line) ask first. Busy-bar
      fingers miss; the toast-light confirm costs half a second and saves the
@@ -136,6 +153,12 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
   const [cashTendered, setCashTendered] = useState<string>("");
   const [splitCashAmount, setSplitCashAmount] = useState<string>("");
   const [splitMomoAmount, setSplitMomoAmount] = useState<string>("");
+
+  // Changing what is being tendered starts a new payment attempt, so the retry
+  // key of the previous attempt is dropped.
+  useEffect(() => {
+    payAttemptRef.current = null;
+  }, [paymentMethod, cashTendered, splitCashAmount, splitMomoAmount, momoRef]);
   const [splitCashTendered, setSplitCashTendered] = useState<string>("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -544,6 +567,50 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
     };
 
     /**
+     * Closes out a bill that the server has confirmed as settled: docket to the
+     * kitchen first, then the customer receipt. Used both by the normal path and
+     * by the recovered path below, so a lost answer ends the same way as a
+     * received one.
+     */
+    const finishPayment = (settledOrder: any, changeGiven: string) => {
+      const receiptOrder = {
+        ...settledOrder,
+        items: cart,
+        paidAmount: totalAmount.toFixed(2),
+        paymentMethod:
+          payMethod === "split"
+            ? "Split (Cash + MoMo)"
+            : payMethod === "momo"
+            ? "Mobile Money (MoMo)"
+            : "Cash",
+        referenceNumber: payloadReference,
+        cashTendered: payloadCashTendered,
+        changeGiven,
+        splitDetails:
+          payMethod === "split"
+            ? {
+                cashAmount: payloadCashAmount?.toFixed(2),
+                momoAmount: payloadMomoAmount?.toFixed(2),
+              }
+            : undefined,
+      };
+
+      setShowPayModal(false);
+      clearCart();
+      if (onOrderCreated) onOrderCreated();
+
+      if (cart.length > 0) {
+        setKitchenTicketOrder(buildKitchenTicket(settledOrder, cart));
+        setPendingReceipt(receiptOrder);
+        setCartOpen(false);
+        setShowKitchenTicket(true);
+      } else {
+        setLastCompletedOrder(receiptOrder);
+        setShowReceipt(true);
+      }
+    };
+
+    /**
      * The bill exists on the server the moment this is set. It matters in the
      * catch below: if the order was created and only the payment failed, we must
      * retry the payment, never re-create the order or fake the money.
@@ -603,48 +670,16 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
           momoAmount: payloadMomoAmount,
           userId: currentUser.id,
           releaseTable: true,
+          // Stable per attempt: the server replays instead of re-charging.
+          idempotencyKey: payAttemptKey(),
         }),
       });
 
       const payData = await payRes.json();
       if (payData.success) {
-        const receiptOrder = {
-          ...createdOrder,
-          items: cart,
-          paidAmount: totalAmount.toFixed(2),
-          paymentMethod:
-            payMethod === "split"
-              ? "Split (Cash + MoMo)"
-              : payMethod === "momo"
-              ? "Mobile Money (MoMo)"
-              : "Cash",
-          referenceNumber: payloadReference,
-          cashTendered: payloadCashTendered,
-          changeGiven: payData.changeGiven,
-          splitDetails:
-            payMethod === "split"
-              ? {
-                  cashAmount: payloadCashAmount?.toFixed(2),
-                  momoAmount: payloadMomoAmount?.toFixed(2),
-                }
-              : undefined,
-        };
-
-        setShowPayModal(false);
-        clearCart();
-        if (onOrderCreated) onOrderCreated();
-
-        // Print the kitchen docket first; the customer receipt follows once
-        // the docket has been handed to the line.
-        if (cart.length > 0) {
-          setKitchenTicketOrder(buildKitchenTicket(createdOrder, cart));
-          setPendingReceipt(receiptOrder);
-          setCartOpen(false);
-        setShowKitchenTicket(true);
-        } else {
-          setLastCompletedOrder(receiptOrder);
-          setShowReceipt(true);
-        }
+        // Settled: the next tender on this ticket is a new attempt, not a retry.
+        payAttemptRef.current = null;
+        finishPayment(createdOrder, String(payData.changeGiven ?? "0.00"));
       } else {
         // Nothing was recorded, so nothing is claimed. The order stays open and
         // the till keeps its ticket, ready to take the tender again.
@@ -680,10 +715,40 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
           setShowPayModal(false);
         }
       } else {
-        notify(
-          `The bill was created but the payment was NOT recorded (${e?.message || "connection lost"}). The order is still open and unpaid — take the tender again to settle it. It will not be charged twice.`,
-          "error"
-        );
+        // The answer never arrived, so the tender may or may not have landed.
+        // Ask the server before the cashier takes money a second time — and
+        // because this attempt carries a retry key, asking twice is safe even
+        // if the first one did get through.
+        let accountedFor = false;
+        let recoveredChange = "0.00";
+        try {
+          const checkRes = await fetch(`/api/orders/${createdOrder.id}`);
+          if (checkRes.ok) {
+            const checked = await checkRes.json();
+            const before = Number(createdOrder.paidAmount || 0);
+            const after = Number(checked?.order?.paidAmount || 0);
+            if (after > before) {
+              accountedFor = true;
+              const tendered = payloadCashTendered !== null ? Number(payloadCashTendered) : totalAmount;
+              const cashPortion =
+                payMethod === "split" ? Number(payloadCashAmount || 0) : payMethod === "cash" ? totalAmount : 0;
+              recoveredChange = (tendered - cashPortion).toFixed(2);
+            }
+          }
+        } catch {
+          /* audit-ok: still unreachable — the message below says exactly that, and the payment key keeps a retry safe */
+          /* still unreachable — the message below says exactly that */
+        }
+
+        if (accountedFor) {
+          notify("The payment did go through — the answer was lost on the way back. Nothing needs re-entering.", "ok");
+          finishPayment(createdOrder, recoveredChange);
+        } else {
+          notify(
+            `Could not confirm the payment (${e?.message || "connection lost"}). The bill stands on the system at GH₵${totalAmount.toFixed(2)} and no money has been claimed. Press Record payment again — the same tender is never taken twice — or check Order History first.`,
+            "error"
+          );
+        }
       }
     } finally {
       setIsSubmitting(false);

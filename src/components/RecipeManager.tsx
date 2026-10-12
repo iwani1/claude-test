@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadFailure } from "./LoadFailure";
+
 import React, { useState, useEffect, useCallback } from "react";
 import {
   Scroll,
@@ -28,16 +30,19 @@ export const RecipeManager: React.FC = () => {
     { ingredientId: number | ""; quantity: string; unit: string }[]
   >([{ ingredientId: "", quantity: "1", unit: "pcs" }]);
 
+  const [loadError, setLoadError] = useState<string | null>(null);
+
   const fetchRecipes = useCallback(() => fetch("/api/inventory/recipes")
     .then(res => { if (!res.ok) throw new Error("Request failed"); return res.json(); })
     .then(data => {
+    setLoadError(null);
       if (data.recipes) {
         setRecipes(data.recipes);
         setMenuItems(data.menuItems || []);
         setAllIngredients(data.allIngredients || []);
       }
 
-    }).catch(console.error), []);
+    }).catch(() => setLoadError("Recipes could not be loaded. What is shown may be out of date.")), []);
 
   useEffect(() => {
     fetchRecipes();
@@ -103,6 +108,7 @@ export const RecipeManager: React.FC = () => {
 
   return (
     <div className="flex-1 flex flex-col h-full bg-neutral-950 overflow-hidden">
+      <LoadFailure message={loadError} onRetry={fetchRecipes} />
       {/* Header */}
       <div className="p-4 bg-neutral-900 border-b border-neutral-800 flex flex-col sm:flex-row gap-3 justify-between items-start sm:items-center">
         <div>

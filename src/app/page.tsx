@@ -171,10 +171,21 @@ export default function App() {
   }, []);
 
   const handleLogout = async () => {
+    let serverSignedOut = false;
     try {
-      await fetch("/api/auth/logout", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+      const res = await fetch("/api/auth/logout", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+      serverSignedOut = res.ok;
     } catch {
-      /* clearing local state regardless */
+      /* audit-ok: the notice right after this block tells the user the sign-out could not be completed */
+      serverSignedOut = false;
+    }
+    if (!serverSignedOut) {
+      // The screen is cleared either way, but the session cookie could not be
+      // ended: on a shared terminal that matters, so it is never silent.
+      notify(
+        "Signed out on this screen, but the server could not be reached to end the session. Sign out again once there is a connection.",
+        "error"
+      );
     }
     setCategories([]); setMenuItems([]); setAreas([]); setTables([]); setOpenShift(null);
     clearIdentity();
@@ -252,7 +263,7 @@ export default function App() {
         setOfflineSession(false);
         notify("Back online — the till is talking to the server again.", "ok");
       } catch {
-        /* still unreachable; the strip stays and keeps saying so */
+        /* audit-ok: still unreachable — the offline strip stays on screen saying exactly that */
       }
     })();
     return () => {

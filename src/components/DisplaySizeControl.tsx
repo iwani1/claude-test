@@ -27,7 +27,7 @@ export function readDisplaySize(): DisplaySize {
     const saved = window.localStorage.getItem(DISPLAY_SIZE_KEY);
     if (saved === "standard" || saved === "extra" || saved === "large") return saved;
   } catch {
-    /* private mode — fall through to default */
+    /* audit-ok: private mode — the control falls back to the default size */
   }
   return DEFAULT_DISPLAY_SIZE;
 }
@@ -37,7 +37,7 @@ export function applyDisplaySize(size: DisplaySize) {
   try {
     window.localStorage.setItem(DISPLAY_SIZE_KEY, size);
   } catch {
-    /* not fatal — the size still applies for this session */
+    /* audit-ok: not fatal — the size still applies for this session */
   }
 }
 

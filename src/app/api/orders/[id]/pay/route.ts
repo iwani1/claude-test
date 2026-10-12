@@ -2,7 +2,8 @@ import { secureRoute } from "@/lib/api";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { orders, payments, shifts, diningTables, auditLogs } from "@/db/schema";
-import { eq, desc } from "drizzle-orm";
+import { eq, and, desc, sql } from "drizzle-orm";
+import { createHash } from "node:crypto";
 import { requireSession } from "@/lib/guard";
 
 /**
@@ -28,6 +29,22 @@ const fromCents = (c: number): string => (c / 100).toFixed(2);
 
 type Tender = "cash" | "momo" | "split";
 
+/**
+ * Identifies one tender request by the values the client sent, so a retry with
+ * the same key replays and a *different* tender reusing that key is refused
+ * instead of silently replaying the wrong money.
+ */
+function paymentFingerprint(input: {
+  orderId: number;
+  requestedCents: number | null;
+  method: Tender;
+  cashCents: number | null;
+  momoCents: number | null;
+  tenderedCents: number | null;
+}): string {
+  return createHash("sha256").update(JSON.stringify(input)).digest("hex");
+}
+
 async function handlePOST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const guard = await requireSession();
@@ -40,7 +57,12 @@ async function handlePOST(req: Request, { params }: { params: Promise<{ id: stri
     }
 
     const body = await req.json();
-    const { amount, paymentMethod, cashTendered, referenceNumber, cashAmount, momoAmount, releaseTable } = body;
+    const { amount, paymentMethod, cashTendered, referenceNumber, cashAmount, momoAmount, releaseTable, idempotencyKey } = body;
+
+    if (idempotencyKey !== undefined && idempotencyKey !== null &&
+        (typeof idempotencyKey !== "string" || idempotencyKey.length < 8 || idempotencyKey.length > 128)) {
+      return NextResponse.json({ error: "Payment key must contain 8-128 characters" }, { status: 400 });
+    }
 
     if (paymentMethod !== "cash" && paymentMethod !== "momo" && paymentMethod !== "split") {
       return NextResponse.json(
@@ -61,10 +83,70 @@ async function handlePOST(req: Request, { params }: { params: Promise<{ id: stri
         return { error: "This order is cancelled or refunded and cannot be paid.", status: 409 };
       }
 
+      // Request-side values first: they are what the fingerprint is built from,
+      // so a replay can be recognised without depending on the order's balance
+      // (which the first attempt has already changed).
+      const requestedCents = amount !== undefined && amount !== null && amount !== "" ? toCents(amount) : null;
+      const requestCashCents = method === "split" ? toCents(cashAmount) : null;
+      const requestMomoCents = method === "split" ? toCents(momoAmount) : null;
+      const requestTenderedCents = cashTendered !== undefined && cashTendered !== null && cashTendered !== ""
+        ? toCents(cashTendered)
+        : null;
+      const fingerprint = paymentFingerprint({
+        orderId,
+        requestedCents,
+        method,
+        cashCents: requestCashCents,
+        momoCents: requestMomoCents,
+        tenderedCents: requestTenderedCents,
+      });
+
+      // A retry of the same tender replays the original payment instead of
+      // taking the money again. Checked before the balance checks: a replayed
+      // full payment would otherwise be refused as "already fully paid", which
+      // leaves the cashier unable to tell whether the money landed.
+      if (idempotencyKey) {
+        await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`${guard.user.branchId}:pay:${idempotencyKey}`}, 0))`);
+        const [existing] = await tx
+          .select()
+          .from(payments)
+          .where(eq(payments.idempotencyKey, idempotencyKey))
+          .limit(1);
+        if (existing) {
+          if (existing.requestFingerprint !== fingerprint) {
+            return {
+              error: "That payment key was already used for a different amount. Start a new payment instead of retrying.",
+              status: 409,
+            };
+          }
+          const batch = await tx
+            .select()
+            .from(payments)
+            .where(and(eq(payments.orderId, orderId), eq(payments.createdAt, existing.createdAt)));
+          const [fresh] = await tx.select().from(orders).where(eq(orders.id, orderId)).limit(1);
+          const replayedCents = batch.reduce((sum, row) => sum + toCents(row.amount), 0);
+          const replayedChange = batch.reduce((sum, row) => sum + toCents(row.changeGiven || 0), 0);
+          return {
+            ok: true as const,
+            replayed: true,
+            payment: batch[0] ?? existing,
+            payments: batch,
+            order: fresh,
+            changeGiven: fromCents(replayedChange),
+            isFullyPaid: toCents(fresh.paidAmount) >= toCents(fresh.totalAmount),
+            method,
+            amount: fromCents(replayedCents),
+          };
+        }
+      }
+
       const outstandingCents = toCents(order.totalAmount) - toCents(order.paidAmount);
+      if (requestedCents !== null && requestedCents <= 0) {
+        return { error: "Payment amount must be greater than zero.", status: 400 };
+      }
       if (outstandingCents <= 0) return { error: "This order is already fully paid.", status: 409 };
 
-      const payCents = amount !== undefined && amount !== null && amount !== "" ? toCents(amount) : outstandingCents;
+      const payCents = requestedCents !== null ? requestedCents : outstandingCents;
       if (!Number.isSafeInteger(payCents) || payCents <= 0) {
         return { error: "Payment amount must be greater than zero.", status: 400 };
       }
@@ -85,8 +167,8 @@ async function handlePOST(req: Request, { params }: { params: Promise<{ id: stri
       }[] = [];
 
       if (method === "split") {
-        const cashCents = toCents(cashAmount);
-        const momoCents = toCents(momoAmount);
+        const cashCents = requestCashCents as number;
+        const momoCents = requestMomoCents as number;
         if (!Number.isSafeInteger(cashCents) || !Number.isSafeInteger(momoCents) || cashCents <= 0 || momoCents <= 0) {
           return { error: "A split needs both a cash amount and a MoMo amount greater than zero.", status: 400 };
         }
@@ -96,14 +178,14 @@ async function handlePOST(req: Request, { params }: { params: Promise<{ id: stri
             status: 400,
           };
         }
-        const tendered = cashTendered ? toCents(cashTendered) : cashCents;
+        const tendered = requestTenderedCents !== null ? requestTenderedCents : cashCents;
         if (!Number.isSafeInteger(tendered) || tendered < cashCents) {
           return { error: "Cash handed over must cover the cash portion.", status: 400 };
         }
         lines.push({ method: "cash", cents: cashCents, reference: "CASH-PORTION", tenderedCents: tendered, changeCents: tendered - cashCents });
         lines.push({ method: "momo", cents: momoCents, reference: ref || "MOMO-PORTION", tenderedCents: null, changeCents: 0 });
       } else if (method === "cash") {
-        const tendered = cashTendered ? toCents(cashTendered) : payCents;
+        const tendered = requestTenderedCents !== null ? requestTenderedCents : payCents;
         if (!Number.isSafeInteger(tendered) || tendered < payCents) {
           return { error: "Cash handed over does not cover the amount due.", status: 400 };
         }
@@ -125,7 +207,7 @@ async function handlePOST(req: Request, { params }: { params: Promise<{ id: stri
       const records = await tx
         .insert(payments)
         .values(
-          lines.map((l) => ({
+          lines.map((l, index) => ({
             orderId,
             shiftId: shift.id,
             amount: fromCents(l.cents),
@@ -135,6 +217,9 @@ async function handlePOST(req: Request, { params }: { params: Promise<{ id: stri
             changeGiven: l.method === "cash" ? fromCents(l.changeCents) : null,
             status: "completed",
             processedBy: userId,
+            // One key per tender (a split writes two lines), stored on the first.
+            idempotencyKey: index === 0 ? idempotencyKey || null : null,
+            requestFingerprint: index === 0 ? fingerprint : null,
           }))
         )
         .returning();

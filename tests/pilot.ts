@@ -145,6 +145,86 @@ async function main() {
   check((await raw(`orders/${cancelProbe.id}`, "DELETE")).status, 200, "cancel probe order erased");
   check(await stock(), editStockStart, "erasing a fully returned order moves no stock again");
 
+  // --- A retried tender must not take the money twice -------------------------
+  // The dangerous path is not a gateway timeout: it is a cashier tapping Pay,
+  // the answer being lost, and the tender being entered again. A partial
+  // payment is the case a balance check alone cannot catch.
+  const { shift: retryShift } = await api("shifts", { action: "open_shift", openingCash: "20.00", notes: "Tender-retry probe" });
+  const { order: retryOrder } = await api("orders", {
+    idempotencyKey: "pilot-pay-retry-001",
+    orderType: "takeaway",
+    items: [{ menuItemId: 1, quantity: 4 }],
+  });
+  check(retryOrder.totalAmount, "40.00", "retry probe bills four portions");
+  const partial = { amount: "10.00", paymentMethod: "cash", cashTendered: "10.00", idempotencyKey: "pilot-pay-same-key-001" };
+  const firstTender = await api(`orders/${retryOrder.id}/pay`, partial);
+  check(firstTender.order.paidAmount, "10.00", "the first tender lands on the bill once");
+  const replayed = await api(`orders/${retryOrder.id}/pay`, partial);
+  check(replayed.success, true, "the retried tender answers success instead of failing");
+  check(replayed.replayed, true, "and is reported as a replay");
+  check(replayed.order.paidAmount, "10.00", "the retry does not take the money a second time");
+  const changedAmount = await raw(`orders/${retryOrder.id}/pay`, "POST", { ...partial, amount: "5.00" });
+  check(changedAmount.status, 409, "the same key with a different amount is refused, not replayed");
+  const retryPayments = await admin.query("select amount from payments where order_id=$1 order by id", [retryOrder.id]);
+  check(retryPayments.rows.map((r: any) => r.amount), ["10.00"], "exactly one payment row exists for the retry probe");
+  check((await raw(`orders/${retryOrder.id}`, "DELETE")).status, 200, "retry probe order erased");
+  const retryClose = await api("shifts", { action: "close_shift", shiftId: retryShift.id, actualClosingCash: "20.00" });
+  check(retryClose.difference, "0.00", "the drawer reconciles after the erased probe");
+
+  // --- Receiving one delivery twice ------------------------------------------
+  // Receiving writes straight into live stock, so a second receive of the same
+  // purchase order would inflate the shelf.
+  let supplierId = Number((await admin.query("select id from suppliers order by id limit 1")).rows[0]?.id ?? 0);
+  if (!supplierId) {
+    const createdSupplier = await api("purchasing/suppliers", { name: "Pilot Supplier", contactPerson: "Pilot", phone: "000000000" });
+    supplierId = Number(createdSupplier.supplier?.id ?? createdSupplier.id);
+  }
+  const { purchaseOrder: po } = await api("purchasing/orders", {
+    supplierId,
+    items: [{ ingredientId: 1, orderedQuantity: 5, unitPrice: "2.00" }],
+  });
+  const poItemId = Number((await admin.query("select id from purchase_order_items where purchase_order_id=$1 order by id limit 1", [po.id])).rows[0].id);
+  const receiveBody = {
+    purchaseOrderId: po.id,
+    action: "receive_goods",
+    receivedItems: [{ poItemId, ingredientId: 1, receivedQuantity: 5, unitPrice: "2.00" }],
+  };
+  check(await stock(), editStockStart, "the purchase probe starts from known stock");
+  check((await patch("purchasing/orders", receiveBody)).success, true, "goods are received once");
+  check(await stock(), editStockStart + 5, "and land in stock once");
+  const receiveAgain = await raw("purchasing/orders", "PATCH", receiveBody);
+  check(receiveAgain.status, 409, "receiving the same purchase order again is refused");
+  check(await stock(), editStockStart + 5, "and the shelf does not double-count the delivery");
+  const duplicateLine = await raw("purchasing/orders", "PATCH", {
+    purchaseOrderId: po.id,
+    action: "receive_goods",
+    receivedItems: [
+      { poItemId, ingredientId: 1, receivedQuantity: 1 },
+      { poItemId, ingredientId: 1, receivedQuantity: 1 },
+    ],
+  });
+  check(duplicateLine.status === 409 || duplicateLine.status === 400, true, "a second receive attempt is refused either way");
+
+  // --- A stock adjustment floors at zero without lying in the ledger ----------
+  const overshoot = await api("inventory", {
+    action: "adjust_stock",
+    ingredientId: 1,
+    delta: -(editStockStart + 5 + 1000),
+    movementType: "waste_spoilage",
+    reason: "Pilot overshoot",
+  });
+  check(overshoot.success, true, "an oversized waste adjustment is accepted");
+  check(await stock(), 0, "stock floors at zero rather than going negative");
+  const overshootLedger = await admin.query(
+    "select quantity_delta, new_stock from stock_movements where ingredient_id=1 order by id desc limit 1"
+  );
+  check(Number(overshootLedger.rows[0].new_stock), 0, "the ledger records the stock the shelf now has");
+  check(Number(overshootLedger.rows[0].quantity_delta), -(editStockStart + 5), "and only the quantity that actually moved");
+  const zeroDelta = await raw("inventory", "POST", { action: "adjust_stock", ingredientId: 1, delta: 0 });
+  check(zeroDelta.status, 400, "a zero adjustment is refused instead of writing a no-op ledger line");
+  await admin.query("update ingredients set current_stock=$1 where id=1", [editStockStart.toFixed(3)]);
+  check(await stock(), editStockStart, "stock restored for anything that follows");
+
   console.log(`\n${checks} synthetic shift/pilot checks passed. No physical payment, printer, or backup test was performed.`);
 }
 main().catch(error => { console.error(error); process.exitCode = 1; }).finally(() => admin.end());

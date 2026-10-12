@@ -19,7 +19,7 @@ export function saveTicketDraft(userId: string | number, items: unknown[]) {
     if (items.length === 0) window.localStorage.removeItem(draftKey(userId));
     else window.localStorage.setItem(draftKey(userId), JSON.stringify({ savedAt: Date.now(), items }));
   } catch {
-    /* storage unavailable — the ticket lives in memory for this session */
+    /* audit-ok: storage unavailable — the ticket lives in memory for this session */
   }
 }
 
@@ -37,6 +37,7 @@ export function readTicketDraft<T>(userId: string | number): T[] {
     }
     return items;
   } catch {
+    /* audit-ok: unreadable draft — an empty ticket is the safe answer */
     return [];
   }
 }
@@ -45,6 +46,6 @@ export function clearTicketDraft(userId: string | number) {
   try {
     window.localStorage.removeItem(draftKey(userId));
   } catch {
-    /* nothing to clear */
+    /* audit-ok: nothing to clear */
   }
 }

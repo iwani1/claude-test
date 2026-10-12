@@ -77,52 +77,65 @@ async function handlePOST(req: Request) {
 
     if (action === "adjust_stock") {
       const { ingredientId, delta, movementType, reason } = body;
-      const [currentIng] = await db
-        .select()
-        .from(ingredients)
-        .where(eq(ingredients.id, Number(ingredientId)))
-        .limit(1);
 
-      if (!currentIng) {
-        return NextResponse.json({ error: "Ingredient not found" }, { status: 404 });
+      // Lock the ingredient row so two adjustments (or a double tap) cannot
+      // read the same starting stock and lose one of the movements, and so the
+      // stock, the ledger line and the audit entry commit together.
+      const deltaNum = Number(delta);
+      if (!Number.isFinite(deltaNum) || deltaNum === 0) {
+        return NextResponse.json({ error: "Enter a non-zero adjustment amount." }, { status: 400 });
       }
 
-      const prevStock = Number(currentIng.currentStock);
-      const deltaNum = Number(delta);
-      const newStock = Math.max(0, prevStock + deltaNum);
+      const outcome = await db.transaction(async (tx) => {
+        const [locked] = await tx
+          .select()
+          .from(ingredients)
+          .where(eq(ingredients.id, Number(ingredientId)))
+          .limit(1)
+          .for("update");
+        if (!locked) return { error: "Ingredient not found", status: 404 };
 
-      const [updated] = await db
-        .update(ingredients)
-        .set({
-          currentStock: newStock.toFixed(3),
-          updatedAt: new Date(),
-        })
-        .where(eq(ingredients.id, Number(ingredientId)))
-        .returning();
+        const prevStock = Number(locked.currentStock);
+        const newStock = Math.max(0, prevStock + deltaNum);
+        // What actually moved, after the floor at zero: the ledger must agree
+        // with the stock it wrote.
+        const appliedDelta = newStock - prevStock;
 
-      // Record movement
-      await db.insert(stockMovements).values({
-        ingredientId: Number(ingredientId),
-        movementType: movementType || "adjustment",
-        quantityDelta: deltaNum.toFixed(3),
-        previousStock: prevStock.toFixed(3),
-        newStock: newStock.toFixed(3),
-        unitCost: currentIng.costPerUnit,
-        reason: reason || "Manual inventory adjustment",
-        // Attribution comes from the verified session, never from the client body.
-        createdById: guard.user.id,
+        const [updated] = await tx
+          .update(ingredients)
+          .set({ currentStock: newStock.toFixed(3), updatedAt: new Date() })
+          .where(eq(ingredients.id, Number(ingredientId)))
+          .returning();
+
+        await tx.insert(stockMovements).values({
+          ingredientId: Number(ingredientId),
+          movementType: movementType || "adjustment",
+          quantityDelta: appliedDelta.toFixed(3),
+          previousStock: prevStock.toFixed(3),
+          newStock: newStock.toFixed(3),
+          unitCost: locked.costPerUnit,
+          reason: reason || "Manual inventory adjustment",
+          // Attribution comes from the verified session, never from the client body.
+          createdById: guard.user.id,
+        });
+
+        await tx.insert(auditLogs).values({
+          userId: guard.user.id,
+          userName: guard.user.name,
+          action: "stock_adjusted",
+          entityType: "inventory",
+          entityId: String(ingredientId),
+          details: `${movementType || "Stock adjustment"}: ${appliedDelta > 0 ? "+" : ""}${appliedDelta} ${locked.unit} on "${locked.name}". New: ${newStock.toFixed(3)} ${locked.unit}. By ${guard.user.name}`,
+        });
+
+        return { ok: true as const, updated };
       });
 
-      await db.insert(auditLogs).values({
-        userId: guard.user.id,
-        userName: guard.user.name,
-        action: "stock_adjusted",
-        entityType: "inventory",
-        entityId: String(ingredientId),
-        details: `${movementType || "Stock adjustment"}: ${deltaNum > 0 ? "+" : ""}${deltaNum} ${currentIng.unit} on "${currentIng.name}". New: ${newStock.toFixed(3)} ${currentIng.unit}. By ${guard.user.name}`,
-      });
+      if ("error" in outcome) {
+        return NextResponse.json({ error: outcome.error }, { status: outcome.status });
+      }
 
-      return NextResponse.json({ success: true, ingredient: updated });
+      return NextResponse.json({ success: true, ingredient: outcome.updated });
     }
 
     return NextResponse.json({ error: "Invalid action" }, { status: 400 });

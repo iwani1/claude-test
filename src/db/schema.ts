@@ -381,6 +381,10 @@ export const payments = pgTable("payments", {
   cashTendered: numeric("cash_tendered", { precision: 10, scale: 2 }),
   changeGiven: numeric("change_given", { precision: 10, scale: 2 }),
   status: text("status").default("completed").notNull(), // 'completed' | 'failed' | 'refunded'
+  /** Stable retry key: a lost response must replay, not take the money twice. */
+  idempotencyKey: text("idempotency_key"),
+  /** A reused key with a different amount is rejected, never replayed. */
+  requestFingerprint: text("request_fingerprint"),
   processedBy: integer("processed_by").notNull(),
   gatewayResponse: jsonb("gateway_response"),
   createdAt: timestamp("created_at").defaultNow().notNull(),

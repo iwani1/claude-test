@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadFailure } from "./LoadFailure";
+
 import React, { useState, useEffect, useCallback } from "react";
 import { FileText, Search, Shield, RefreshCw } from "lucide-react";
 
@@ -7,12 +9,15 @@ export const AuditLogsViewer: React.FC = () => {
   const [logs, setLogs] = useState<any[]>([]);
   const [search, setSearch] = useState("");
 
+  const [loadError, setLoadError] = useState<string | null>(null);
+
   const fetchLogs = useCallback(() => fetch("/api/audit-logs?limit=100")
     .then(res => { if (!res.ok) throw new Error("Request failed"); return res.json(); })
     .then(data => {
+    setLoadError(null);
       if (data.logs) setLogs(data.logs);
 
-    }).catch(console.error), []);
+    }).catch(() => setLoadError("Audit logs could not be loaded. What is shown may be out of date.")), []);
 
   useEffect(() => {
     fetchLogs();
@@ -28,6 +33,7 @@ export const AuditLogsViewer: React.FC = () => {
 
   return (
     <div className="flex-1 flex flex-col h-full bg-neutral-950 overflow-hidden">
+      <LoadFailure message={loadError} onRetry={fetchLogs} />
       <div className="p-4 bg-neutral-900 border-b border-neutral-800 flex justify-between items-center">
         <div>
           <h2 className="text-base font-bold text-white flex items-center gap-2">

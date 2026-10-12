@@ -115,32 +115,77 @@ async function handlePATCH(req: Request) {
     const receivedBy = guard.user.id;
 
     if (action === "receive_goods") {
-      const [po] = await db
-        .select()
-        .from(purchaseOrders)
-        .where(eq(purchaseOrders.id, Number(purchaseOrderId)))
-        .limit(1);
-
-      if (!po) {
-        return NextResponse.json({ error: "Purchase Order not found" }, { status: 404 });
+      if (!Array.isArray(receivedItems) || receivedItems.length === 0) {
+        return NextResponse.json({ error: "Nothing was entered against this delivery." }, { status: 400 });
       }
 
-      // Update inventory quantities for each received item
-      for (const item of receivedItems) {
-        const qtyReceived = Number(item.receivedQuantity);
-        if (qtyReceived <= 0) continue;
-
-        const [ing] = await db
+      // Receiving writes straight into live stock, so it happens in one
+      // transaction against a locked purchase order:
+      //   - a PO can only be received once (a double tap or a retry after a
+      //     slow response would otherwise add the delivery to stock twice),
+      //   - every line must belong to *this* PO,
+      //   - the same line twice in one payload is refused rather than counted twice,
+      //   - stock, ledger lines, the GRN and the audit entry commit together.
+      const outcome = await db.transaction(async (tx) => {
+        const [po] = await tx
           .select()
-          .from(ingredients)
-          .where(eq(ingredients.id, Number(item.ingredientId)))
-          .limit(1);
+          .from(purchaseOrders)
+          .where(eq(purchaseOrders.id, Number(purchaseOrderId)))
+          .limit(1)
+          .for("update");
 
-        if (ing) {
+        if (!po) return { error: "Purchase Order not found", status: 404 };
+        if (po.status === "received") {
+          return {
+            error: `PO ${po.poNumber} was already received. Reverse the stock by adjustment instead of receiving it again.`,
+            status: 409,
+          };
+        }
+
+        const seenLines = new Set<number>();
+        const seenIngredients = new Set<number>();
+        for (const item of receivedItems) {
+          const poItemId = Number(item.poItemId);
+          const ingredientId = Number(item.ingredientId);
+          const qty = Number(item.receivedQuantity);
+          if (!Number.isFinite(qty) || qty < 0) {
+            return { error: "Received quantities must be zero or more.", status: 400 };
+          }
+          if (seenLines.has(poItemId) || seenIngredients.has(ingredientId)) {
+            return { error: "The same delivery line appears twice. Enter each item once.", status: 400 };
+          }
+          seenLines.add(poItemId);
+          seenIngredients.add(ingredientId);
+
+          const [line] = await tx
+            .select()
+            .from(purchaseOrderItems)
+            .where(eq(purchaseOrderItems.id, poItemId))
+            .limit(1);
+          if (!line || line.purchaseOrderId !== po.id) {
+            return { error: "A received line does not belong to this purchase order.", status: 400 };
+          }
+        }
+
+        for (const item of receivedItems) {
+          const qtyReceived = Number(item.receivedQuantity);
+          if (qtyReceived <= 0) continue;
+
+          const [ing] = await tx
+            .select()
+            .from(ingredients)
+            .where(eq(ingredients.id, Number(item.ingredientId)))
+            .limit(1)
+            .for("update");
+
+          if (!ing) {
+            return { error: "One of the received items is not in Ingredient Stock.", status: 400 };
+          }
+
           const prev = Number(ing.currentStock);
           const next = prev + qtyReceived;
 
-          await db
+          await tx
             .update(ingredients)
             .set({
               currentStock: next.toFixed(3),
@@ -149,8 +194,7 @@ async function handlePATCH(req: Request) {
             })
             .where(eq(ingredients.id, ing.id));
 
-          // Log stock movement
-          await db.insert(stockMovements).values({
+          await tx.insert(stockMovements).values({
             ingredientId: ing.id,
             movementType: "purchase_receipt",
             quantityDelta: qtyReceived.toFixed(3),
@@ -162,42 +206,41 @@ async function handlePATCH(req: Request) {
             createdById: receivedBy || 1,
           });
 
-          // Update PO item received quantity
-          await db
+          await tx
             .update(purchaseOrderItems)
             .set({ receivedQuantity: String(qtyReceived) })
             .where(eq(purchaseOrderItems.id, Number(item.poItemId)));
         }
+
+        const grnNumber = `GRN-${Date.now().toString().slice(-6)}`;
+        await tx.insert(goodsReceipts).values({
+          grnNumber,
+          purchaseOrderId: po.id,
+          receivedBy: receivedBy || 1,
+          invoiceNumber: invoiceNumber || "",
+          itemsReceived: receivedItems,
+        });
+
+        const [updatedPO] = await tx
+          .update(purchaseOrders)
+          .set({ status: "received", receivedAt: new Date() })
+          .where(eq(purchaseOrders.id, po.id))
+          .returning();
+
+        await tx.insert(auditLogs).values({
+          action: "goods_receipt_processed",
+          entityType: "inventory",
+          entityId: String(po.id),
+          details: `Processed GRN ${grnNumber} for PO ${po.poNumber}. Stock automatically updated.`,
+        });
+
+        return { ok: true as const, purchaseOrder: updatedPO, grnNumber };
+      });
+
+      if ("error" in outcome) {
+        return NextResponse.json({ error: outcome.error }, { status: outcome.status });
       }
-
-      // Record Goods Receipt Note
-      const grnNumber = `GRN-${Date.now().toString().slice(-6)}`;
-      await db.insert(goodsReceipts).values({
-        grnNumber,
-        purchaseOrderId: po.id,
-        receivedBy: receivedBy || 1,
-        invoiceNumber: invoiceNumber || "",
-        itemsReceived: receivedItems,
-      });
-
-      // Update PO status to received
-      const [updatedPO] = await db
-        .update(purchaseOrders)
-        .set({
-          status: "received",
-          receivedAt: new Date(),
-        })
-        .where(eq(purchaseOrders.id, po.id))
-        .returning();
-
-      await db.insert(auditLogs).values({
-        action: "goods_receipt_processed",
-        entityType: "inventory",
-        entityId: String(po.id),
-        details: `Processed GRN ${grnNumber} for PO ${po.poNumber}. Stock automatically updated.`,
-      });
-
-      return NextResponse.json({ success: true, purchaseOrder: updatedPO, grnNumber });
+      return NextResponse.json({ success: true, purchaseOrder: outcome.purchaseOrder, grnNumber: outcome.grnNumber });
     }
 
     return NextResponse.json({ error: "Invalid action" }, { status: 400 });

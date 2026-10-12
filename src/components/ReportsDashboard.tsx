@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadFailure } from "./LoadFailure";
+
 import React, { useState, useEffect, useCallback } from "react";
 import {
   BarChart3,
@@ -21,13 +23,15 @@ export const ReportsDashboard: React.FC = () => {
   const [timeframe, setTimeframe] = useState<"today" | "7days" | "30days" | "all">("all");
   const [data, setData] = useState<any | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const fetchReports = useCallback(() => fetch(`/api/reports?timeframe=${timeframe}`)
     .then(res => { if (!res.ok) throw new Error("Request failed"); return res.json(); })
     .then(json => {
+      setLoadError(null);
       setData(json);
 
-    }).catch(console.error).finally(() => setIsLoading(false)), [timeframe]);
+    }).catch(() => setLoadError("Reports could not be loaded. The figures shown may be out of date.")).finally(() => setIsLoading(false)), [timeframe]);
 
   useEffect(() => {
     fetchReports();
@@ -81,6 +85,7 @@ export const ReportsDashboard: React.FC = () => {
 
   return (
     <div className="flex-1 flex flex-col h-full bg-neutral-950 overflow-hidden">
+      <LoadFailure message={loadError} onRetry={fetchReports} />
       {/* Header */}
       <div className="p-4 bg-neutral-900 border-b border-neutral-800 flex flex-col sm:flex-row gap-3 justify-between items-start sm:items-center">
         <div>

@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadFailure } from "./LoadFailure";
+
 import React, { useState, useEffect, useCallback } from "react";
 import {
   Boxes,
@@ -46,9 +48,12 @@ export const InventoryManager: React.FC = () => {
   const [auditItems, setAuditItems] = useState<Record<number, string>>({});
   const [auditNotes, setAuditNotes] = useState("");
 
+  const [loadError, setLoadError] = useState<string | null>(null);
+
   const fetchInventory = useCallback(() => fetch("/api/inventory")
     .then(res => { if (!res.ok) throw new Error("Request failed"); return res.json(); })
     .then(data => {
+    setLoadError(null);
       if (data.ingredients) {
         setIngredients(data.ingredients);
         setMovements(data.movements || []);
@@ -56,15 +61,20 @@ export const InventoryManager: React.FC = () => {
         setLowStockCount(data.lowStockCount || 0);
       }
 
-    }).catch(console.error), []);
+    }).catch(() => setLoadError("Ingredient stock could not be loaded. What is shown may be out of date.")), []);
 
   useEffect(() => {
     fetchInventory();
   }, [fetchInventory]);
 
+  const [adjusting, setAdjusting] = useState(false);
+
   const handleAdjustStock = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!showAdjustModal || !adjustDelta) return;
+    // A second tap while the first is still in flight would apply the same
+    // adjustment twice.
+    if (!showAdjustModal || !adjustDelta || adjusting) return;
+    setAdjusting(true);
 
     try {
       const deltaNum = Number(adjustDelta);
@@ -92,6 +102,8 @@ export const InventoryManager: React.FC = () => {
     } catch (e) {
       console.error(e);
       alert("Could not reach the server. Stock was not adjusted.");
+    } finally {
+      setAdjusting(false);
     }
   };
 
@@ -180,6 +192,7 @@ export const InventoryManager: React.FC = () => {
 
   return (
     <div className="flex-1 flex flex-col h-full bg-neutral-950 overflow-hidden">
+      <LoadFailure message={loadError} onRetry={fetchInventory} />
       {/* Top Banner with Key Metrics */}
       <div className="p-4 bg-neutral-900 border-b border-neutral-800 flex flex-col md:flex-row gap-4 justify-between items-start md:items-center">
         <div>
@@ -817,9 +830,10 @@ export const InventoryManager: React.FC = () => {
               </button>
               <button
                 type="submit"
-                className="px-4 py-1.5 text-xs font-semibold bg-amber-500 text-black rounded-lg"
+                disabled={adjusting}
+                className="min-h-11 px-5 text-sm font-bold bg-amber-500 hover:bg-amber-400 disabled:opacity-60 text-black rounded-xl"
               >
-                Commit Adjustment
+                {adjusting ? "Committing…" : "Commit Adjustment"}
               </button>
             </div>
           </form>

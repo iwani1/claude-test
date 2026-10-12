@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadFailure } from "./LoadFailure";
+
 import React, { useState, useEffect, useCallback } from "react";
 import {
   Truck,
@@ -45,16 +47,19 @@ export const PurchasingManager: React.FC = () => {
   const [supPhone, setSupPhone] = useState("");
   const [supTerms, setSupTerms] = useState("Net 30");
 
+  const [loadError, setLoadError] = useState<string | null>(null);
+
   const fetchData = useCallback(() => Promise.all([
     fetch("/api/purchasing/orders"), fetch("/api/purchasing/suppliers"), fetch("/api/inventory"),
   ]).then(responses => Promise.all(responses.map(res => {
     if (!res.ok) throw new Error("Purchasing data unavailable");
     return res.json();
   }))).then(([poData, supData, ingData]) => {
+    setLoadError(null);
     if (poData.purchaseOrders) setPurchaseOrders(poData.purchaseOrders);
     if (supData.suppliers) setSuppliers(supData.suppliers);
     if (ingData.ingredients) setIngredients(ingData.ingredients);
-  }).catch(console.error), []);
+  }).catch(() => setLoadError("Purchasing data could not be loaded. What is shown may be out of date.")), []);
 
   useEffect(() => {
     fetchData();
@@ -172,6 +177,7 @@ export const PurchasingManager: React.FC = () => {
 
   return (
     <div className="flex-1 flex flex-col h-full bg-neutral-950 overflow-hidden">
+      <LoadFailure message={loadError} onRetry={fetchData} />
       {/* Header */}
       <div className="p-4 bg-neutral-900 border-b border-neutral-800 flex flex-col sm:flex-row gap-3 justify-between items-start sm:items-center">
         <div>

@@ -43,6 +43,7 @@ export function saveMenuToCache(menuData: any, branchId: number) {
   try {
     localStorage.setItem(scopedKey(MENU_CACHE_KEY, branchId), JSON.stringify(menuData));
   } catch (e) {
+    /* audit-ok: the cache is best effort — the live menu comes from the server */
     console.warn("Failed to cache menu:", e);
   }
 }
@@ -53,6 +54,7 @@ export function getCachedMenu(branchId: number) {
     const raw = localStorage.getItem(scopedKey(MENU_CACHE_KEY, branchId));
     return raw ? JSON.parse(raw) : null;
   } catch (e) {
+    /* audit-ok: unreadable cache — the caller falls back to the server */
     return null;
   }
 }
@@ -72,6 +74,7 @@ function writeCache(key: string, branchId: number, value: unknown) {
   try {
     localStorage.setItem(scopedKey(key, branchId), JSON.stringify({ value, cachedAt: Date.now() }));
   } catch (e) {
+    /* audit-ok: the cache is best effort — it is refreshed from the server */
     console.warn("Failed to cache", key, e);
   }
 }
@@ -84,6 +87,7 @@ function readCache<T>(key: string, branchId: number): { value: T; cachedAt: numb
     const parsed = JSON.parse(raw);
     return parsed && typeof parsed === "object" && "value" in parsed ? parsed : null;
   } catch (e) {
+    /* audit-ok: unreadable cache — the caller falls back to the server */
     return null;
   }
 }
@@ -137,7 +141,7 @@ export function saveIdentity(user: any) {
       JSON.stringify({ user, branchId: user.branchId, cachedAt: Date.now() })
     );
   } catch (e) {
-    /* private mode — offline restore simply will not be available */
+    /* audit-ok: private mode — offline restore simply is not available */
   }
 }
 
@@ -151,6 +155,7 @@ export function readIdentity(): CachedIdentity | null {
     if (Date.now() - Number(parsed.cachedAt || 0) > IDENTITY_TTL_MS) return null;
     return parsed;
   } catch (e) {
+    /* audit-ok: unreadable identity — the device asks for the network instead */
     return null;
   }
 }
@@ -178,6 +183,7 @@ export function queueOfflineOrder(order: OfflineOrder): boolean {
       (queued) => queued.idempotencyKey === order.idempotencyKey
     );
   } catch (e) {
+    /* audit-ok: the caller is told (false) and keeps the ticket on screen */
     console.error("Failed to queue offline order:", e);
     return false;
   }
@@ -189,6 +195,7 @@ export function getOfflineQueue(branchId: number): OfflineOrder[] {
     const raw = localStorage.getItem(scopedKey(OFFLINE_QUEUE_KEY, branchId));
     return raw ? JSON.parse(raw) : [];
   } catch (e) {
+    /* audit-ok: unreadable queue — treated as empty, never as money */
     return [];
   }
 }
@@ -219,6 +226,7 @@ export async function syncOfflineQueueToServer(branchId: number): Promise<{ succ
     }
     return { success: false, count: 0 };
   } catch (e) {
+    /* audit-ok: the sync reports failure; callers tell the user and keep the queue */
     return { success: false, count: 0 };
   }
 }

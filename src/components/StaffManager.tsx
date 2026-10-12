@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadFailure } from "./LoadFailure";
+
 import React, { useState, useEffect, useCallback } from "react";
 import {
   Users2,
@@ -33,14 +35,17 @@ export const StaffManager: React.FC<{ currentUser?: any }> = ({ currentUser }) =
   const [error, setError] = useState("");
   const [phone, setPhone] = useState("");
 
+  const [loadError, setLoadError] = useState<string | null>(null);
+
   const fetchStaff = useCallback(() => fetch("/api/staff")
     .then(res => { if (!res.ok) throw new Error("Request failed"); return res.json(); })
     .then(data => {
+    setLoadError(null);
       if (data.staff) {
         setStaff(data.staff);
       }
 
-    }).catch(console.error), []);
+    }).catch(() => setLoadError("Staff list could not be loaded. What is shown may be out of date.")), []);
 
   useEffect(() => {
     fetchStaff();
@@ -168,6 +173,7 @@ export const StaffManager: React.FC<{ currentUser?: any }> = ({ currentUser }) =
 
   return (
     <div className="flex-1 flex flex-col h-full bg-neutral-950 overflow-hidden">
+      <LoadFailure message={loadError} onRetry={fetchStaff} />
       {/* Header */}
       <div className="p-4 bg-neutral-900 border-b border-neutral-800 flex flex-col sm:flex-row gap-3 justify-between items-start sm:items-center">
         <div>

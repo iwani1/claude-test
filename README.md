@@ -60,6 +60,9 @@ One layout serves every screen; nothing is feature-limited on a smaller device.
   bar still scales the whole UI — pick *Standard* on a phone for the most
   content per screen.
 
+`npm run audit:workflows` re-checks the rules about telling the truth to the
+person at the till: no swallowed failures in client code, money routes stay
+idempotent, routes keep their permission check, and screens keep a phone view.
 `npm run audit:responsive` re-checks the structural rules this depends on
 (tables scroll or become cards, dialogs scroll on short screens, no `h-screen` /
 `w-screen` in an app that lives inside mobile browser chrome). It exits non-zero
@@ -97,6 +100,19 @@ network slows the writing down, never the truth.
 - **Session restore**: a device that signed in within the last 12 hours reopens
   the till offline; after that, or after signing out, it asks for the network,
   because a local copy of who you are is not proof of who you are.
+
+### Audits
+
+`docs/SYSTEM_AUDIT.md` is the full pass over the system (access control, money,
+stock, feedback, devices, deployment): what was verified and how, what was fixed,
+what is still open, and what cannot be checked without hardware or the server.
+Re-run it with:
+
+```sh
+npm run test:security      # 149 security + 70 pilot + 30 accounting checks
+npm run audit:responsive   # phone/tablet/laptop layout rules
+npm run audit:workflows    # failure-feedback and money-guard rules
+```
 
 ### Editing a saved order (owner only)
 

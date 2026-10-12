@@ -36,7 +36,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             the browser default because these screens are driven by fingers. */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `try{var s=localStorage.getItem('pos.displaySize');document.documentElement.dataset.displaySize=(s==='standard'||s==='extra'||s==='large')?s:'large'}catch(e){}`,
+            __html: `try{var s=localStorage.getItem('pos.displaySize');document.documentElement.dataset.displaySize=(s==='standard'||s==='extra'||s==='large')?s:'large'}catch(e){/* audit-ok: display size is a per-device preference; failing keeps the default */}`,
           }}
         />
       </head>
