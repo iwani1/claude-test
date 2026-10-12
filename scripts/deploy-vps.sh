@@ -59,6 +59,21 @@ as_user() {
   fi
 }
 
+# This script updates the checkout it lives in, and bash reads a script file
+# lazily — a file that is replaced underneath it mid-run can make bash execute
+# garbage. So it always runs from a copy of itself, wherever it was invoked.
+if [[ "${POS_DEPLOY_REEXEC:-0}" != "1" ]]; then
+  SELF="$(readlink -f "$0" 2>/dev/null || echo "$0")"
+  case "$SELF" in
+    "$POS_DIR"/*)
+      COPY="$(mktemp /tmp/pos-deploy-XXXXXX.sh)"
+      cp "$SELF" "$COPY"
+      chmod 755 "$COPY"
+      printf '\n\033[1;36m==>\033[0m %s\n' "Running from a copy of itself ($COPY)"
+      POS_DEPLOY_REEXEC=1 exec "$COPY" "$@" ;;
+  esac
+fi
+
 if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
   sed -n '3,30p' "$0" | sed 's/^# \{0,1\}//'
   exit 0
@@ -237,8 +252,12 @@ fi
 # The deploy is only "done" once the app answers; the marker stays until then.
 [[ "$DRY_RUN" == "1" ]] || rm -f "$MARKER"
 
-step "Deployed"
-info "Now at:  $NEW_SHA  ($(git -C "$POS_DIR" log --oneline -1 "$NEW_SHA" | cut -c1-60))"
+if [[ "$DRY_RUN" == "1" ]]; then
+  step "Plan complete — dry run, nothing was changed"
+else
+  step "Deployed"
+fi
+info "$([[ "$DRY_RUN" == "1" ]] && echo 'Would be at:' || echo 'Now at:  ') $NEW_SHA  ($(git -C "$POS_DIR" log --oneline -1 "$NEW_SHA" | cut -c1-60))"
 info "Backup:  $DUMP"
 info "Rollback:
       cd $POS_DIR && git reset --hard $OLD_SHA && sudo -u $POS_USER npm run build && systemctl restart $POS_SERVICE"
