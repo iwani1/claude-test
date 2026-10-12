@@ -48,6 +48,10 @@ async function main() {
   const closed = await api("shifts", { action: "close_shift", shiftId: shift.id, actualClosingCash: "205.00" });
   check(closed.difference, "0.00", "drawer reconciles: 200 + 18 - 10 - 3 = 205");
   check(Number((await admin.query("SELECT current_stock FROM ingredients WHERE id=1")).rows[0].current_stock), startingStock - 4, "only unrefunded dine-in stock remains consumed");
+  const page = await api("orders?limit=50");
+  check(page.orders.length > 0 && typeof page.total === "number" && page.total >= page.orders.length, true, "orders history lists pages with a total count");
+  check((await api("orders?from=2000-01-01&to=2000-01-02")).orders.length, 0, "orders history honours date range filters");
+  check((await api("orders?limit=1&offset=1")).orders.length, 1, "orders history pagination offset works");
   const offline = { idempotencyKey: "pilot-offline-001", orderType: "takeaway", items: [{ menuItemId: 1, quantity: 1 }], paidAmount: 0, paymentStatus: "unpaid" };
   check((await api("sync/offline", { offlineOrders: [offline] })).syncedCount, 1, "offline order replay accepted");
   check((await api("sync/offline", { offlineOrders: [offline] })).duplicateCount, 1, "offline replay retry is deduplicated");

@@ -20,6 +20,11 @@ import { KitchenTicketModal } from "./KitchenTicketModal";
 
 export const OrdersHistory: React.FC<{ currentUser: any }> = ({ currentUser }) => {
   const [orders, setOrders] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const [total, setTotal] = useState(0);
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
   const [selectedOrder, setSelectedOrder] = useState<any | null>(null);
   const [statusFilter, setStatusFilter] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
@@ -56,17 +61,32 @@ export const OrdersHistory: React.FC<{ currentUser: any }> = ({ currentUser }) =
   const [docketOrder, setDocketOrder] = useState<any | null>(null);
   const [showDocketModal, setShowDocketModal] = useState(false);
 
-  const fetchOrders = useCallback(() => fetch("/api/orders?limit=100")
-    .then(res => { if (!res.ok) throw new Error("Request failed"); return res.json(); })
-    .then(data => {
-      if (data.orders) {
-        setOrders(data.orders);
-      }
+  const PAGE_SIZE = 100;
+  const fetchOrders = useCallback((offset = 0, append = false) => {
+    setLoading(true);
+    setLoadError("");
+    const params = new URLSearchParams({ limit: String(PAGE_SIZE), offset: String(offset) });
+    if (from) params.set("from", from);
+    if (to) params.set("to", to);
+    fetch(`/api/orders?${params.toString()}`)
+      .then(res => { if (!res.ok) throw new Error(`Request failed (${res.status})`); return res.json(); })
+      .then(data => {
+        const rows = data.orders || [];
+        setOrders(prev => (append ? [...prev, ...rows] : rows));
+        setTotal(Number(data.total) || rows.length);
+      })
+      .catch(err => setLoadError(err?.message || "Could not load orders"))
+      .finally(() => setLoading(false));
+  }, [from, to]);
 
-    }).catch(console.error), []);
-
+  // Load on the first tick (deferred so effects never setState synchronously),
+  // then keep the list live: refresh on an interval and whenever the tab regains focus.
   useEffect(() => {
-    fetchOrders();
+    const kick = setTimeout(() => fetchOrders(0, false), 0);
+    const timer = setInterval(() => fetchOrders(0, false), 30_000);
+    const onFocus = () => fetchOrders(0, false);
+    window.addEventListener("focus", onFocus);
+    return () => { clearTimeout(kick); clearInterval(timer); window.removeEventListener("focus", onFocus); };
   }, [fetchOrders]);
 
   const handleProcessRefund = async (e: React.FormEvent) => {
@@ -150,6 +170,29 @@ export const OrdersHistory: React.FC<{ currentUser: any }> = ({ currentUser }) =
             <option value="refunded">Refunded</option>
             <option value="cancelled">Cancelled</option>
           </select>
+
+          <input
+            type="date"
+            value={from}
+            onChange={(e) => setFrom(e.target.value)}
+            title="From date"
+            className="bg-neutral-800 border border-neutral-700 rounded-xl px-2 py-1.5 text-xs text-white focus:outline-none"
+          />
+          <input
+            type="date"
+            value={to}
+            onChange={(e) => setTo(e.target.value)}
+            title="To date"
+            className="bg-neutral-800 border border-neutral-700 rounded-xl px-2 py-1.5 text-xs text-white focus:outline-none"
+          />
+          {(from || to) && (
+            <button
+              onClick={() => { setFrom(""); setTo(""); }}
+              className="px-2 py-1.5 text-xs text-amber-400 hover:text-amber-300"
+            >
+              Clear dates
+            </button>
+          )}
         </div>
       </div>
 
@@ -172,7 +215,33 @@ export const OrdersHistory: React.FC<{ currentUser: any }> = ({ currentUser }) =
                 </tr>
               </thead>
               <tbody className="divide-y divide-neutral-800/60 text-neutral-300">
-                {filteredOrders.map((ord) => {
+                {loading && orders.length === 0 ? (
+                  <tr>
+                    <td colSpan={9} className="px-4 py-10 text-center text-neutral-500">
+                      Loading orders…
+                    </td>
+                  </tr>
+                ) : loadError ? (
+                  <tr>
+                    <td colSpan={9} className="px-4 py-10 text-center">
+                      <div className="text-rose-300 font-medium mb-2">Could not load orders: {loadError}</div>
+                      <button
+                        onClick={() => fetchOrders(0, false)}
+                        className="px-3 py-1.5 rounded-xl bg-amber-500 text-neutral-900 text-xs font-bold hover:bg-amber-400"
+                      >
+                        Retry
+                      </button>
+                    </td>
+                  </tr>
+                ) : filteredOrders.length === 0 ? (
+                  <tr>
+                    <td colSpan={9} className="px-4 py-10 text-center text-neutral-500">
+                      {orders.length === 0
+                        ? "No orders found for this date range."
+                        : "No orders match your search or filter."}
+                    </td>
+                  </tr>
+                ) : filteredOrders.map((ord) => {
                   const isCompleted = ord.status === "completed";
                   const isRefunded = ord.status === "refunded";
                   const isCancelled = ord.status === "cancelled";
@@ -266,6 +335,25 @@ export const OrdersHistory: React.FC<{ currentUser: any }> = ({ currentUser }) =
               </tbody>
             </table>
           </div>
+        </div>
+
+        {/* Live count + pagination — the list must never fail silently */}
+        <div className="mt-3 flex flex-col items-center gap-2">
+          <div className="text-[11px] text-neutral-400">
+            {loading
+              ? "Loading orders…"
+              : loadError
+              ? ""
+              : `Showing ${orders.length} of ${total} orders (newest first)`}
+          </div>
+          {!loading && !loadError && orders.length < total && (
+            <button
+              onClick={() => fetchOrders(orders.length, true)}
+              className="px-4 py-2 rounded-xl bg-neutral-800 border border-neutral-700 text-xs text-white hover:border-amber-500"
+            >
+              Load older orders ({total - orders.length} more)
+            </button>
+          )}
         </div>
       </div>
 
