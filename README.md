@@ -32,6 +32,27 @@ the shift's running sales/cash/MoMo totals are rolled back so the drawer still
 reconciles to the sales that remain. There is no undo, and no other role —
 including managers — can reach it.
 
+### Editing a saved order (owner only)
+
+The same account gets a pencil button on each row of **Order History**. The
+editor changes lines and quantities, the order type (dine-in / room service /
+takeaway / delivery), the table or room, guest details, discount, tip and notes.
+Every price is recalculated on the server from the menu and the billing
+configuration — the browser's numbers are never trusted — and stock is re-synced
+to exactly what the saved lines require, using the movement ledger's **net** so
+a second edit can never hand back stock that was already returned. Open kitchen
+dockets are refreshed to the corrected lines; completed ones are left alone.
+
+Money is never adjusted silently:
+
+- **Editing up** leaves the order open showing **"Collect GH₵X more"**; it only
+  reads *paid* again once the money matches.
+- **Editing below what was collected is refused** with an explanation. An order
+  can never hold more money than its bill, so it is not half-saved; either raise
+  the total or refund the order and ring up the correct bill.
+- **Once anything has been refunded** against an order, its items, discount and
+  tip are locked (guest details and notes still save). Re-pricing would rewrite
+  what the drawer already recorded.
 
 
 - **Display size** — the control in the top bar cycles **Standard (16px)** →

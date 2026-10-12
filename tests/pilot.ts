@@ -23,6 +23,12 @@ async function api(path: string, body?: unknown) {
   if (response.headers.has("set-cookie")) cookie = response.headers.get("set-cookie")!.split(";")[0];
   return data;
 }
+/** Owner-edit endpoint is a PATCH; api() only posts. */
+async function patch(path: string, body: unknown) {
+  const result = await raw(path, "PATCH", body);
+  assert.equal(result.status, 200, `${path}: ${JSON.stringify(result.data)}`);
+  return result.data;
+}
 /** Raw request for the cases whose whole point is a non-200 answer. */
 async function raw(path: string, method: string, body?: unknown, asCookie = cookie) {
   const response = await fetch(`http://127.0.0.1:3100/api/${path}`, {
@@ -95,6 +101,50 @@ async function main() {
   check(Number((await admin.query("SELECT count(*)::int AS c FROM payments WHERE order_id=$1", [paidDoomed.id])).rows[0].c), 0, "payments erased with the order");
   const rollbackClose = await api("shifts", { action: "close_shift", shiftId: rollbackShift.id, actualClosingCash: "50.00" });
   check(rollbackClose.difference, "0.00", "drawer still reconciles after the deleted sale");
+
+  // --- Owner-only order editing ------------------------------------------
+  const stock = async () => Number((await admin.query("SELECT current_stock FROM ingredients WHERE id=1")).rows[0].current_stock);
+  const recipeQty = Number((await admin.query("SELECT quantity FROM recipe_ingredients WHERE recipe_id=1")).rows[0].quantity);
+  const editStockStart = Number((await admin.query("SELECT current_stock FROM ingredients WHERE id=1")).rows[0].current_stock);
+  const { order: editable } = await api("orders", { idempotencyKey: "pilot-edit-001", orderType: "takeaway", items: [{ menuItemId: 1, quantity: 1 }] });
+  const edited = await patch(`orders/${editable.id}/edit`, { items: [{ menuItemId: 1, quantity: 2 }], discountAmount: 0, discountPercent: 0, tipAmount: 0 });
+  check(edited.order.totalAmount, "20.00", "owner re-prices an unpaid order to the new quantity");
+  check(await stock(), editStockStart - 2 * recipeQty, "edit re-syncs recipe stock to the edited lines");
+  const docket = (await admin.query("SELECT items FROM kitchen_tickets WHERE order_id=$1 ORDER BY id DESC LIMIT 1", [editable.id])).rows[0];
+  check(Number(docket.items[0].qty), 2, "open kitchen docket shows the corrected quantity");
+
+  const { shift: editShift } = await api("shifts", { action: "open_shift", openingCash: "30.00", notes: "Edit-balance probe" });
+  await api(`orders/${editable.id}/pay`, { paymentMethod: "cash", amount: "20.00", cashTendered: "20.00" });
+  const up = await patch(`orders/${editable.id}/edit`, { items: [{ menuItemId: 1, quantity: 3 }], discountAmount: 0, discountPercent: 0, tipAmount: 0 });
+  check(up.balanceDue, "10.00", "editing a paid order up reports the balance to collect");
+  check(up.order.paymentStatus, "partially_paid", "an order with a balance is marked partially paid");
+  check(up.order.status, "confirmed", "a completed order reopens when it owes money");
+  await api(`orders/${editable.id}/pay`, { paymentMethod: "cash", amount: "10.00", cashTendered: "10.00" });
+  const tooLow = await raw(`orders/${editable.id}/edit`, "PATCH", { items: [{ menuItemId: 1, quantity: 1 }], discountAmount: 0, discountPercent: 0, tipAmount: 0 });
+  check(tooLow.status, 409, "an edit below the money already collected is refused, not silently accepted");
+  check(String(tooLow.data.error).includes("GH₵30.00 has already been collected"), true, "the refusal names the GH₵30.00 already collected");
+  check(String(tooLow.data.error).includes("refund this order"), true, "the refusal says what the cashier can do instead");
+  const afterRefusal = await api(`orders/${editable.id}`);
+  check(afterRefusal.order.totalAmount, "30.00", "a refused edit changes nothing on the bill");
+  check(await stock(), editStockStart - 3 * recipeQty, "a refused edit touches no stock");
+  check((await raw(`orders/${editable.id}`, "DELETE")).status, 200, "edit probe order cleaned up");
+  check(await stock(), editStockStart, "cleanup returns every bottle the probe used");
+  const editClose = await api("shifts", { action: "close_shift", shiftId: editShift.id, actualClosingCash: "30.00" });
+  check(editClose.difference, "0.00", "the edit probe leaves the drawer reconciled");
+
+  // --- Stock comes back by net, not by gross ----------------------------------
+  // An order that was edited before it was cancelled must return what it still
+  // holds. Summing the original deduction plus the edited one would hand back
+  // stock the shelf never had.
+  const { order: cancelProbe } = await api("orders", { idempotencyKey: "pilot-edit-cancel-001", orderType: "takeaway", items: [{ menuItemId: 1, quantity: 1 }] });
+  check(await stock(), editStockStart - recipeQty, "cancel probe holds one portion");
+  await patch(`orders/${cancelProbe.id}/edit`, { items: [{ menuItemId: 1, quantity: 3 }], discountAmount: 0, discountPercent: 0, tipAmount: 0 });
+  check(await stock(), editStockStart - 3 * recipeQty, "the edited cancel probe holds three portions");
+  await patch(`orders/${cancelProbe.id}`, { status: "cancelled", returnStockOnCancel: true });
+  check(await stock(), editStockStart, "cancelling an edited order returns exactly what it held");
+  check((await raw(`orders/${cancelProbe.id}`, "DELETE")).status, 200, "cancel probe order erased");
+  check(await stock(), editStockStart, "erasing a fully returned order moves no stock again");
+
   console.log(`\n${checks} synthetic shift/pilot checks passed. No physical payment, printer, or backup test was performed.`);
 }
 main().catch(error => { console.error(error); process.exitCode = 1; }).finally(() => admin.end());

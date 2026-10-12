@@ -15,10 +15,12 @@ import {
   ShieldCheck,
   ChefHat,
   Trash2,
+  Pencil,
 } from "lucide-react";
 import { ReceiptModal } from "./ReceiptModal";
 import { KitchenTicketModal } from "./KitchenTicketModal";
 import { ConfirmDialog } from "./ConfirmDialog";
+import { EditOrderModal } from "./EditOrderModal";
 
 export const OrdersHistory: React.FC<{ currentUser: any }> = ({ currentUser }) => {
   const [orders, setOrders] = useState<any[]>([]);
@@ -65,10 +67,12 @@ export const OrdersHistory: React.FC<{ currentUser: any }> = ({ currentUser }) =
 
   // Owner-only hard delete. The confirm dialog stays open while the request
   // runs, and a server failure is shown inside it — never swallowed.
+  const [editTarget, setEditTarget] = useState<any | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<any | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteError, setDeleteError] = useState("");
   const [notice, setNotice] = useState("");
+  const [noticeTone, setNoticeTone] = useState<"ok" | "danger">("ok");
 
   const PAGE_SIZE = 100;
   const fetchOrders = useCallback((offset = 0, append = false) => {
@@ -103,6 +107,7 @@ export const OrdersHistory: React.FC<{ currentUser: any }> = ({ currentUser }) =
       if (!res.ok) throw new Error(data?.error || `Delete failed (${res.status})`);
       const number = deleteTarget.orderNumber;
       setDeleteTarget(null);
+      setNoticeTone("danger");
       setNotice(`Order ${number} was permanently deleted.`);
       fetchOrders(0, false);
     } catch (err: any) {
@@ -363,6 +368,17 @@ export const OrdersHistory: React.FC<{ currentUser: any }> = ({ currentUser }) =
 
                           {currentUser?.role === "super_admin" && (
                             <button
+                              onClick={() => setEditTarget(ord)}
+                              className="p-1.5 bg-neutral-800 hover:bg-amber-500 text-neutral-400 hover:text-black rounded-lg transition border border-neutral-700 hover:border-amber-400"
+                              title="Edit this order (owner only)"
+                              aria-label={`Edit order ${ord.orderNumber}`}
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+
+                          {currentUser?.role === "super_admin" && (
+                            <button
                               onClick={() => {
                                 setDeleteError("");
                                 setDeleteTarget(ord);
@@ -385,9 +401,15 @@ export const OrdersHistory: React.FC<{ currentUser: any }> = ({ currentUser }) =
         </div>
 
         {notice && (
-          <div className="mt-3 px-4 py-2.5 rounded-xl bg-rose-500/10 border border-rose-500/40 text-rose-300 text-xs font-semibold flex items-center justify-between gap-3">
+          <div
+            className={`mt-3 px-4 py-2.5 rounded-xl text-xs font-semibold flex items-center justify-between gap-3 border ${
+              noticeTone === "ok"
+                ? "bg-emerald-500/10 border-emerald-500/40 text-emerald-300"
+                : "bg-rose-500/10 border-rose-500/40 text-rose-300"
+            }`}
+          >
             <span>{notice}</span>
-            <button onClick={() => setNotice("")} className="text-rose-300 hover:text-white" aria-label="Dismiss">
+            <button onClick={() => setNotice("")} className="hover:text-white" aria-label="Dismiss">
               <X className="w-4 h-4" />
             </button>
           </div>
@@ -521,6 +543,29 @@ export const OrdersHistory: React.FC<{ currentUser: any }> = ({ currentUser }) =
           order={receiptOrder}
         />
       )}
+      {/* OWNER-ONLY ORDER EDITOR */}
+      {editTarget && (
+        <EditOrderModal
+          order={editTarget}
+          onClose={() => setEditTarget(null)}
+          onSaved={(result) => {
+            const number = editTarget?.orderNumber;
+            setEditTarget(null);
+            const due = Number(result?.balanceDue || 0);
+            const collected = Number(result?.collected || 0);
+            setNoticeTone("ok");
+            setNotice(
+              due > 0
+                ? collected > 0
+                  ? `Order ${number} updated. Collect GH₵${due.toFixed(2)} more from the guest.`
+                  : `Order ${number} updated. GH₵${due.toFixed(2)} is still to be paid.`
+                : `Order ${number} updated.`
+            );
+            fetchOrders(0, false);
+          }}
+        />
+      )}
+
       {/* OWNER-ONLY PERMANENT DELETE */}
       <ConfirmDialog
         open={!!deleteTarget}

@@ -18,7 +18,12 @@ async function handleGET(req: Request, { params }: { params: Promise<{ id: strin
 
     const items = await db.select().from(orderItems).where(eq(orderItems.orderId, orderId));
 
-    return NextResponse.json({ order: { ...order, items } });
+    // Refunds live in their own ledger and paid_amount stays gross, so anyone
+    // showing money still in hand needs this figure alongside paid_amount.
+    const refundRows = await db.select().from(refunds).where(eq(refunds.orderId, orderId));
+    const refundedCents = refundRows.reduce((sum, row) => sum + Math.round(Number(row.amount) * 100), 0);
+
+    return NextResponse.json({ order: { ...order, items, refundedAmount: fromCents(refundedCents) } });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }

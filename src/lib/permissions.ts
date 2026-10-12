@@ -16,6 +16,10 @@ export const ROLE_PERMISSIONS: Record<UserRole, {
   /** Hard-delete orders. Owner only: this erases the order and its whole
    *  financial trail, so it is deliberately not delegable to managers. */
   canDeleteOrders: boolean;
+  /** Re-price a saved order (items, discount, tip, customer). Owner only:
+   *  changing what a guest was charged after the fact is an owner decision,
+   *  and any balance it creates is settled against the drawer. */
+  canEditOrders: boolean;
 }> = {
   super_admin: {
     label: "Super Admin / Owner",
@@ -29,6 +33,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, {
     canManageMenu: true,
     canManageSettings: true,
     canDeleteOrders: true,
+    canEditOrders: true,
   },
   manager: {
     label: "Restaurant Manager",
@@ -42,6 +47,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, {
     canManageMenu: true,
     canManageSettings: false,
     canDeleteOrders: false,
+    canEditOrders: false,
   },
   cashier: {
     label: "Cashier / Front-of-House",
@@ -56,6 +62,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, {
     canManageMenu: false,
     canManageSettings: false,
     canDeleteOrders: false,
+    canEditOrders: false,
   },
   cook: {
     label: "Kitchen Staff (No Terminal Access)",
@@ -70,6 +77,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, {
     canManageMenu: false,
     canManageSettings: false,
     canDeleteOrders: false,
+    canEditOrders: false,
   },
   inventory_officer: {
     label: "Inventory Officer",
@@ -83,6 +91,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, {
     canManageMenu: true,
     canManageSettings: false,
     canDeleteOrders: false,
+    canEditOrders: false,
   },
   accountant: {
     terminalAccess: true,
@@ -96,6 +105,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, {
     canManageMenu: false,
     canManageSettings: false,
     canDeleteOrders: false,
+    canEditOrders: false,
   },
 };
 

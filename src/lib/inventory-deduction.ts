@@ -90,7 +90,15 @@ async function applyStockChange(
   // Restoration uses the actual deduction ledger, never today's editable recipe.
   const totals = direction === "deduct" ? await resolveIngredientTotals(items) : new Map<number, number>();
   if (direction === "restore") {
-    const movements = await db.select().from(stockMovements).where(sql`${stockMovements.referenceId} = ${orderNumber} AND ${stockMovements.movementType} = 'order_deduction'`);
+    // Net, never gross. Deductions are booked under the order number and every
+    // restore under REF-<order number>, so summing both forms answers "what is
+    // still taken out of stock for this order" — which is exactly what has to
+    // go back. Summing the deductions alone would give back stock that an
+    // earlier edit, cancel or refund had already returned.
+    const movements = await db
+      .select()
+      .from(stockMovements)
+      .where(sql`${stockMovements.referenceId} = ${orderNumber} OR ${stockMovements.referenceId} = ${`REF-${orderNumber}`}`);
     for (const movement of movements) totals.set(movement.ingredientId, (totals.get(movement.ingredientId) || 0) - Number(movement.quantityDelta));
   }
 
@@ -199,6 +207,89 @@ export async function deductStockForOrder(
  * Returns ingredients to stock when an order is voided or refunded.
  * Safe to call more than once — repeat calls are ignored.
  */
+/**
+ * Re-syncs the recipe deduction of an order whose lines have changed, in one
+ * transaction.
+ *
+ * The move is the difference between what the order currently holds (the
+ * ledger's net, already net of any earlier reversal) and what the new lines
+ * require. "Undo everything, then deduct everything" is wrong here: it
+ * double-counts as soon as an order has been edited, cancelled or partly
+ * refunded before, and it can invent stock that never existed.
+ *
+ * A shortage rolls the whole move back (the caller writes nothing else first),
+ * so a refused edit cannot leave the bill changed while the shelf disagrees.
+ */
+export async function resyncStockForOrder(
+  orderId: number,
+  orderNumber: string,
+  items: OrderItemDeduction[],
+  userId?: number
+): Promise<StockMutationResult> {
+  const required = await resolveIngredientTotals(items);
+
+  return db.transaction(async (tx) => {
+    const movements = await tx
+      .select()
+      .from(stockMovements)
+      .where(sql`${stockMovements.referenceId} = ${orderNumber} OR ${stockMovements.referenceId} = ${`REF-${orderNumber}`}`);
+
+    const held = new Map<number, number>(); // positive = still out of stock for this order
+    for (const movement of movements) {
+      held.set(movement.ingredientId, (held.get(movement.ingredientId) ?? 0) - Number(movement.quantityDelta));
+    }
+
+    const ingredientIds = [...new Set([...required.keys(), ...held.keys()])].sort((a, b) => a - b);
+    let movementCount = 0;
+
+    for (const ingredientId of ingredientIds) {
+      if (!Number.isFinite(ingredientId)) continue;
+      const target = required.get(ingredientId) ?? 0; // should be out of stock now
+      const current = held.get(ingredientId) ?? 0; // is out of stock now
+      const take = target - current; // positive: take more, negative: give back
+      if (take === 0) continue;
+
+      // Same lock ordering as applyStockChange, so two tickets touching the
+      // same ingredients cannot deadlock against each other.
+      const locked = await tx.select().from(ingredients).where(eq(ingredients.id, ingredientId)).limit(1).for("update");
+      const ingredient = locked[0];
+      if (!ingredient) continue;
+
+      const previous = Number(ingredient.currentStock);
+      const next = previous - take;
+      if (next < 0) {
+        throw new ApiError(
+          409,
+          `Not enough ${ingredient.name} in stock: ${previous} ${ingredient.unit} on hand, the edited order needs ${target}. Nothing was changed.`
+        );
+      }
+
+      await tx
+        .update(ingredients)
+        .set({ currentStock: next.toFixed(3), updatedAt: new Date() })
+        .where(eq(ingredients.id, ingredientId));
+
+      await tx.insert(stockMovements).values({
+        ingredientId,
+        movementType: take > 0 ? "order_deduction" : "return",
+        quantityDelta: (-take).toFixed(3),
+        previousStock: previous.toFixed(3),
+        newStock: next.toFixed(3),
+        referenceId: take > 0 ? orderNumber : `REF-${orderNumber}`,
+        unitCost: ingredient.costPerUnit,
+        reason: `Edited order ${orderNumber}: stock re-synced to the saved lines`,
+        createdById: userId,
+      });
+      movementCount += 1;
+    }
+
+    // The order holds a deduction exactly when its lines still consume stock.
+    await tx.update(orders).set({ stockDeducted: required.size > 0, updatedAt: new Date() }).where(eq(orders.id, orderId));
+
+    return { success: true, movements: movementCount, message: "Edited order stock re-synced." };
+  });
+}
+
 export async function reverseStockForOrder(
   orderId: number,
   orderNumber: string,

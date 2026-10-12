@@ -130,6 +130,24 @@ async function main() {
   const refund = await Promise.all([1,2].map(() => request(`/api/orders/${id}/refund`, "POST", { amount: "6", cashAmount: "0.00", momoAmount: "6.00", reason: "Remaining", managerPin: "2222", returnStock: true }, cashier)));
   check(refund.filter(r => r.status === 200).length === 1 && refund.filter(r => r.status === 409).length === 1, "concurrent final refunds cannot over-refund");
   check(Number((await admin.query("SELECT current_stock FROM ingredients WHERE id=1")).rows[0].current_stock) === 100, "stock restored once using original deduction, not changed recipe");
+
+  // Owner-only editing of a saved order: nobody else reaches the handler,
+  // another branch cannot see it, and the browser never sets a price.
+  const editTarget = await request("/api/orders", "POST", order("edit-permission-target"), owner);
+  const editTargetId = editTarget.body.order.id;
+  const recipeQty = Number((await admin.query("SELECT quantity FROM recipe_ingredients WHERE recipe_id=1")).rows[0].quantity);
+  const stockAfterEditTarget = Number((await admin.query("SELECT current_stock FROM ingredients WHERE id=1")).rows[0].current_stock);
+  check((await request(`/api/orders/${editTargetId}/edit`, "PATCH", { tipAmount: "1.00" }, cashier)).status === 403, "cashier cannot edit orders");
+  check((await request(`/api/orders/${editTargetId}/edit`, "PATCH", { tipAmount: "1.00" }, manager)).status === 403, "manager cannot edit orders (owner only)");
+  check((await request(`/api/orders/${editTargetId}/edit`, "PATCH", { tipAmount: "1.00" }, otherOwner)).status === 404, "another branch's owner cannot edit this branch's order");
+  const tampered = await request(`/api/orders/${editTargetId}/edit`, "PATCH", { items: [{ menuItemId: 1, quantity: 3, unitPrice: "0.01" }], discountAmount: 0, discountPercent: 0, tipAmount: 0 }, owner);
+  check(tampered.status === 200, "owner edits the saved order");
+  check(tampered.body.order.totalAmount === "30.00", "edit prices the bill from the menu, ignoring client prices");
+  check(Number((await admin.query("SELECT unit_price FROM order_items WHERE order_id=$1", [editTargetId])).rows[0].unit_price) === 10, "edited line keeps the menu price");
+  check(Number((await admin.query("SELECT current_stock FROM ingredients WHERE id=1")).rows[0].current_stock) === stockAfterEditTarget - 2 * recipeQty, "edit re-syncs recipe stock to the new quantities");
+  check((await request(`/api/orders/${id}/edit`, "PATCH", { items: [{ menuItemId: 1, quantity: 1 }] }, owner)).status === 409, "refunded orders cannot be re-priced");
+  check((await request(`/api/orders/${editTargetId}`, "DELETE", {}, owner)).status === 200, "edit probe order cleaned up");
+  check(Number((await admin.query("SELECT current_stock FROM ingredients WHERE id=1")).rows[0].current_stock) === stockAfterEditTarget + recipeQty, "cleanup returns the stock the probe used");
   await admin.query("UPDATE recipe_ingredients SET quantity=2 WHERE recipe_id=1");
   // A failed second item in a batch must roll back the entire first order.
   const batch = await request("/api/sync/offline", "POST", { offlineOrders: [order("offline-rollback-1"), order("offline-rollback-2", { items: [{ menuItemId: 9999, quantity: 1 }] })] }, cashier);
