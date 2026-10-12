@@ -93,7 +93,12 @@ export const OrdersHistory: React.FC<{ currentUser: any }> = ({ currentUser }) =
     setDeleteBusy(true);
     setDeleteError("");
     try {
-      const res = await fetch(`/api/orders/${deleteTarget.id}`, { method: "DELETE" });
+      const res = await fetch(`/api/orders/${deleteTarget.id}`, {
+        method: "DELETE",
+        // The API requires a JSON content type on every write (else 415).
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || `Delete failed (${res.status})`);
       const number = deleteTarget.orderNumber;

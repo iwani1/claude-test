@@ -97,7 +97,11 @@ export const StaffManager: React.FC<{ currentUser?: any }> = ({ currentUser }) =
         setNewPin("");
         alert(`PIN updated for ${showPinModal.name}. Sessions for this account were signed out; a changed PIN must be used from a fresh sign-in.`);
         if (data.employee?.id === currentUser?.id) {
-          await fetch("/api/auth/logout", { method: "POST" });
+          await fetch("/api/auth/logout", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({}),
+          });
           window.location.reload();
           return;
         }
@@ -124,7 +128,11 @@ export const StaffManager: React.FC<{ currentUser?: any }> = ({ currentUser }) =
         setNewPassword("");
         alert(`${showPasswordModal.name}'s password was changed. All existing sessions for this account are now signed out.`);
         if (data.employee?.id === currentUser?.id) {
-          await fetch("/api/auth/logout", { method: "POST" });
+          await fetch("/api/auth/logout", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({}),
+          });
           window.location.reload();
           return;
         }
