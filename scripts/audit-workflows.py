@@ -57,6 +57,7 @@ def has_feedback(body: str) -> bool:
         r"\bset[A-Za-z]*(Error|Status|Notice|Message|Feedback|Failed|Warning|Banner)\b",
         r"\bsetAuthState\b",
         r"\bNextResponse\.json\s*\(",
+        r"\berrorResponse\s*\(",
         r"\bResponse\.json\s*\(",
         r"\breturn\s*\{\s*error",
     ]

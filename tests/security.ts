@@ -44,6 +44,8 @@ async function main() {
       check(res.status === 401, `anonymous ${match[1]} ${url} denied (${res.status})`);
     }
   }
+  const anon = await request("/api/menu");
+  check(anon.status === 401 && anon.headers.get("cache-control") === "no-store", "refusals are uncacheable, so a repaired system cannot look broken");
   const owner = await login(1), manager = await login(2), cashier = await login(3), accountant = await login(4), other = await login(7), otherOwner = await login(8), otherTenant = await login(9);
   check((await request("/api/shifts", "POST", { action: "open_shift", openingCash: "100.00" }, owner)).status === 200, "security fixture opens register");
   check((await request("/api/auth/login", "POST", { email: "user6@test.invalid", password: "Test-password-only-123!" })).status === 401, "kitchen account cannot log in");
@@ -210,6 +212,7 @@ async function main() {
   const driftedDelete = await request(`/api/orders/${driftId}`, "DELETE", {}, owner);
   check(driftedDelete.status === 503, `the work that needs the missing column answers 503, not a mystery 500 (${driftedDelete.status})`);
   check(/idempotency_key/.test(String(driftedDelete.body.error)) && /db:migrate/.test(String(driftedDelete.body.error)), "the refusal names the missing column and the command that fixes it");
+  check(driftedDelete.headers.get("cache-control") === "no-store", "and the 503 itself is never cached");
   const driftedHealth = await request("/api/health");
   check(driftedHealth.status === 503 && driftedHealth.body.reason === "schema-behind" && (driftedHealth.body.missing || []).includes("payments.idempotency_key"), "health reports the schema gap for the deploy gate and the operator");
   await admin.query(await readFile("migrations/0004_payment_idempotency.sql", "utf8"));

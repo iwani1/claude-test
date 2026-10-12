@@ -1,5 +1,7 @@
 import { rootDb } from "@/db";
 import { sql } from "drizzle-orm";
+
+const NO_STORE = { "Cache-Control": "no-store" };
 import { findMissingSchema, MIGRATE_HINT } from "@/lib/schema-guard";
 
 export const dynamic = "force-dynamic";
@@ -26,11 +28,11 @@ export async function GET() {
       console.error(`Schema behind on ${place.database}.${place.schema} @ ${COMMIT}: missing ${missing.join(", ")}`);
       return Response.json(
         { ok: false, reason: "schema-behind", missing, commit: COMMIT, ...place, hint: MIGRATE_HINT },
-        { status: 503 }
+        { status: 503, headers: NO_STORE }
       );
     }
-    return Response.json({ ok: true, commit: COMMIT, ...place });
+    return Response.json({ ok: true, commit: COMMIT, ...place }, { headers: NO_STORE });
   } catch {
-    return Response.json({ ok: false, commit: COMMIT }, { status: 500 });
+    return Response.json({ ok: false, commit: COMMIT }, { status: 500, headers: NO_STORE });
   }
 }

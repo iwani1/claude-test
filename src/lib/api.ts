@@ -24,6 +24,16 @@ function driverError(err: unknown): any {
   }
   return {};
 }
+/** Every API answer is uncacheable — including failures. A cached 503 or 401
+ *  once made a repaired system look broken for an hour, to the browser and to
+ *  whoever was checking it. */
+function noStore(response: NextResponse) {
+  response.headers.set("Cache-Control", "no-store");
+  return response;
+}
+function errorResponse(body: Record<string, unknown>, status: number) {
+  return noStore(NextResponse.json(body, { status }));
+}
 export function safeSession(row: typeof users.$inferSelect): SessionUser {
   return { id: row.id, restaurantId: row.restaurantId, branchId: row.branchId, name: row.name, email: row.email,
     role: row.role as UserRole, avatarUrl: row.avatarUrl, sessionVersion: row.sessionVersion };
@@ -74,8 +84,8 @@ export function secureRoute(handler: Handler, permission: Permission | "session"
     } catch (err) {
       if (err instanceof RollbackResponse) {
         // Do not expose legacy handlers' SQL/error internals to the browser.
-        if (err.response.status >= 500) return NextResponse.json({ error: "Request failed" }, { status: 500 });
-        return err.response;
+        if (err.response.status >= 500) return errorResponse({ error: "Request failed" }, 500);
+        return noStore(err.response as NextResponse);
       }
       // Database constraint rejections become clear 409/400 explanations,
       // never anonymous 500s (Drizzle may wrap the driver error).
@@ -84,7 +94,7 @@ export function secureRoute(handler: Handler, permission: Permission | "session"
       // A stale database (migration not applied, or grants not re-run) gets
       // instructions instead of "Request failed".
       const drift = driver.code ? schemaDriftMessage(String(driver.code), String(driver.message || detail)) : null;
-      if (drift) return NextResponse.json({ error: drift }, { status: 503 });
+      if (drift) return errorResponse({ error: drift }, 503);
       if (driver.code === "23505" || /duplicate key/i.test(detail)) {
         const label = /pin/i.test(detail) ? "That PIN is already used by another staff member in this branch. Choose a different PIN."
           : /email/i.test(detail) ? "That email is already registered."
@@ -94,18 +104,18 @@ export function secureRoute(handler: Handler, permission: Permission | "session"
           : /grn_number/i.test(detail) ? "A goods receipt with that number already exists."
           : /settings/i.test(detail) ? "That setting key is already in use."
           : "That record already exists.";
-        return NextResponse.json({ error: label }, { status: 409 });
+        return errorResponse({ error: label }, 409);
       }
       if (driver.code === "23503" || /foreign key/i.test(detail)) {
-        return NextResponse.json({ error: "A linked record is missing or belongs to another branch." }, { status: 409 });
+        return errorResponse({ error: "A linked record is missing or belongs to another branch." }, 409);
       }
       if (driver.code === "23514" || /check constraint/i.test(detail)) {
-        return NextResponse.json({ error: "One of the values is not allowed." }, { status: 400 });
+        return errorResponse({ error: "One of the values is not allowed." }, 400);
       }
-      if (err instanceof ApiError) return NextResponse.json({ error: err.message }, { status: err.status });
-      if (err instanceof SyntaxError) return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+      if (err instanceof ApiError) return errorResponse({ error: err.message }, err.status);
+      if (err instanceof SyntaxError) return errorResponse({ error: "Invalid JSON" }, 400);
       console.error("API request failed", err);
-      return NextResponse.json({ error: "Request failed" }, { status: 500 });
+      return errorResponse({ error: "Request failed" }, 500);
     }
   };
 }
