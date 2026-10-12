@@ -167,10 +167,32 @@ async function handleDELETE(req: Request, { params }: { params: Promise<{ id: st
       .where(eq(shifts.id, shiftId));
   }
 
+  // 3b. A cash refund the order paid is an outflow on the shift that paid it.
+  // Leaving that total behind makes the drawer reconcile short by exactly the
+  // refunded amount — the shift can then never be closed flat again.
+  const erasedRefunds = await db
+    .select({ id: refunds.id, shiftId: refunds.shiftId, cashAmount: refunds.cashAmount })
+    .from(refunds)
+    .where(eq(refunds.orderId, orderId));
+  const payoutDelta = new Map<number, number>();
+  for (const refund of erasedRefunds) {
+    if (refund.shiftId == null) continue;
+    const cash = toCents(refund.cashAmount || "0");
+    if (cash <= 0) continue;
+    payoutDelta.set(refund.shiftId, (payoutDelta.get(refund.shiftId) || 0) + cash);
+  }
+  for (const [shiftId, delta] of payoutDelta) {
+    const [shift] = await db.select().from(shifts).where(eq(shifts.id, shiftId)).limit(1).for("update");
+    if (!shift) continue;
+    await db
+      .update(shifts)
+      .set({ cashPayouts: fromCents(Math.max(0, toCents(shift.cashPayouts || 0) - delta)) })
+      .where(eq(shifts.id, shiftId));
+  }
+
   // 4. Erase the order's records — children before parents.
-  const orderRefunds = await db.select({ id: refunds.id }).from(refunds).where(eq(refunds.orderId, orderId));
-  if (orderRefunds.length > 0) {
-    await db.delete(drawerMovements).where(inArray(drawerMovements.refundId, orderRefunds.map((refund) => refund.id)));
+  if (erasedRefunds.length > 0) {
+    await db.delete(drawerMovements).where(inArray(drawerMovements.refundId, erasedRefunds.map((refund) => refund.id)));
   }
   await db.delete(refunds).where(eq(refunds.orderId, orderId));
   await db.delete(payments).where(eq(payments.orderId, orderId));

@@ -6,6 +6,7 @@ import { rootDb, requestContext, Transaction } from "@/db";
 import { users, branches } from "@/db/schema";
 import { authSecret, hasTerminalAccess, ROLE_PERMISSIONS, SessionUser, UserRole, verifyToken } from "./auth";
 import type { Permission } from "./guard";
+import { findMissingSchema, schemaBehindMessage, schemaDriftMessage, type Executor } from "./schema-guard";
 export class ApiError extends Error {
   constructor(public status: number, message: string) { super(message); }
 }
@@ -15,6 +16,13 @@ type Handler = (req: Request, context: RouteContext) => Promise<Response>;
 export async function setScope(tx: Transaction, user: SessionUser) {
   await tx.execute(sql`select set_config('app.auth', '0', true), set_config('app.branch_id', ${String(user.branchId)}, true), set_config('app.restaurant_id', ${String(user.restaurantId)}, true)`);
   requestContext.getStore()!.user = user;
+}
+/** The driver error hiding inside Drizzle's wrapper (it nests `cause`). */
+function driverError(err: unknown): any {
+  for (let node: any = err, depth = 0; node && depth < 5; node = node.cause, depth++) {
+    if (node.code) return node;
+  }
+  return {};
 }
 export function safeSession(row: typeof users.$inferSelect): SessionUser {
   return { id: row.id, restaurantId: row.restaurantId, branchId: row.branchId, name: row.name, email: row.email,
@@ -47,6 +55,10 @@ export function secureRoute(handler: Handler, permission: Permission | "session"
         const role = await tx.execute(sql`select rolsuper, rolbypassrls from pg_roles where rolname = current_user`);
         if (role.rows[0]?.rolsuper || role.rows[0]?.rolbypassrls) throw new Error("Runtime database role must not bypass row security");
         await tx.execute(sql`select version from security_meta where version = 1`);
+        // Refuse to work against a database that has not run this version's
+        // migrations: half of the request would fail anonymously later.
+        const missing = await findMissingSchema(tx as unknown as Executor);
+        if (missing.length) throw new ApiError(503, schemaBehindMessage(missing));
         await tx.execute(sql`select set_config('app.auth', '1', true)`);
         if (permission !== "public") {
           const cookie = req.headers.get("cookie")?.split(";").map(s => s.trim()).find(s => s.startsWith("pos_session="))?.slice(12);
@@ -71,8 +83,12 @@ export function secureRoute(handler: Handler, permission: Permission | "session"
       }
       // Database constraint rejections become clear 409/400 explanations,
       // never anonymous 500s (Drizzle may wrap the driver error).
-      const driver: any = (err as any)?.code ? err : (err as any)?.cause?.code ? (err as any).cause : {};
+      const driver: any = driverError(err);
       const detail = String(driver.constraint || (err as any)?.message || (err as any)?.cause?.message || "");
+      // A stale database (migration not applied, or grants not re-run) gets
+      // instructions instead of "Request failed".
+      const drift = driver.code ? schemaDriftMessage(String(driver.code), String(driver.message || detail)) : null;
+      if (drift) return NextResponse.json({ error: drift }, { status: 503 });
       if (driver.code === "23505" || /duplicate key/i.test(detail)) {
         const label = /pin/i.test(detail) ? "That PIN is already used by another staff member in this branch. Choose a different PIN."
           : /email/i.test(detail) ? "That email is already registered."

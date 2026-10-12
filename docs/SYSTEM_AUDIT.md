@@ -5,7 +5,8 @@ paths, the stock paths, the offline layer and the deployment tooling. It is
 written to be checkable rather than reassuring — each claim below names the
 evidence, and everything still open is listed as open.
 
-**Audited at:** `8e402e9` (branch `arena/181e4004-claude-test`)
+**Audited at:** `8e402e9` and updated on the commit that follows it on
+branch `arena/181e4004-claude-test` (the deletion fix below)
 **Performed by:** the agent, from the repository and a disposable PostgreSQL —
 not from the production server, not with a browser, not with hardware.
 
@@ -13,7 +14,7 @@ not from the production server, not with a browser, not with hardware.
 
 | Method | What it covered |
 |---|---|
-| `npm run test:security` | 149 security + 70 pilot + 30 accounting checks against a disposable database and a production build |
+| `npm run test:security` | 159 security (including a stale-database scenario) + 70 pilot + 30 accounting checks against a disposable database and a production build |
 | `npm run audit:responsive` | 28 components + 2 app files: tables scroll or become cards, dialogs scroll, no `h-screen`/`w-screen`, no unguarded fixed widths |
 | `npm run audit:workflows` | **new** — swallowed failures in client code, fetches parsed without a status check, money routes without an idempotency guard, routes without a permission check, tables without a phone view |
 | Route sweep | all 27 route handlers read for permission gates, error envelopes and money/stock writes |
@@ -82,10 +83,94 @@ not from the production server, not with a browser, not with hardware.
 | **High** | A retried **partial** payment was recorded twice: if the answer to "Pay" was lost, entering the same tender again added it to the bill a second time (a full payment was caught by the balance check, a deposit was not). | `migrations/0004_payment_idempotency.sql` + pay route: stable key per attempt with a request fingerprint, advisory-locked, replay returns the original outcome, a reused key with a different amount is a 409. The till now pins one key per attempt, and after a lost answer it **asks the server what happened** before the cashier takes money again. Covered by 6 new pilot checks. |
 | **High** | Receiving the same purchase order twice added the delivery to stock twice (no status guard, no transaction, no row lock), and a partial failure could leave stock updated with no GRN. | `receive_goods` now runs in one transaction against a locked PO, refuses an already-received PO, refuses lines that belong to another PO or appear twice, and locks each ingredient row. 4 new pilot checks. |
 | **Medium** | Manual stock adjustments were read-modify-write with no lock: two concurrent adjustments lost one another, and the ledger could record a delta the shelf never took (an over-large write-off logged −1050 while stock only fell 100). | Adjustment is transactional with a locked ingredient row, records the **applied** delta, and refuses a zero adjustment. 4 new pilot checks. |
+| **High** | Erasing an order that had been refunded left the shift's cash-outflow total behind, so the drawer reconciled short by the refunded amount and could never be closed flat again. | `DELETE /api/orders/[id]` reverses the erased refunds on the shift that paid them, in the same transaction as the sales rollback; 8 pilot checks cover the whole cycle. |
+| **High** | Deploying code without applying its migration made ordinary work fail with a bare "Request failed" — order deletion was the visible casualty. | Schema guard + actionable 503 + `/api/health` reporting, a `schema-guard.ts` list kept in step with migrations by an audit rule, and a stale-database test. See the section below. |
 | **Medium** | 8 screens swallowed load failures (`console.error` only), so a broken connection looked like "no stock", "no sales", "no staff". | `LoadFailure` strip with a 44px Retry on every one of them. |
 | **Medium** | A failed sign-out was silent: the screen cleared while the session cookie could still be alive — dangerous on a shared terminal. | Sign-out now reports the failure and asks for a retry once connected. |
 | **Low** | The stock-adjustment submit button was a 28px target (below the touch floor) and could be double-tapped. | 44px minimum, in-flight guard, "Committing…" state. |
 | **Low** | An offline payment notice promised "it will not be charged twice" before the server could guarantee it. | The promise is now backed by payment idempotency, and the notice points at the safe action (retry, or check Order History). |
+
+## Missed on the first pass: order deletion on a stale database
+
+**What the user saw:** *"i tried deleting an order and i had error"* — the delete
+request answered `Request failed` (HTTP 500) and the order stayed where it was.
+
+**What actually happened:** the repository was consistent — code and migration
+both added `payments.idempotency_key`. The **database** was not: the running
+environment had never had `migrations/0004_payment_idempotency.sql` applied.
+Drizzle selects every column it knows about, so the payment step of the delete
+asked for `payments.idempotency_key` and Postgres refused with `column
+"idempotency_key" does not exist` (SQLSTATE 42703). The generic 500 handler then
+reported "Request failed" and the real reason never reached anyone.
+
+**Why the audit missed it:** every suite in this repository migrates a fresh
+database before it runs, so the tests could only ever see code and schema in
+step. The state that breaks is the one *between* a code deploy and the
+migration — and no test created it. The lesson is not "look harder": that state
+is now impossible to be silent about.
+
+**What changed**
+
+- Every request checks the columns this version needs (one catalogue query in
+  the same transaction as the work) and answers **503** naming the missing
+  piece, for example: *"The database is missing an update this version needs
+  (payments.idempotency_key). Run `npm run db:migrate` on the server with
+  MIGRATION_DATABASE_URL set, then restart the app."*
+- `/api/health` reports `{ok:false, reason:"schema-behind", missing:[…]}`, so
+  the deploy script's health gate and the operator see it at once.
+- Any other mismatch — missing table, missing grant — is translated the same
+  way instead of becoming a bare 500.
+- `scripts/audit-workflows.py` now fails when a migration adds a column that is
+  not listed in `src/lib/schema-guard.ts`. Writing that rule immediately caught
+  that the list itself was incomplete: columns added by migrations 0002 and
+  0003 were missing from it.
+- `tests/security.ts` reproduces the incident against its disposable database:
+  it drops the column, asserts the 503 message and the health report, re-applies
+  the migration, and asserts the delete that was refused now succeeds.
+- The running environment was repaired with
+  `MIGRATION_DATABASE_URL=… npm run db:migrate`, and the delete then returned
+  200 for the same order.
+
+**Operator note:** a release that adds a migration must run
+`npm run db:migrate` before the app restarts. `scripts/deploy-vps.sh` does that
+automatically — it stops before touching the working tree when a migration is
+present but `MIGRATION_DATABASE_URL` is missing — and the by-hand steps in
+`docs/VPS_DEPLOYMENT.md` include it too. If the app ever answers 503 with
+`schema-behind`, that is this check, not a crash.
+
+## Found by driving the live environment: erasing a refunded order broke the drawer
+
+The suites all passed, so the next step was to walk the running system: every
+screen, then a real sale on the live preview — ring it up, take cash, refund
+part of it, erase the order, close the register.
+
+**What broke:** the drawer could no longer be closed flat. `shifts.cash_payouts`
+carries cash refunds out of the drawer, and the close formula is
+`expected = opening + cash sales − payouts`. Erasing an order rolled back its
+sales and deleted its refund movements, but left the refund in `cash_payouts`,
+so the shift expected a drawer short by exactly the refunded amount — a phantom
+loss the cashier could not explain or correct. In the wild it reads as "the till
+says I'm 20 short and I've taken nothing".
+
+**Fix:** `DELETE /api/orders/[id]` now reverses the erased order's cash refunds
+on the shift that paid them, in the same transaction as the sales rollback, and
+the pilot suite asserts the whole cycle — refund shows as outflow, erase clears
+it, drawer closes with a 0.00 difference. Verified on the live preview:
+`2.00` outflow while the refund existed → `0.00` after the erase → register
+closed with `difference: 0.00`.
+
+**Why the suites missed it:** every drawer test refunded and then *kept* the
+order. Erasing a refunded order was the one combination nobody had walked.
+
+## Live environment smoke (every screen)
+
+23 checks against the running preview with the real imported data — sign in,
+Menu Items, Tables, Order History, Ingredient Stock, Purchasing & GRN, Register
+shift, Staff, Reports (all time and today), Audit Logs, Kitchen Display,
+Settings, Billing config, Recipes & Costing, then the full money cycle: open the
+register, ring a sale, take a partial card-free cash payment, refund part of it,
+watch the balance, erase the order, confirm the stock came back, close the
+drawer. **23/23 pass** after the fixes above.
 
 ## Open — known and accepted
 

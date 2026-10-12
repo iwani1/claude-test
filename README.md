@@ -109,10 +109,16 @@ what is still open, and what cannot be checked without hardware or the server.
 Re-run it with:
 
 ```sh
-npm run test:security      # 149 security + 70 pilot + 30 accounting checks
+npm run test:security      # 159 security + 70 pilot + 30 accounting checks
 npm run audit:responsive   # phone/tablet/laptop layout rules
-npm run audit:workflows    # failure-feedback and money-guard rules
+npm run audit:workflows    # failure-feedback, money-guard and schema-guard rules
 ```
+
+The app refuses to work against a database that has not run this version's
+migrations: requests answer `503` naming the missing column and the command to
+fix it (`npm run db:migrate`), and `/api/health` reports
+`{"ok":false,"reason":"schema-behind"}`. `scripts/audit-workflows.py` fails
+when a migration adds a column that `src/lib/schema-guard.ts` does not list.
 
 ### Editing a saved order (owner only)
 

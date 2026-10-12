@@ -195,6 +195,25 @@ async function main() {
   check(limited === 429, "login throttling persists across failed request rollbacks");
   const runtime = new Pool({ connectionString: process.env.DATABASE_URL });
   try { check((await runtime.query("SELECT * FROM orders")).rowCount === 0, "runtime DB connection without request scope sees no orders"); } finally { await runtime.end(); }
+  // --- A database that has not been migrated must say so, not fail randomly --
+  // Order deletion once answered a bare "Request failed" for hours because the
+  // code expected a column the database did not have yet. The app now names the
+  // missing update, and /api/health reports it, so a stale environment is
+  // diagnosable from the first request instead of from a log hunt.
+  const beforeDrift = await request("/api/orders", "POST", order("drift-probe"), owner);
+  check(beforeDrift.status === 200, "order created before the drift");
+  const driftId = beforeDrift.body.order.id;
+  await admin.query("ALTER TABLE payments DROP COLUMN idempotency_key, DROP COLUMN request_fingerprint");
+  const driftedDelete = await request(`/api/orders/${driftId}`, "DELETE", {}, owner);
+  check(driftedDelete.status === 503, `a stale database refuses the work instead of answering a mystery 500 (${driftedDelete.status})`);
+  check(/idempotency_key/.test(String(driftedDelete.body.error)) && /db:migrate/.test(String(driftedDelete.body.error)), "the refusal names the missing column and the command that fixes it");
+  const driftedHealth = await request("/api/health");
+  check(driftedHealth.status === 503 && driftedHealth.body.reason === "schema-behind" && (driftedHealth.body.missing || []).includes("payments.idempotency_key"), "health reports the schema gap instead of pretending to be well");
+  check((await request("/api/orders", "POST", order("drift-blocked"), owner)).status === 503, "no write is accepted while the database is behind");
+  await admin.query(await readFile("migrations/0004_payment_idempotency.sql", "utf8"));
+  check((await request("/api/health")).status === 200, "running the migration returns the app to healthy");
+  check((await request(`/api/orders/${driftId}`, "DELETE", {}, owner)).status === 200, "and the work that was refused now succeeds");
+  check(Number((await admin.query("SELECT count(*)::int AS c FROM information_schema.columns WHERE table_name='payments' AND column_name='idempotency_key'")).rows[0].c) === 1, "the re-applied migration restored the column");
   const shift = (await request("/api/shifts", "GET", undefined, owner)).body.activeShift;
   const expected = Number(shift.openingCash) + Number(shift.totalCashSales) - Number(shift.cashPayouts);
   check((await request("/api/shifts", "POST", { action: "close_shift", shiftId: shift.id, actualClosingCash: expected.toFixed(2) }, owner)).status === 200, "security fixture closes register");

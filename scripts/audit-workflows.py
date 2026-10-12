@@ -136,6 +136,23 @@ for name in ("pay", "refund"):
         if "idempotency" not in text.lower():
             failures.append(f"{path.relative_to(ROOT)} takes money without an idempotency guard")
 
+# 5b. A migration that adds a column must be tracked in the schema guard, so a
+#     database that has not run it yet is refused with advice instead of failing
+#     half-way through a real task. (This is how order deletion broke.)
+guard_path = SRC / "lib/schema-guard.ts"
+guard = guard_path.read_text() if guard_path.exists() else ""
+for path in sorted((ROOT / "migrations").glob("*.sql")):
+    migration = path.read_text()
+    if path.name != "0000_initial.sql":
+        for match in re.finditer(r"create\s+table\s+(?:if\s+not\s+exists\s+)?\"?(\w+)\"?", migration, re.IGNORECASE):
+            table = match.group(1)
+            if f'"{table}"' not in guard:
+                failures.append(f"{path.relative_to(ROOT)} creates {table} but src/lib/schema-guard.ts does not require it")
+    for match in re.finditer(r"alter\s+table\s+\"?(\w+)\"?\s+add\s+column\s+(?:if\s+not\s+exists\s+)?\"?(\w+)\"?", migration, re.IGNORECASE):
+        table, column = match.group(1), match.group(2)
+        if f'["{table}", "{column}"]' not in guard:
+            failures.append(f"{path.relative_to(ROOT)} adds {table}.{column} but src/lib/schema-guard.ts does not require it")
+
 # 6. Every data table in the UI has a mobile card rendering, or is inside a
 #    scroller (structural, mirrors audit-responsive.py but only reports).
 for path in sorted((SRC / "components").glob("*.tsx")):

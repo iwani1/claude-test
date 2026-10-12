@@ -225,6 +225,34 @@ async function main() {
   await admin.query("update ingredients set current_stock=$1 where id=1", [editStockStart.toFixed(3)]);
   check(await stock(), editStockStart, "stock restored for anything that follows");
 
+  // --- Erasing an order must also erase what it took out of the drawer -------
+  // A cash refund is an outflow: it is carried on the shifts.cash_payouts total,
+  // which is what the close formula subtracts. Erase the order but leave that
+  // total behind and the drawer reconciles short by exactly the refunded
+  // amount — and can never be closed flat again.
+  const { shift: erasedRefundShift } = await api("shifts", { action: "open_shift", openingCash: "0.00", notes: "Erased-refund probe" });
+  const { order: erasedRefundOrder } = await api("orders", {
+    idempotencyKey: "pilot-erase-refund-001",
+    orderType: "takeaway",
+    items: [{ menuItemId: 1, quantity: 1 }],
+  });
+  await api(`orders/${erasedRefundOrder.id}/pay`, { paymentMethod: "cash", amount: "5.00", cashTendered: "5.00" });
+  await api(`orders/${erasedRefundOrder.id}/refund`, {
+    amount: "2.00", cashAmount: "2.00", momoAmount: "0.00", managerPin: "1111",
+    reason: "Erased-refund probe", idempotencyKey: "pilot-erase-refund-r-001",
+  });
+  const withRefund = (await api("shifts")).activeShift;
+  check(withRefund.cashPayouts, "2.00", "a cash refund shows in the drawer outflows");
+  check(withRefund.cashRefunds, "2.00", "and in the refund movement total");
+  check((await raw(`orders/${erasedRefundOrder.id}`, "DELETE")).status, 200, "the refunded order is erased");
+  const afterErase = (await api("shifts")).activeShift;
+  check(afterErase.cashPayouts, "0.00", "erasing it takes the refund back out of the drawer outflows");
+  check(afterErase.cashRefunds, "0.00", "and leaves no refund movement behind");
+  check(afterErase.totalSales, "0.00", "and no sale behind either");
+  const erasedClose = await api("shifts", { action: "close_shift", shiftId: erasedRefundShift.id, actualClosingCash: "0.00" });
+  check(erasedClose.difference, "0.00", "the drawer still closes flat after an erased sale and refund");
+  check(await stock(), editStockStart, "and the erased order returned its stock");
+
   console.log(`\n${checks} synthetic shift/pilot checks passed. No physical payment, printer, or backup test was performed.`);
 }
 main().catch(error => { console.error(error); process.exitCode = 1; }).finally(() => admin.end());

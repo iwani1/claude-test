@@ -418,6 +418,9 @@ curl -sS https://pos.example.com/api/health
 | Login works on server but not from browsers | `APP_ORIGIN` mismatch or not HTTPS |
 | `429 Too many attempts` | Login/refund throttles are working; wait 15 minutes |
 | A deploy stopped half-way | Re-run `sudo ./scripts/deploy-vps.sh`; it sees `/var/backups/pos/deploy-incomplete` and finishes the job |
+| The app answers 503 *"The database is missing an update this version needs (…)"* | The code is newer than the database. Run `sudo -E -u pos env MIGRATION_DATABASE_URL='postgresql://pos_owner:…@127.0.0.1:5432/pos' npm run db:migrate` in `/opt/pos`, then `systemctl restart pos`. `/api/health` reports the same thing as `{"ok":false,"reason":"schema-behind"}` |
+| `/api/health` says `{"ok":false,"reason":"schema-behind"}` | Same fix as above. The check exists because an unapplied migration used to surface as a bare "Request failed" in the middle of a deletion or a payment |
+| Staff PINs suddenly rejected ("Invalid manager approval", "Invalid PIN") | `AUTH_SECRET` was changed. PIN digests are keyed on it, so every stored PIN must be set again: each staff member signs in with their password and sets a new PIN (Staff → Set PIN). Sessions are invalidated too, so everyone signs in again |
 | Tests wanted on the server | `npm run test:security` needs ports 15432 + 3100 free and ignores `.env` — prefer running tests before deploying |
 
 Monitor `journalctl -u pos`, nginx error logs, disk space, and PostgreSQL
