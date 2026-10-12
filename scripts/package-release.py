@@ -21,7 +21,10 @@ if "--check" not in sys.argv:
         for name in files:
             info = zipfile.ZipInfo(name, date_time=(1980, 1, 1, 0, 0, 0))
             info.compress_type = zipfile.ZIP_DEFLATED
-            info.external_attr = 0o100644 << 16
+            # Preserve the executable bit: the deploy script must run from an
+            # unpacked archive without a chmod first.
+            mode = 0o100755 if (root / name).stat().st_mode & 0o111 else 0o100644
+            info.external_attr = mode << 16
             bundle.writestr(info, (root / name).read_bytes())
 with zipfile.ZipFile(archive) as bundle:
     assert bundle.testzip() is None, "ZIP integrity failure"

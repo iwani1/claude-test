@@ -130,6 +130,9 @@ npm ci          # installs dev dependencies too — they are required for the bu
 
 Never deploy the original `11claude.zip`; it contains the insecure legacy code.
 
+Later updates are one command — `sudo ./scripts/deploy-vps.sh` — see
+[Updating the app later](#updating-the-app-later).
+
 ---
 
 ## Phase 5 — Configure the environment
@@ -339,10 +342,59 @@ Contabo's VPS Auto Backup in the panel as a second layer.
 
 ## Updating the app later
 
+### The short way — one command
+
+```sh
+cd /opt/pos
+sudo ./scripts/deploy-vps.sh
+```
+
+It takes the backup, pulls the branch, installs dependencies only if
+`package-lock.json` moved, builds, restarts the service, waits for
+`/api/health`, and prints the rollback for the commit it replaced. It is safe to
+re-run: if anything fails, the next run finishes the job instead of reporting
+"nothing to deploy".
+
+| It refuses to run when | Why |
+|---|---|
+| You are not root (`sudo`) | It has to read the database, chown the build and restart the service |
+| Tracked files in `/opt/pos` have local edits | A fast-forward would bury them; `ALLOW_DIRTY=1` discards them on purpose |
+| `pg_dump` fails or the dump is empty/corrupt | No verified backup, no deploy |
+| The branch and the server have diverged | Nothing is thrown away silently; you resolve it |
+| The release adds migrations and `MIGRATION_DATABASE_URL` is missing | It stops **before** touching the working tree, so the same command can simply be re-run with the URL |
+
+```sh
+# a release that adds migrations (the migration URL is used once, then forgotten)
+sudo MIGRATION_DATABASE_URL='postgresql://pos_owner:PASSWORD@127.0.0.1:5432/pos' ./scripts/deploy-vps.sh
+
+# see the plan without changing anything
+sudo DRY_RUN=1 ./scripts/deploy-vps.sh
+
+# rebuild and restart even when the commit has not changed
+sudo FORCE=1 ./scripts/deploy-vps.sh
+```
+
+Everything it needs can be overridden for a non-standard install:
+`POS_DIR` (default `/opt/pos`), `POS_USER` (`pos`), `POS_SERVICE` (`pos`),
+`POS_BRANCH` (the deployed branch), `POS_URL` (`http://127.0.0.1:3000`),
+`POS_DB` (`pos`), `BACKUP_DIR` (`/var/backups/pos`).
+
+If a deploy fails after the checkout moved, the script leaves
+`/var/backups/pos/deploy-incomplete` and prints the exact commands to roll the
+code back to the previous commit. The database backup taken at the start of
+that same run is named `pos-before-<commit>-<timestamp>.dump`.
+
+Ownership note: the script runs `git` as root and the app as `pos`, and it
+chowns `/opt/pos` to `pos` whenever it installs dependencies. If you later run
+`git` in `/opt/pos` as your admin user, allow the directory once with
+`git config --global --add safe.directory /opt/pos`.
+
+### The long way — every step by hand
+
 ```sh
 sudo -u postgres pg_dump -Fc pos > /root/backups/pos-before-update-$(date +%F-%H%M).dump
 cd /opt/pos && git pull          # or upload the new 11claude-fixed.zip
-sudo -u pos npm ci
+sudo -u pos npm ci               # only needed when package-lock.json changed
 sudo -u pos npm run build
 export MIGRATION_DATABASE_URL='postgresql://pos_owner:...@127.0.0.1:5432/pos'
 sudo -u pos npm run db:migrate   # safe to re-run; new files apply in order
@@ -365,6 +417,7 @@ curl -sS https://pos.example.com/api/health
 | nginx `502 Bad Gateway` | `systemctl status pos`, `journalctl -u pos -n 50` |
 | Login works on server but not from browsers | `APP_ORIGIN` mismatch or not HTTPS |
 | `429 Too many attempts` | Login/refund throttles are working; wait 15 minutes |
+| A deploy stopped half-way | Re-run `sudo ./scripts/deploy-vps.sh`; it sees `/var/backups/pos/deploy-incomplete` and finishes the job |
 | Tests wanted on the server | `npm run test:security` needs ports 15432 + 3100 free and ignores `.env` — prefer running tests before deploying |
 
 Monitor `journalctl -u pos`, nginx error logs, disk space, and PostgreSQL
