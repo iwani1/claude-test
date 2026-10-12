@@ -84,7 +84,7 @@ not from the production server, not with a browser, not with hardware.
 | **High** | Receiving the same purchase order twice added the delivery to stock twice (no status guard, no transaction, no row lock), and a partial failure could leave stock updated with no GRN. | `receive_goods` now runs in one transaction against a locked PO, refuses an already-received PO, refuses lines that belong to another PO or appear twice, and locks each ingredient row. 4 new pilot checks. |
 | **Medium** | Manual stock adjustments were read-modify-write with no lock: two concurrent adjustments lost one another, and the ledger could record a delta the shelf never took (an over-large write-off logged −1050 while stock only fell 100). | Adjustment is transactional with a locked ingredient row, records the **applied** delta, and refuses a zero adjustment. 4 new pilot checks. |
 | **High** | Erasing an order that had been refunded left the shift's cash-outflow total behind, so the drawer reconciled short by the refunded amount and could never be closed flat again. | `DELETE /api/orders/[id]` reverses the erased refunds on the shift that paid them, in the same transaction as the sales rollback; 8 pilot checks cover the whole cycle. |
-| **High** | Deploying code without applying its migration made ordinary work fail with a bare "Request failed" — order deletion was the visible casualty. | Schema guard + actionable 503 + `/api/health` reporting, a `schema-guard.ts` list kept in step with migrations by an audit rule, and a stale-database test. See the section below. |
+| **High** | Deploying code without applying its migration made ordinary work fail with a bare "Request failed" — order deletion was the visible casualty. | `schema-guard.ts` names what the code needs, `/api/health` reports `schema-behind`, every affected operation answers 503 with the exact missing column and the command that fixes it, and an audit rule keeps the list in step with `migrations/`. The rest of the till keeps trading. See the section below. |
 | **Medium** | 8 screens swallowed load failures (`console.error` only), so a broken connection looked like "no stock", "no sales", "no staff". | `LoadFailure` strip with a 44px Retry on every one of them. |
 | **Medium** | A failed sign-out was silent: the screen cleared while the session cookie could still be alive — dangerous on a shared terminal. | Sign-out now reports the failure and asks for a retry once connected. |
 | **Low** | The stock-adjustment submit button was a 28px target (below the touch floor) and could be double-tapped. | 44px minimum, in-flight guard, "Committing…" state. |
@@ -111,11 +111,13 @@ is now impossible to be silent about.
 
 **What changed**
 
-- Every request checks the columns this version needs (one catalogue query in
-  the same transaction as the work) and answers **503** naming the missing
-  piece, for example: *"The database is missing an update this version needs
-  (payments.idempotency_key). Run `npm run db:migrate` on the server with
-  MIGRATION_DATABASE_URL set, then restart the app."*
+- The app checks the columns this version needs and *says so* instead of failing
+  mysteriously. Two places: `/api/health` reports the gap, and any operation that
+  actually needs a missing piece answers **503** naming it, for example: *"The
+  database is missing an update this version needs (payments.idempotency_key).
+  Run `npm run db:migrate` on the server with MIGRATION_DATABASE_URL set, then
+  restart the app."* Everything that does not depend on the missing piece keeps
+  working — a stale database degrades the till, it does not stop the venue.
 - `/api/health` reports `{ok:false, reason:"schema-behind", missing:[…]}`, so
   the deploy script's health gate and the operator see it at once.
 - Any other mismatch — missing table, missing grant — is translated the same
@@ -161,6 +163,22 @@ closed with `difference: 0.00`.
 
 **Why the suites missed it:** every drawer test refunded and then *kept* the
 order. Erasing a refunded order was the one combination nobody had walked.
+
+### The first version of that guard was too blunt — corrected the same night
+
+The first cut refused **every** request while the schema was behind, on the
+theory that a money system should not run against an unknown schema. That theory
+met a real hotel: deploying the new code before the migration left production
+answering `schema-behind` to *every* call, including sign-in, so the till was
+completely stopped until someone ran one command. A venue in service needs to
+keep selling.
+
+It now degrades instead of stopping: reads, sales and the kitchen keep working,
+the operations that genuinely need the missing column answer 503 with the fix,
+and `/api/health` still reports `schema-behind` — which is where the hard stop
+belongs, because `scripts/deploy-vps.sh` gates on it *before* anyone is serving
+from it. `tests/security.ts` asserts both halves: the venue keeps trading, the
+payment-dependent operation refuses loudly.
 
 ## Live environment smoke (every screen)
 

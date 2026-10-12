@@ -114,11 +114,13 @@ npm run audit:responsive   # phone/tablet/laptop layout rules
 npm run audit:workflows    # failure-feedback, money-guard and schema-guard rules
 ```
 
-The app refuses to work against a database that has not run this version's
-migrations: requests answer `503` naming the missing column and the command to
-fix it (`npm run db:migrate`), and `/api/health` reports
-`{"ok":false,"reason":"schema-behind"}`. `scripts/audit-workflows.py` fails
-when a migration adds a column that `src/lib/schema-guard.ts` does not list.
+The app reports a database that has not run this version's migrations instead of
+failing obscurely: `/api/health` answers `{"ok":false,"reason":"schema-behind"}`
+and any operation that needs a missing column answers `503` naming it and the
+command that fixes it (`npm run db:migrate`). Everything else keeps working, so a
+half-applied deploy degrades the till rather than stopping the venue.
+`scripts/audit-workflows.py` fails when a migration adds a column that
+`src/lib/schema-guard.ts` does not list.
 
 ### Editing a saved order (owner only)
 

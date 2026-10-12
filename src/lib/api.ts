@@ -6,7 +6,7 @@ import { rootDb, requestContext, Transaction } from "@/db";
 import { users, branches } from "@/db/schema";
 import { authSecret, hasTerminalAccess, ROLE_PERMISSIONS, SessionUser, UserRole, verifyToken } from "./auth";
 import type { Permission } from "./guard";
-import { findMissingSchema, schemaBehindMessage, schemaDriftMessage, type Executor } from "./schema-guard";
+import { schemaDriftMessage } from "./schema-guard";
 export class ApiError extends Error {
   constructor(public status: number, message: string) { super(message); }
 }
@@ -55,10 +55,6 @@ export function secureRoute(handler: Handler, permission: Permission | "session"
         const role = await tx.execute(sql`select rolsuper, rolbypassrls from pg_roles where rolname = current_user`);
         if (role.rows[0]?.rolsuper || role.rows[0]?.rolbypassrls) throw new Error("Runtime database role must not bypass row security");
         await tx.execute(sql`select version from security_meta where version = 1`);
-        // Refuse to work against a database that has not run this version's
-        // migrations: half of the request would fail anonymously later.
-        const missing = await findMissingSchema(tx as unknown as Executor);
-        if (missing.length) throw new ApiError(503, schemaBehindMessage(missing));
         await tx.execute(sql`select set_config('app.auth', '1', true)`);
         if (permission !== "public") {
           const cookie = req.headers.get("cookie")?.split(";").map(s => s.trim()).find(s => s.startsWith("pos_session="))?.slice(12);
