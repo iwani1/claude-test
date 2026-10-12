@@ -143,7 +143,7 @@ export const RecipeManager: React.FC = () => {
                   <div className="flex justify-between items-start mb-3">
                     <div>
                       <h4 className="font-bold text-white text-sm">{rec.itemName}</h4>
-                      <p className="text-[11px] text-neutral-400 mt-0.5">
+                      <p className="text-[0.6875rem] text-neutral-400 mt-0.5">
                         Yield: {rec.yieldCount} portion(s)
                       </p>
                     </div>
@@ -151,20 +151,20 @@ export const RecipeManager: React.FC = () => {
                       <div className="text-xs font-mono font-bold text-emerald-400">
                         GH₵{price.toFixed(2)}
                       </div>
-                      <div className="text-[10px] text-neutral-500">Menu Price</div>
+                      <div className="text-[0.625rem] text-neutral-500">Menu Price</div>
                     </div>
                   </div>
 
                   {/* Profitability Bar */}
                   <div className="p-2.5 bg-neutral-950/80 rounded-xl border border-neutral-800 grid grid-cols-3 gap-2 text-center text-xs mb-3">
                     <div>
-                      <span className="text-[10px] text-neutral-500 block uppercase">Recipe Cost</span>
+                      <span className="text-[0.625rem] text-neutral-500 block uppercase">Recipe Cost</span>
                       <span className="font-mono font-bold text-neutral-200">
                         GH₵{cost.toFixed(2)}
                       </span>
                     </div>
                     <div>
-                      <span className="text-[10px] text-neutral-500 block uppercase">Food Cost %</span>
+                      <span className="text-[0.625rem] text-neutral-500 block uppercase">Food Cost %</span>
                       <span
                         className={`font-mono font-bold ${
                           foodCostPct > 35 ? "text-rose-400" : "text-amber-400"
@@ -174,14 +174,14 @@ export const RecipeManager: React.FC = () => {
                       </span>
                     </div>
                     <div>
-                      <span className="text-[10px] text-neutral-500 block uppercase">Gross Margin</span>
+                      <span className="text-[0.625rem] text-neutral-500 block uppercase">Gross Margin</span>
                       <span className="font-mono font-bold text-emerald-400">{margin}%</span>
                     </div>
                   </div>
 
                   {/* Ingredients Breakdown */}
                   <div className="space-y-1.5 mb-3">
-                    <span className="text-[10px] uppercase font-bold text-neutral-500 tracking-wider block">
+                    <span className="text-[0.625rem] uppercase font-bold text-neutral-500 tracking-wider block">
                       Required Ingredients:
                     </span>
                     <div className="space-y-1 text-xs">
@@ -200,14 +200,14 @@ export const RecipeManager: React.FC = () => {
                   </div>
 
                   {rec.prepInstructions && (
-                    <div className="p-2 bg-neutral-850/60 rounded-lg text-[11px] text-neutral-400 italic">
+                    <div className="p-2 bg-neutral-850/60 rounded-lg text-[0.6875rem] text-neutral-400 italic">
                       &quot;{rec.prepInstructions}&quot;
                     </div>
                   )}
                 </div>
 
                 <div className="mt-4 pt-3 border-t border-neutral-800 flex justify-between items-center text-xs">
-                  <span className="text-[10px] text-neutral-500">Auto-deducts on order</span>
+                  <span className="text-[0.625rem] text-neutral-500">Auto-deducts on order</span>
                   <button
                     onClick={() => {
                       setSelectedMenuItemId(rec.menuItemId);

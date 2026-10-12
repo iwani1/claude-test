@@ -190,11 +190,11 @@ export const KitchenDisplaySystem: React.FC = () => {
                         <span className="font-mono font-bold text-base text-white">
                           #{ticket.ticketNumber}
                         </span>
-                        <span className="px-1.5 py-0.5 rounded-md bg-neutral-800 text-[10px] font-mono font-bold text-amber-400">
+                        <span className="px-1.5 py-0.5 rounded-md bg-neutral-800 text-[0.625rem] font-mono font-bold text-amber-400">
                           {ticket.tableNumber}
                         </span>
                       </div>
-                      <div className="text-[11px] text-neutral-400 mt-0.5">
+                      <div className="text-[0.6875rem] text-neutral-400 mt-0.5">
                         {ticket.customerName} ({ticket.orderType})
                       </div>
                     </div>
@@ -247,7 +247,7 @@ export const KitchenDisplaySystem: React.FC = () => {
 
                         {/* Modifiers */}
                         {it.modifiers && it.modifiers.length > 0 && (
-                          <div className="pl-8 text-[11px] text-amber-300 font-medium">
+                          <div className="pl-8 text-[0.6875rem] text-amber-300 font-medium">
                             {it.modifiers.map((m: any, mIdx: number) => (
                               <div key={mIdx}>• {m.name || m.optionName}</div>
                             ))}
@@ -256,7 +256,7 @@ export const KitchenDisplaySystem: React.FC = () => {
 
                         {/* Special Instructions Alert */}
                         {(it.notes || it.specialInstructions) && (
-                          <div className="mt-1 px-2 py-1 rounded-md bg-rose-500/10 border border-rose-500/30 text-rose-300 text-[11px] font-semibold flex items-center gap-1.5">
+                          <div className="mt-1 px-2 py-1 rounded-md bg-rose-500/10 border border-rose-500/30 text-rose-300 text-[0.6875rem] font-semibold flex items-center gap-1.5">
                             <AlertCircle className="w-3 h-3 text-rose-400 shrink-0" />
                             <span>{it.notes || it.specialInstructions}</span>
                           </div>
@@ -265,8 +265,8 @@ export const KitchenDisplaySystem: React.FC = () => {
                     ))}
 
                     {ticket.orderNotes && (
-                      <div className="p-2 rounded-lg bg-neutral-800/80 border border-neutral-700 text-[11px] text-neutral-300">
-                        <span className="text-neutral-500 block text-[9px] uppercase font-bold">
+                      <div className="p-2 rounded-lg bg-neutral-800/80 border border-neutral-700 text-[0.6875rem] text-neutral-300">
+                        <span className="text-neutral-500 block text-[0.5625rem] uppercase font-bold">
                           Order Note:
                         </span>
                         {ticket.orderNotes}

@@ -59,7 +59,7 @@ export const AuditLogsViewer: React.FC = () => {
       <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
         <div className="bg-neutral-900 border border-neutral-800 rounded-2xl overflow-hidden shadow-xl">
           <table className="w-full text-left text-xs">
-            <thead className="bg-neutral-850 text-neutral-400 uppercase text-[10px] tracking-wider border-b border-neutral-800">
+            <thead className="bg-neutral-850 text-neutral-400 uppercase text-[0.625rem] tracking-wider border-b border-neutral-800">
               <tr>
                 <th className="px-4 py-3">Timestamp</th>
                 <th className="px-4 py-3">User / Operator</th>
@@ -71,19 +71,19 @@ export const AuditLogsViewer: React.FC = () => {
             <tbody className="divide-y divide-neutral-800/60 text-neutral-300">
               {filteredLogs.map((log) => (
                 <tr key={log.id} className="hover:bg-neutral-850/50">
-                  <td className="px-4 py-2.5 font-mono text-[11px] text-neutral-400">
+                  <td className="px-4 py-2.5 font-mono text-[0.6875rem] text-neutral-400">
                     {new Date(log.createdAt).toLocaleString()}
                   </td>
                   <td className="px-4 py-2.5 font-semibold text-white">
                     {log.userName || "System"}
                   </td>
                   <td className="px-4 py-2.5">
-                    <span className="px-2 py-0.5 rounded-md bg-neutral-800 text-[10px] font-mono font-semibold text-amber-400">
+                    <span className="px-2 py-0.5 rounded-md bg-neutral-800 text-[0.625rem] font-mono font-semibold text-amber-400">
                       {log.action}
                     </span>
                   </td>
                   <td className="px-4 py-2.5 capitalize text-neutral-400">{log.entityType}</td>
-                  <td className="px-4 py-2.5 text-neutral-300 text-[11px]">{log.details}</td>
+                  <td className="px-4 py-2.5 text-neutral-300 text-[0.6875rem]">{log.details}</td>
                 </tr>
               ))}
             </tbody>

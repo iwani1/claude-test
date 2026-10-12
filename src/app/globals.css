@@ -7,7 +7,27 @@
        selection makes every control feel immediate. */
     touch-action: manipulation;
     -webkit-tap-highlight-color: transparent;
-    font-size: 16px;
+    /* Display size, chosen per terminal with the Navbar control and applied
+       before first paint by layout.tsx. Every Tailwind size is rem-based, so
+       this one value scales text, buttons, gaps and padding together. */
+    font-size: var(--app-font-size, 16px);
+  }
+
+  html[data-display-size="large"] {
+    --app-font-size: 18px;
+  }
+
+  html[data-display-size="extra"] {
+    --app-font-size: 20px;
+  }
+
+  /* Finger-safety floor. In the two enlarged modes nothing tappable may be
+     shorter than 45px/50px — a fingertip is ~9mm, which is ~40px at typical
+     terminal pixel densities. Deliberately :where() so utilities like
+     min-h-0 keep working. Standard mode is untouched. */
+  html[data-display-size="large"] :where(button, [role="button"], select, input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"])),
+  html[data-display-size="extra"] :where(button, [role="button"], select, input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"])) {
+    min-height: 2.5rem;
   }
 
   body {

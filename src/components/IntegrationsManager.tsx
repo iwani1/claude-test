@@ -82,28 +82,28 @@ export const IntegrationsManager: React.FC = () => {
                 <CheckCircle2 className="w-4 h-4 shrink-0" />
                 <span>Zero gateway dependencies — 100% reliable at checkout</span>
               </div>
-              <p className="text-neutral-400 text-[11px] leading-relaxed">
+              <p className="text-neutral-400 text-[0.6875rem] leading-relaxed">
                 Staff simply select how the customer settled:
               </p>
               <div className="space-y-1.5 pt-1">
                 <div className="flex items-start gap-2">
-                  <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-bold text-[10px]">CASH</span>
-                  <span className="text-neutral-300 text-[11px]">Exact physical cash tendered and automatic change calculation.</span>
+                  <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-bold text-[0.625rem]">CASH</span>
+                  <span className="text-neutral-300 text-[0.6875rem]">Exact physical cash tendered and automatic change calculation.</span>
                 </div>
                 <div className="flex items-start gap-2">
-                  <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-bold text-[10px]">MOMO</span>
-                  <span className="text-neutral-300 text-[11px]">Staff confirms customer transferred to restaurant MoMo or scanned GhQR.</span>
+                  <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-bold text-[0.625rem]">MOMO</span>
+                  <span className="text-neutral-300 text-[0.6875rem]">Staff confirms customer transferred to restaurant MoMo or scanned GhQR.</span>
                 </div>
                 <div className="flex items-start gap-2">
-                  <span className="px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300 font-bold text-[10px]">SPLIT</span>
-                  <span className="text-neutral-300 text-[11px]">Customer pays part in Cash and part via MoMo. Both amounts recorded!</span>
+                  <span className="px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300 font-bold text-[0.625rem]">SPLIT</span>
+                  <span className="text-neutral-300 text-[0.6875rem]">Customer pays part in Cash and part via MoMo. Both amounts recorded!</span>
                 </div>
               </div>
             </div>
 
             <div className="p-3 bg-neutral-850 rounded-xl border border-neutral-800 space-y-2 text-xs">
               <span className="font-semibold text-neutral-300 block">Restaurant Receiving MoMo Accounts:</span>
-              <div className="grid grid-cols-2 gap-2 text-[11px]">
+              <div className="grid grid-cols-2 gap-2 text-[0.6875rem]">
                 <div className="p-2 bg-neutral-900 rounded-lg">
                   <span className="text-neutral-500 block">MTN MoMo / Merchant</span>
                   <span className="font-mono text-white font-bold">Configure in Settings</span>
@@ -129,10 +129,10 @@ export const IntegrationsManager: React.FC = () => {
             </div>
 
             <div className="p-3 bg-neutral-850 rounded-xl border border-neutral-800 space-y-2.5 text-xs">
-              <p className="text-neutral-300 text-[11px] leading-relaxed">
+              <p className="text-neutral-300 text-[0.6875rem] leading-relaxed">
                 When a customer pays with both Cash and Mobile Money:
               </p>
-              <ul className="list-disc pl-4 space-y-1 text-neutral-400 text-[11px]">
+              <ul className="list-disc pl-4 space-y-1 text-neutral-400 text-[0.6875rem]">
                 <li>Cashier enters the cash portion and MoMo portion in the POS settlement window.</li>
                 <li>Physical cash portion adds to the register drawer balance and calculates cash change.</li>
                 <li>MoMo portion adds to electronic sales for the shift.</li>
@@ -143,7 +143,7 @@ export const IntegrationsManager: React.FC = () => {
             <div className="p-3 bg-neutral-850 rounded-xl border border-neutral-800 flex justify-between items-center text-xs">
               <div className="space-y-0.5">
                 <span className="font-semibold text-white block">Accounting Journal Export</span>
-                <span className="text-[10px] text-neutral-400">Download formatted sales journals with Cash &amp; MoMo tender breakdown</span>
+                <span className="text-[0.625rem] text-neutral-400">Download formatted sales journals with Cash &amp; MoMo tender breakdown</span>
               </div>
               <div className="flex gap-2">
                 <button
@@ -198,7 +198,7 @@ export const IntegrationsManager: React.FC = () => {
             </div>
 
             {printerStatus && (
-              <div className="p-3 rounded-xl bg-neutral-850 border border-neutral-800 text-neutral-300 font-mono text-[11px]">
+              <div className="p-3 rounded-xl bg-neutral-850 border border-neutral-800 text-neutral-300 font-mono text-[0.6875rem]">
                 {printerStatus}
               </div>
             )}

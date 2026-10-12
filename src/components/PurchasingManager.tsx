@@ -253,7 +253,7 @@ export const PurchasingManager: React.FC = () => {
                           </h4>
                         </div>
                         <span
-                          className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${
+                          className={`px-2 py-0.5 rounded-md text-[0.625rem] font-bold uppercase tracking-wider ${
                             isReceived
                               ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
                               : "bg-amber-500/20 text-amber-300 border border-amber-500/40"
@@ -263,13 +263,13 @@ export const PurchasingManager: React.FC = () => {
                         </span>
                       </div>
 
-                      <div className="text-[11px] text-neutral-400 mb-3">
+                      <div className="text-[0.6875rem] text-neutral-400 mb-3">
                         Date: {new Date(po.createdAt).toLocaleDateString()}
                       </div>
 
                       {/* Items preview */}
                       <div className="p-2.5 bg-neutral-950 rounded-xl border border-neutral-850 space-y-1.5 text-xs mb-3">
-                        <span className="text-[10px] uppercase font-bold text-neutral-500 block">
+                        <span className="text-[0.625rem] uppercase font-bold text-neutral-500 block">
                           Ordered Items:
                         </span>
                         {po.items?.map((it: any, idx: number) => (
@@ -290,7 +290,7 @@ export const PurchasingManager: React.FC = () => {
 
                     <div className="mt-4 pt-3 border-t border-neutral-800 flex justify-between items-center text-xs">
                       {isReceived ? (
-                        <span className="text-emerald-400 flex items-center gap-1 font-semibold text-[11px]">
+                        <span className="text-emerald-400 flex items-center gap-1 font-semibold text-[0.6875rem]">
                           <CheckCircle2 className="w-3.5 h-3.5" />
                           <span>Goods In Stock</span>
                         </span>
@@ -326,7 +326,7 @@ export const PurchasingManager: React.FC = () => {
                     <h4 className="font-bold text-white text-sm">{sup.name}</h4>
                     <p className="text-xs text-neutral-400 mt-0.5">{sup.contactPerson || "Rep"}</p>
                   </div>
-                  <span className="px-2 py-0.5 rounded-md bg-neutral-800 text-[10px] font-mono text-neutral-300">
+                  <span className="px-2 py-0.5 rounded-md bg-neutral-800 text-[0.625rem] font-mono text-neutral-300">
                     {sup.paymentTerms}
                   </span>
                 </div>
@@ -340,7 +340,7 @@ export const PurchasingManager: React.FC = () => {
                     <Phone className="w-3.5 h-3.5 text-neutral-500" />
                     <span>{sup.phone || "No phone"}</span>
                   </div>
-                  <div className="text-[11px] text-neutral-400 mt-1">
+                  <div className="text-[0.6875rem] text-neutral-400 mt-1">
                     Lead time: {sup.leadTimeDays || 2} days delivery
                   </div>
                 </div>
@@ -452,7 +452,7 @@ export const PurchasingManager: React.FC = () => {
                       className="w-20 bg-neutral-800 border border-neutral-700 rounded-lg px-2 py-1.5 text-white font-mono text-right"
                     />
 
-                    <span className="w-10 text-neutral-400 text-center font-mono text-[11px]">
+                    <span className="w-10 text-neutral-400 text-center font-mono text-[0.6875rem]">
                       {row.unit}
                     </span>
                   </div>
@@ -539,12 +539,12 @@ export const PurchasingManager: React.FC = () => {
                   >
                     <div>
                       <span className="font-bold text-white">{it.ingredientName}</span>
-                      <div className="text-[11px] text-neutral-400">
+                      <div className="text-[0.6875rem] text-neutral-400">
                         Ordered: {Number(it.orderedQuantity).toFixed(1)} {it.unit} @ GH₵{it.unitPrice}
                       </div>
                     </div>
                     <div className="flex items-center gap-1.5">
-                      <span className="text-[10px] text-neutral-500">Recv:</span>
+                      <span className="text-[0.625rem] text-neutral-500">Recv:</span>
                       <input
                         type="number"
                         step="0.1"
@@ -557,7 +557,7 @@ export const PurchasingManager: React.FC = () => {
                         }
                         className="w-20 text-right bg-neutral-800 border border-neutral-700 rounded-lg px-2 py-1 text-xs text-white font-mono font-bold"
                       />
-                      <span className="text-neutral-400 font-mono text-[11px]">{it.unit}</span>
+                      <span className="text-neutral-400 font-mono text-[0.6875rem]">{it.unit}</span>
                     </div>
                   </div>
                 ))}

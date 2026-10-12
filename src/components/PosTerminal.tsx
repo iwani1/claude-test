@@ -22,6 +22,8 @@ import {
 } from "lucide-react";
 import { ReceiptModal } from "./ReceiptModal";
 import { KitchenTicketModal } from "./KitchenTicketModal";
+import { ConfirmDialog } from "./ConfirmDialog";
+import { saveTicketDraft, readTicketDraft } from "@/lib/active-ticket";
 import { queueOfflineOrder } from "@/lib/offline-storage";
 import { priceOrder, fromCents, toCents } from "@/lib/pricing-core";
 import type { BillingConfig } from "@/lib/pricing-core";
@@ -52,7 +54,26 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
   // State
   const [selectedCategory, setSelectedCategory] = useState<number | "all">("all");
   const [searchQuery, setSearchQuery] = useState("");
-  const [cart, setCart] = useState<any[]>([]);
+  /* The open ticket is restored from the staff member's draft: tapping
+     Tables/Orders/Drawer (or a crash/restart) no longer destroys a
+     half-taken order. */
+  const [cart, setCart] = useState<any[]>(() => readTicketDraft(currentUser?.id ?? "anon"));
+
+  /* Destructive taps (discard ticket, remove a line) ask first. Busy-bar
+     fingers miss; the toast-light confirm costs half a second and saves the
+     whole ticket. */
+  const [pendingConfirm, setPendingConfirm] = useState<null | {
+    title: string;
+    message: string;
+    confirmLabel: string;
+    action: () => void;
+  }>(null);
+
+  /* Keep the draft in step with the cart; the global "New Order" buttons
+     read it to warn before discarding a loaded ticket. */
+  useEffect(() => {
+    saveTicketDraft(currentUser?.id ?? "anon", cart);
+  }, [cart, currentUser?.id]);
   const [orderType, setOrderType] = useState<"dine_in" | "room_service" | "takeaway" | "delivery">("dine_in");
   const [selectedTableId, setSelectedTableId] = useState<number | null>(activeTableId);
   const [roomNumber, setRoomNumber] = useState("");
@@ -236,6 +257,22 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
     setRoomNumber("");
     setSelectedTableId(null);
     setOrderType("dine_in");
+  };
+
+  /** Both "New Ticket" and "Clear" route through here: an empty ticket resets
+   *  instantly, a loaded one asks first. */
+  const requestNewTicket = () => {
+    if (cart.length === 0) {
+      handleNewTicketLocal();
+      return;
+    }
+    const total = cart.reduce((sum, it) => sum + Number(it.totalPrice || 0), 0);
+    setPendingConfirm({
+      title: "Discard this ticket?",
+      message: `The ticket has ${cart.length} item${cart.length === 1 ? "" : "s"} (GH₵${total.toFixed(2)}). Those lines will be removed.`,
+      confirmLabel: "Discard ticket",
+      action: () => handleNewTicketLocal(),
+    });
   };
 
   // ---------------------------------------------------------------------
@@ -527,9 +564,9 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
           Big 56px targets designed for touchscreen terminals. */}
       <div className="shrink-0 bg-neutral-900 border-b border-neutral-800 px-3 py-2 flex items-center gap-2 overflow-x-auto custom-scrollbar">
         <button
-          onClick={handleNewTicketLocal}
+          onClick={requestNewTicket}
           className="h-14 px-5 shrink-0 rounded-2xl bg-amber-500 hover:bg-amber-400 active:bg-amber-600 text-black font-bold text-sm flex items-center gap-2 shadow-md transition active:scale-[0.97]"
-          title="Clear the ticket and start a new order"
+          title="Start a new order (asks before discarding a loaded ticket)"
         >
           <Plus className="w-5 h-5" strokeWidth={3} />
           <span>New Ticket</span>
@@ -612,7 +649,7 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
         <div className="px-4 py-3 bg-neutral-900/50 border-b border-neutral-800 flex items-center gap-2 overflow-x-auto custom-scrollbar shrink-0">
           <button
             onClick={() => setSelectedCategory("all")}
-            className={`px-5 h-11 rounded-xl text-[13px] font-bold whitespace-nowrap transition-all active:scale-95 ${
+            className={`px-5 h-12 rounded-xl text-sm font-bold whitespace-nowrap transition-all active:scale-95 ${
               selectedCategory === "all"
                 ? "bg-amber-500 text-black shadow-md shadow-amber-500/20"
                 : "bg-neutral-800 text-neutral-300 hover:bg-neutral-750 hover:text-white"
@@ -624,7 +661,7 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
             <button
               key={cat.id}
               onClick={() => setSelectedCategory(cat.id)}
-              className={`px-5 h-11 rounded-xl text-[13px] font-bold whitespace-nowrap transition-all active:scale-95 ${
+              className={`px-5 h-12 rounded-xl text-sm font-bold whitespace-nowrap transition-all active:scale-95 ${
                 selectedCategory === cat.id
                   ? "bg-amber-500 text-black shadow-md shadow-amber-500/20"
                   : "bg-neutral-800 text-neutral-300 hover:bg-neutral-750 hover:text-white"
@@ -668,27 +705,27 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
                       </div>
                     )}
                     {item.hasRecipe && (
-                      <div className="absolute top-2 left-2 px-1.5 py-0.5 rounded-md bg-black/70 backdrop-blur-xs text-[10px] text-amber-300 font-medium flex items-center gap-1 border border-amber-500/30">
+                      <div className="absolute top-2 left-2 px-1.5 py-0.5 rounded-md bg-black/70 backdrop-blur-xs text-[0.625rem] text-amber-300 font-medium flex items-center gap-1 border border-amber-500/30">
                         <ChefHat className="w-3 h-3" />
                         <span>Recipe</span>
                       </div>
                     )}
-                    <div className="absolute bottom-2 right-2 px-2.5 py-1 rounded-lg bg-neutral-950/85 backdrop-blur-xs text-[13px] font-bold text-emerald-400 border border-neutral-700">
+                    <div className="absolute bottom-2 right-2 px-2.5 py-1 rounded-lg bg-neutral-950/85 backdrop-blur-xs text-[0.8125rem] font-bold text-emerald-400 border border-neutral-700">
                       GH₵{Number(item.price).toFixed(2)}
                     </div>
                   </div>
 
-                  <h4 className="font-bold text-neutral-50 text-[13.5px] leading-snug line-clamp-2">
+                  <h4 className="font-bold text-neutral-50 text-[0.84375rem] leading-snug line-clamp-2">
                     {item.name}
                   </h4>
                   {item.sku && (
-                    <div className="text-[10px] text-neutral-500 mt-0.5 font-mono">
+                    <div className="text-[0.625rem] text-neutral-500 mt-0.5 font-mono">
                       {item.sku}
                     </div>
                   )}
                 </div>
 
-                <div className="mt-3 pt-2.5 border-t border-neutral-800/80 flex items-center justify-between text-[11.5px] text-neutral-400">
+                <div className="mt-3 pt-2.5 border-t border-neutral-800/80 flex items-center justify-between text-[0.71875rem] text-neutral-400">
                   <span className="capitalize text-neutral-500">{item.station || "Kitchen"}</span>
                   <span className="w-8 h-8 rounded-lg bg-amber-500/10 text-amber-400 group-hover:bg-amber-500 group-hover:text-black flex items-center justify-center font-bold transition text-lg leading-none">
                     +
@@ -714,7 +751,7 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
         <div className="p-4 border-b border-neutral-800 space-y-3">
           {/* Order Type Selector — Room Service is distinct from restaurant
               table dining because the GH₵ room charge applies only there. */}
-          <div className="grid grid-cols-4 gap-1 bg-neutral-950 p-1 rounded-xl border border-neutral-800 text-[11px] font-bold">
+          <div className="grid grid-cols-4 gap-1.5 bg-neutral-950 p-1.5 rounded-xl border border-neutral-800 text-xs font-bold">
             {([
               ["dine_in", "Table"],
               ["room_service", "Room Service"],
@@ -729,7 +766,7 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
                   if (type !== "room_service") setIsComplimentary(false);
                   if (type !== "room_service") setRoomNumber("");
                 }}
-                className={`h-11 px-1 rounded-lg transition active:scale-[0.97] ${
+                className={`h-12 px-1 rounded-lg transition active:scale-[0.97] ${
                   orderType === type
                     ? type === "room_service"
                       ? "bg-sky-400 text-black shadow-xs"
@@ -746,7 +783,7 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
           <div className="grid grid-cols-2 gap-2 text-xs">
             {orderType === "dine_in" ? (
               <div>
-                <label className="text-[10px] text-neutral-400 font-medium block mb-1">
+                <label className="text-[0.625rem] text-neutral-400 font-medium block mb-1">
                   Table Number
                 </label>
                 <select
@@ -764,7 +801,7 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
               </div>
             ) : orderType === "room_service" ? (
               <div>
-                <label className="text-[10px] text-sky-300 font-semibold block mb-1">
+                <label className="text-[0.625rem] text-sky-300 font-semibold block mb-1">
                   Hotel Room Number *
                 </label>
                 <input
@@ -777,7 +814,7 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
               </div>
             ) : (
               <div>
-                <label className="text-[10px] text-neutral-400 font-medium block mb-1">
+                <label className="text-[0.625rem] text-neutral-400 font-medium block mb-1">
                   Guest Phone (optional)
                 </label>
                 <div className="relative">
@@ -794,7 +831,7 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
             )}
 
             <div>
-              <label className="text-[10px] text-neutral-400 font-medium block mb-1">
+              <label className="text-[0.625rem] text-neutral-400 font-medium block mb-1">
                 Guest Name
               </label>
               <div className="relative">
@@ -810,7 +847,7 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
             </div>
           </div>
           <div>
-            <label className="text-[10px] text-neutral-400 font-medium block mb-1">
+            <label className="text-[0.625rem] text-neutral-400 font-medium block mb-1">
               Order Note (prints on kitchen docket)
             </label>
             <input
@@ -835,13 +872,13 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
             cart.map((it, idx) => (
               <div
                 key={it.cartItemId || idx}
-                className="bg-neutral-855 border border-neutral-750 rounded-xl p-3 text-xs space-y-2 group"
+                className="bg-neutral-855 border border-neutral-750 rounded-xl p-3.5 text-sm space-y-2.5 group"
               >
                 <div className="flex justify-between items-start gap-2">
                   <div className="flex-1">
                     <span className="font-semibold text-neutral-100">{it.itemName}</span>
                     {it.modifiers && it.modifiers.length > 0 && (
-                      <div className="text-[11px] text-amber-400/90 mt-0.5">
+                      <div className="text-[0.6875rem] text-amber-400/90 mt-0.5">
                         {it.modifiers.map((m: any, mIdx: number) => (
                           <span key={mIdx} className="mr-2">
                             + {m.name || m.optionName}
@@ -850,7 +887,7 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
                       </div>
                     )}
                     {it.specialInstructions && (
-                      <div className="text-[10px] text-neutral-400 italic mt-0.5">
+                      <div className="text-[0.625rem] text-neutral-400 italic mt-0.5">
                         * {it.specialInstructions}
                       </div>
                     )}
@@ -861,7 +898,7 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
                 </div>
 
                 <div className="flex items-center justify-between pt-2 border-t border-neutral-800">
-                  <span className="text-[11px] text-neutral-500">
+                  <span className="text-[0.6875rem] text-neutral-500">
                     GH₵{Number(it.unitPrice).toFixed(2)} ea
                   </span>
                   {/* Oversized steppers: cashiers adjust quantities constantly
@@ -885,10 +922,17 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
                       <Plus className="w-5 h-5" strokeWidth={3} />
                     </button>
                     <button
-                      onClick={() => removeCartItem(idx)}
+                      onClick={() =>
+                        setPendingConfirm({
+                          title: `Remove ${it.itemName}?`,
+                          message: `This line (${it.quantity} × GH₵${Number(it.unitPrice).toFixed(2)}) will be taken off the ticket.`,
+                          confirmLabel: "Remove item",
+                          action: () => removeCartItem(idx),
+                        })
+                      }
                       aria-label="Remove item"
-                      className="ml-0.5 w-10 h-10 rounded-xl text-neutral-500 hover:text-rose-400 hover:bg-rose-500/10 flex items-center justify-center transition"
-                      title="Remove item"
+                      className="ml-2 w-10 h-10 rounded-xl text-neutral-500 hover:text-rose-400 hover:bg-rose-500/10 flex items-center justify-center transition"
+                      title="Remove item (asks first)"
                     >
                       <Trash2 className="w-[18px] h-[18px]" />
                     </button>
@@ -905,7 +949,7 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
           <div className="flex gap-2 text-xs">
             <button
               onClick={() => setShowDiscountModal(true)}
-              className={`flex-1 h-11 px-2 rounded-xl border flex items-center justify-center gap-1.5 font-semibold text-[12.5px] transition active:scale-95 ${
+              className={`flex-1 h-11 px-2 rounded-xl border flex items-center justify-center gap-1.5 font-semibold text-[0.78125rem] transition active:scale-95 ${
                 calculatedDiscount > 0
                   ? "bg-amber-500/10 border-amber-500/40 text-amber-400"
                   : "bg-neutral-800 border-neutral-700 text-neutral-300 hover:bg-neutral-750"
@@ -926,7 +970,7 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
                   <button
                     key={pct}
                     onClick={() => setTipAmount(isSelected ? 0 : tipVal)}
-                    className={`flex-1 h-11 rounded-xl border text-[13px] font-bold transition active:scale-95 ${
+                    className={`flex-1 h-11 rounded-xl border text-[0.8125rem] font-bold transition active:scale-95 ${
                       isSelected
                         ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-400"
                         : "bg-neutral-800 border-neutral-700 text-neutral-400 hover:text-white"
@@ -943,7 +987,7 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
           {orderType === "room_service" && billingConfig.compBreakfastEnabled && (
             <button
               onClick={() => (isComplimentary ? setIsComplimentary(false) : setShowCompModal(true))}
-              className={`w-full h-11 rounded-xl border text-[12.5px] font-bold flex items-center justify-center gap-2 transition active:scale-[0.98] ${
+              className={`w-full h-11 rounded-xl border text-[0.78125rem] font-bold flex items-center justify-center gap-2 transition active:scale-[0.98] ${
                 isComplimentary
                   ? "bg-sky-500/20 border-sky-400 text-sky-200"
                   : "bg-neutral-800 border-neutral-700 text-neutral-300 hover:bg-neutral-750"
@@ -996,7 +1040,7 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
                   <span>COMPLIMENTARY:</span>
                   <span className="font-mono text-lg">GH₵0.00</span>
                 </div>
-                <div className="flex justify-between text-[11px] text-neutral-500">
+                <div className="flex justify-between text-[0.6875rem] text-neutral-500">
                   <span>Food value given free:</span>
                   <span className="font-mono">GH₵{fromCents(pricing.compValueCents)}</span>
                 </div>
@@ -1018,7 +1062,7 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
               <button
                 onClick={handleProcessPayment}
                 disabled={cart.length === 0 || isSubmitting}
-                className="w-full h-14 px-4 bg-sky-600 hover:bg-sky-500 active:bg-sky-700 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-2xl text-[15px] font-bold flex items-center justify-center gap-2.5 shadow-lg shadow-sky-600/25 transition active:scale-[0.98]"
+                className="w-full h-14 px-4 bg-sky-600 hover:bg-sky-500 active:bg-sky-700 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-2xl text-[0.9375rem] font-bold flex items-center justify-center gap-2.5 shadow-lg shadow-sky-600/25 transition active:scale-[0.98]"
               >
                 <Coffee className="w-6 h-6 shrink-0" />
                 <span>{isSubmitting ? "Sending…" : "Send Comp Order · GH₵0.00"}</span>
@@ -1035,7 +1079,7 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
                   setShowPayModal(true);
                 }}
                 disabled={cart.length === 0 || isSubmitting}
-                className="w-full h-14 px-4 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-2xl text-[15px] font-bold flex items-center justify-center gap-2.5 shadow-lg shadow-emerald-600/25 transition active:scale-[0.98]"
+                className="w-full h-14 px-4 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-2xl text-[0.9375rem] font-bold flex items-center justify-center gap-2.5 shadow-lg shadow-emerald-600/25 transition active:scale-[0.98]"
               >
                 <DollarSign className="w-6 h-6 text-amber-300 shrink-0" />
                 <span>Settle Bill · GH₵{totalAmount.toFixed(2)}</span>
@@ -1046,7 +1090,7 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
               <button
                 onClick={handleSendToKitchen}
                 disabled={cart.length === 0 || isSubmitting}
-                className="h-12 px-3 bg-neutral-800 hover:bg-neutral-750 active:bg-neutral-700 disabled:opacity-40 disabled:cursor-not-allowed border border-neutral-700 text-white rounded-2xl text-[12px] font-bold flex items-center justify-center gap-2 transition active:scale-[0.98]"
+                className="h-12 px-3 bg-neutral-800 hover:bg-neutral-750 active:bg-neutral-700 disabled:opacity-40 disabled:cursor-not-allowed border border-neutral-700 text-white rounded-2xl text-[0.75rem] font-bold flex items-center justify-center gap-2 transition active:scale-[0.98]"
                 title="Print the kitchen docket without taking payment"
               >
                 <Printer className="w-5 h-5 text-amber-400 shrink-0" />
@@ -1055,7 +1099,7 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
               {onOpenDrawer ? (
                 <button
                   onClick={onOpenDrawer}
-                  className="h-12 px-3 bg-emerald-600/15 hover:bg-emerald-600/25 border border-emerald-500/50 text-emerald-300 rounded-2xl text-[12px] font-bold flex items-center justify-center gap-2 transition active:scale-[0.98]"
+                  className="h-12 px-3 bg-emerald-600/15 hover:bg-emerald-600/25 border border-emerald-500/50 text-emerald-300 rounded-2xl text-[0.75rem] font-bold flex items-center justify-center gap-2 transition active:scale-[0.98]"
                   title="Jump to the cash drawer screen"
                 >
                   <Coins className="w-5 h-5 shrink-0" />
@@ -1063,10 +1107,10 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
                 </button>
               ) : (
                 <button
-                  onClick={handleNewTicketLocal}
+                  onClick={requestNewTicket}
                   disabled={cart.length === 0 || isSubmitting}
-                  className="h-12 px-3 bg-neutral-800 hover:bg-neutral-750 border border-neutral-700 text-neutral-300 rounded-2xl text-[12px] font-bold flex items-center justify-center gap-2 transition active:scale-[0.98] disabled:opacity-40"
-                  title="Clear the current ticket"
+                  className="h-12 px-3 bg-neutral-800 hover:bg-neutral-750 border border-neutral-700 text-neutral-300 rounded-2xl text-[0.75rem] font-bold flex items-center justify-center gap-2 transition active:scale-[0.98] disabled:opacity-40"
+                  title="Clear the current ticket (asks first)"
                 >
                   <Trash2 className="w-5 h-5 shrink-0" />
                   <span>Clear</span>
@@ -1077,7 +1121,7 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
               <button
                 onClick={handleNewTicketLocal}
                 disabled={cart.length === 0 || isSubmitting}
-                className="w-full h-10 text-[12px] font-semibold text-neutral-400 hover:text-rose-300 hover:bg-rose-500/10 rounded-xl transition disabled:opacity-40"
+                className="w-full h-10 text-[0.75rem] font-semibold text-neutral-400 hover:text-rose-300 hover:bg-rose-500/10 rounded-xl transition disabled:opacity-40"
               >
                 Clear ticket
               </button>
@@ -1108,7 +1152,7 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
                 <div key={mod.id} className="bg-neutral-850 border border-neutral-800 rounded-xl p-3.5 space-y-2">
                   <div className="flex items-center justify-between text-xs font-semibold text-neutral-200">
                     <span>{mod.name}</span>
-                    {mod.isRequired && <span className="text-[10px] text-rose-400 font-bold">*Required</span>}
+                    {mod.isRequired && <span className="text-[0.625rem] text-rose-400 font-bold">*Required</span>}
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     {mod.options?.map((opt: any) => {
@@ -1270,7 +1314,7 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
               </div>
             </div>
 
-            <div className="p-3 rounded-xl bg-sky-500/10 border border-sky-500/30 text-[11.5px] text-sky-100 space-y-1">
+            <div className="p-3 rounded-xl bg-sky-500/10 border border-sky-500/30 text-[0.71875rem] text-sky-100 space-y-1">
               <p>
                 The order will be recorded at <strong>GH₵0.00</strong> — no VAT and no room charge.
               </p>
@@ -1295,7 +1339,7 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
                     key={r}
                     type="button"
                     onClick={() => setCompReason(r)}
-                    className="px-2.5 h-8 rounded-lg bg-neutral-800 hover:bg-neutral-750 border border-neutral-700 text-[11px] text-neutral-300 transition"
+                    className="px-2.5 h-8 rounded-lg bg-neutral-800 hover:bg-neutral-750 border border-neutral-700 text-[0.6875rem] text-neutral-300 transition"
                   >
                     {r}
                   </button>
@@ -1417,28 +1461,28 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
                   <button
                     type="button"
                     onClick={() => setCashTendered(totalAmount.toFixed(2))}
-                    className="h-11 rounded-xl bg-neutral-800 hover:bg-neutral-700 active:bg-neutral-600 text-neutral-100 font-bold text-[12.5px] transition active:scale-95"
+                    className="h-11 rounded-xl bg-neutral-800 hover:bg-neutral-700 active:bg-neutral-600 text-neutral-100 font-bold text-[0.78125rem] transition active:scale-95"
                   >
                     Exact
                   </button>
                   <button
                     type="button"
                     onClick={() => setCashTendered("100")}
-                    className="h-11 rounded-xl bg-neutral-800 hover:bg-neutral-700 active:bg-neutral-600 text-neutral-100 font-bold text-[12.5px] transition active:scale-95"
+                    className="h-11 rounded-xl bg-neutral-800 hover:bg-neutral-700 active:bg-neutral-600 text-neutral-100 font-bold text-[0.78125rem] transition active:scale-95"
                   >
                     GH₵100
                   </button>
                   <button
                     type="button"
                     onClick={() => setCashTendered("200")}
-                    className="h-11 rounded-xl bg-neutral-800 hover:bg-neutral-700 active:bg-neutral-600 text-neutral-100 font-bold text-[12.5px] transition active:scale-95"
+                    className="h-11 rounded-xl bg-neutral-800 hover:bg-neutral-700 active:bg-neutral-600 text-neutral-100 font-bold text-[0.78125rem] transition active:scale-95"
                   >
                     GH₵200
                   </button>
                   <button
                     type="button"
                     onClick={() => setCashTendered("500")}
-                    className="h-11 rounded-xl bg-neutral-800 hover:bg-neutral-700 active:bg-neutral-600 text-neutral-100 font-bold text-[12.5px] transition active:scale-95"
+                    className="h-11 rounded-xl bg-neutral-800 hover:bg-neutral-700 active:bg-neutral-600 text-neutral-100 font-bold text-[0.78125rem] transition active:scale-95"
                   >
                     GH₵500
                   </button>
@@ -1462,18 +1506,18 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
                   <span>Cashier verifies MoMo transfer on phone/till</span>
                 </div>
 
-                <div className="p-3 bg-neutral-900 border border-neutral-800 rounded-lg text-[11px] text-neutral-300 space-y-1">
+                <div className="p-3 bg-neutral-900 border border-neutral-800 rounded-lg text-[0.6875rem] text-neutral-300 space-y-1">
                   <div className="flex justify-between">
                     <span className="text-neutral-400">Total MoMo Expected:</span>
                     <span className="font-mono font-bold text-amber-400">GH₵{totalAmount.toFixed(2)}</span>
                   </div>
-                  <p className="text-[10px] text-neutral-400 pt-1">
+                  <p className="text-[0.625rem] text-neutral-400 pt-1">
                     Customer transfers to restaurant merchant line / scans table GhQR code. Simply tap confirm below once received.
                   </p>
                 </div>
 
                 <div>
-                  <label className="text-neutral-300 block mb-1 font-semibold text-[11px]">
+                  <label className="text-neutral-300 block mb-1 font-semibold text-[0.6875rem]">
                     Optional MoMo Note / Sender Reference
                   </label>
                   <input
@@ -1500,7 +1544,7 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
                       setSplitMomoAmount((totalAmount - Number(half)).toFixed(2));
                       setSplitCashTendered(half);
                     }}
-                    className="px-2 py-0.5 rounded bg-neutral-800 hover:bg-neutral-750 text-neutral-300 text-[10px] font-semibold border border-neutral-700"
+                    className="px-2 py-0.5 rounded bg-neutral-800 hover:bg-neutral-750 text-neutral-300 text-[0.625rem] font-semibold border border-neutral-700"
                   >
                     50 / 50 Split
                   </button>
@@ -1508,7 +1552,7 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
 
                 <div className="grid grid-cols-2 gap-2.5">
                   <div>
-                    <label className="text-neutral-300 block mb-1 font-semibold text-[11px]">
+                    <label className="text-neutral-300 block mb-1 font-semibold text-[0.6875rem]">
                       Cash Portion (GH₵)
                     </label>
                     <input
@@ -1528,7 +1572,7 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
                   </div>
 
                   <div>
-                    <label className="text-neutral-300 block mb-1 font-semibold text-[11px]">
+                    <label className="text-neutral-300 block mb-1 font-semibold text-[0.6875rem]">
                       MoMo Portion (GH₵)
                     </label>
                     <input
@@ -1550,7 +1594,7 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
 
                 {/* Physical cash note tendered for cash portion */}
                 <div>
-                  <label className="text-neutral-400 block mb-1 text-[11px]">
+                  <label className="text-neutral-400 block mb-1 text-[0.6875rem]">
                     Physical Cash Handed by Customer (GH₵)
                   </label>
                   <input
@@ -1574,7 +1618,7 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
 
                   return (
                     <div className="pt-2 border-t border-neutral-800 space-y-1.5 text-xs">
-                      <div className="flex justify-between items-center text-[11px]">
+                      <div className="flex justify-between items-center text-[0.6875rem]">
                         <span className="text-neutral-400">Total Covered:</span>
                         <span
                           className={`font-mono font-bold ${
@@ -1586,14 +1630,14 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
                       </div>
 
                       {remaining > 0.01 && (
-                        <div className="p-1.5 bg-rose-500/10 border border-rose-500/30 rounded text-[11px] text-rose-300 font-semibold flex justify-between">
+                        <div className="p-1.5 bg-rose-500/10 border border-rose-500/30 rounded text-[0.6875rem] text-rose-300 font-semibold flex justify-between">
                           <span>Balance still owed:</span>
                           <span className="font-mono">GH₵{remaining.toFixed(2)}</span>
                         </div>
                       )}
 
                       {cashChange > 0 && (
-                        <div className="p-1.5 bg-emerald-500/10 border border-emerald-500/30 rounded text-[11px] text-emerald-300 font-bold flex justify-between">
+                        <div className="p-1.5 bg-emerald-500/10 border border-emerald-500/30 rounded text-[0.6875rem] text-emerald-300 font-bold flex justify-between">
                           <span>Cash Change to Return:</span>
                           <span className="font-mono">GH₵{cashChange.toFixed(2)}</span>
                         </div>
@@ -1603,7 +1647,7 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
                 })()}
 
                 <div>
-                  <label className="text-neutral-400 block mb-1 text-[11px]">
+                  <label className="text-neutral-400 block mb-1 text-[0.6875rem]">
                     Optional MoMo Reference / Sender Info
                   </label>
                   <input
@@ -1670,6 +1714,21 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
           order={lastCompletedOrder}
         />
       )}
+
+      {/* MODAL 5: Safety net for destructive taps */}
+      <ConfirmDialog
+        open={!!pendingConfirm}
+        title={pendingConfirm?.title || ""}
+        message={pendingConfirm?.message || ""}
+        confirmLabel={pendingConfirm?.confirmLabel}
+        cancelLabel="Go back"
+        onCancel={() => setPendingConfirm(null)}
+        onConfirm={() => {
+          const action = pendingConfirm?.action;
+          setPendingConfirm(null);
+          action?.();
+        }}
+      />
       </div>
     </div>
   );

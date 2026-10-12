@@ -201,7 +201,7 @@ export const OrdersHistory: React.FC<{ currentUser: any }> = ({ currentUser }) =
         <div className="bg-neutral-900 border border-neutral-800 rounded-2xl overflow-hidden shadow-xl">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
-              <thead className="bg-neutral-850 text-neutral-400 uppercase text-[10px] tracking-wider border-b border-neutral-800">
+              <thead className="bg-neutral-850 text-neutral-400 uppercase text-[0.625rem] tracking-wider border-b border-neutral-800">
                 <tr>
                   <th className="px-4 py-3">Order #</th>
                   <th className="px-4 py-3">Date & Time</th>
@@ -251,7 +251,7 @@ export const OrdersHistory: React.FC<{ currentUser: any }> = ({ currentUser }) =
                       <td className="px-4 py-3 font-mono font-bold text-white">
                         {ord.orderNumber}
                       </td>
-                      <td className="px-4 py-3 text-neutral-400 text-[11px]">
+                      <td className="px-4 py-3 text-neutral-400 text-[0.6875rem]">
                         {new Date(ord.createdAt).toLocaleString()}
                       </td>
                       <td className="px-4 py-3 capitalize text-neutral-300">
@@ -267,7 +267,7 @@ export const OrdersHistory: React.FC<{ currentUser: any }> = ({ currentUser }) =
                       </td>
                       <td className="px-4 py-3 text-right font-mono capitalize">
                         <span
-                          className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
+                          className={`px-2 py-0.5 rounded-md text-[0.625rem] font-bold ${
                             ord.paymentStatus === "paid"
                               ? "bg-emerald-500/10 text-emerald-300"
                               : ord.paymentStatus === "refunded"
@@ -280,7 +280,7 @@ export const OrdersHistory: React.FC<{ currentUser: any }> = ({ currentUser }) =
                       </td>
                       <td className="px-4 py-3 capitalize">
                         <span
-                          className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
+                          className={`px-2 py-0.5 rounded-md text-[0.625rem] font-bold ${
                             isCompleted
                               ? "bg-emerald-500/20 text-emerald-300"
                               : isRefunded
@@ -320,7 +320,7 @@ export const OrdersHistory: React.FC<{ currentUser: any }> = ({ currentUser }) =
                           {Number(ord.paidAmount) > 0 && ord.paymentStatus !== "refunded" && (
                             <button
                               onClick={() => openRefund(ord)}
-                              className="px-2 py-1 bg-neutral-800 hover:bg-rose-950/40 text-neutral-300 hover:text-rose-400 rounded-lg text-[11px] font-medium border border-neutral-700 transition flex items-center gap-1"
+                              className="px-2 py-1 bg-neutral-800 hover:bg-rose-950/40 text-neutral-300 hover:text-rose-400 rounded-lg text-[0.6875rem] font-medium border border-neutral-700 transition flex items-center gap-1"
                               title="Process Refund"
                             >
                               <RotateCcw className="w-3 h-3 text-rose-400" />
@@ -339,7 +339,7 @@ export const OrdersHistory: React.FC<{ currentUser: any }> = ({ currentUser }) =
 
         {/* Live count + pagination — the list must never fail silently */}
         <div className="mt-3 flex flex-col items-center gap-2">
-          <div className="text-[11px] text-neutral-400">
+          <div className="text-[0.6875rem] text-neutral-400">
             {loading
               ? "Loading orders…"
               : loadError
@@ -417,7 +417,7 @@ export const OrdersHistory: React.FC<{ currentUser: any }> = ({ currentUser }) =
                   onChange={(e) => setRefundManagerPin(e.target.value)}
                   className="w-full bg-neutral-800 border border-neutral-700 rounded-xl px-3 py-2 text-white font-mono text-center tracking-widest text-lg"
                 />
-                <span className="text-[10px] text-neutral-500 mt-0.5 block">
+                <span className="text-[0.625rem] text-neutral-500 mt-0.5 block">
                   Enter your assigned 4–8 digit Manager or Owner authorization PIN
                 </span>
               </div>

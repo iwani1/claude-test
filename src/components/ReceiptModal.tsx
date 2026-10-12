@@ -76,8 +76,8 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
             </h2>
             {restAddress && <p className="text-neutral-600 mt-0.5">{restAddress}</p>}
             {restPhone && <p className="text-neutral-600">Tel: {restPhone}</p>}
-            {restTaxNo && <p className="text-neutral-500 text-[11px] mt-1">GRA TIN: {restTaxNo}</p>}
-            <p className="text-[10px] text-neutral-500 font-bold uppercase">
+            {restTaxNo && <p className="text-neutral-500 text-[0.6875rem] mt-1">GRA TIN: {restTaxNo}</p>}
+            <p className="text-[0.625rem] text-neutral-500 font-bold uppercase">
               {isComp ? "Complimentary — No Charge" : "Official VAT Invoice"}
             </p>
           </div>
@@ -86,11 +86,11 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
               missing payment. */}
           {isComp && (
             <div className="border-2 border-black text-center py-1 mb-2">
-              <span className="text-[13px] font-black tracking-widest uppercase">
+              <span className="text-[0.8125rem] font-black tracking-widest uppercase">
                 *** Complimentary ***
               </span>
               {order.complimentaryReason && (
-                <div className="text-[10px] font-semibold uppercase">
+                <div className="text-[0.625rem] font-semibold uppercase">
                   {order.complimentaryReason}
                 </div>
               )}
@@ -129,14 +129,14 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
                 <div className="col-span-6">
                   <span className="font-medium">{it.itemName || it.name}</span>
                   {it.modifiers && it.modifiers.length > 0 && (
-                    <div className="text-[10px] text-neutral-500 pl-2">
+                    <div className="text-[0.625rem] text-neutral-500 pl-2">
                       {it.modifiers.map((m: any, mIdx: number) => (
                         <div key={mIdx}>+ {m.optionName || m.name}</div>
                       ))}
                     </div>
                   )}
                   {it.specialInstructions && (
-                    <div className="text-[10px] text-amber-700 italic pl-2">
+                    <div className="text-[0.625rem] text-amber-700 italic pl-2">
                       * {it.specialInstructions}
                     </div>
                   )}
@@ -196,7 +196,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
                   <span>COMPLIMENTARY:</span>
                   <span>{currency}0.00</span>
                 </div>
-                <div className="flex justify-between text-[10px] text-neutral-500">
+                <div className="flex justify-between text-[0.625rem] text-neutral-500">
                   <span>Value provided free of charge:</span>
                   <span>{currency}{compValue.toFixed(2)}</span>
                 </div>
@@ -228,7 +228,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
 
             {/* Split Breakdown if order was paid with both Cash and MoMo */}
             {(order.splitDetails || (order.paymentMethod && String(order.paymentMethod).toLowerCase().includes("split"))) && (
-              <div className="p-2 bg-neutral-100 rounded-md text-[11px] space-y-1 border border-neutral-200">
+              <div className="p-2 bg-neutral-100 rounded-md text-[0.6875rem] space-y-1 border border-neutral-200">
                 <div className="flex justify-between text-neutral-800">
                   <span>• Cash Payment:</span>
                   <span className="font-mono font-bold">
@@ -245,14 +245,14 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
             )}
 
             {order.referenceNumber && (
-              <div className="flex justify-between text-[11px] text-neutral-500">
+              <div className="flex justify-between text-[0.6875rem] text-neutral-500">
                 <span>Reference:</span>
                 <span className="font-mono">{order.referenceNumber}</span>
               </div>
             )}
 
             {order.cashTendered && Number(order.cashTendered) > 0 && (
-              <div className="flex justify-between text-[11px] text-neutral-600">
+              <div className="flex justify-between text-[0.6875rem] text-neutral-600">
                 <span>Cash Tendered:</span>
                 <span className="font-mono">{currency}{Number(order.cashTendered).toFixed(2)}</span>
               </div>
@@ -274,14 +274,14 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
           <div className="border-t border-dashed border-neutral-400 my-3" />
 
           {/* Barcode & Ghanaian Welcome Footer */}
-          <div className="text-center space-y-1 text-neutral-600 text-[11px]">
+          <div className="text-center space-y-1 text-neutral-600 text-[0.6875rem]">
             <p className="font-bold whitespace-pre-line">{receiptFooter}</p>
             <div className="py-2 flex justify-center">
-              <div className="bg-neutral-900 text-white font-mono text-[9px] px-3 py-1 tracking-widest rounded-xs">
+              <div className="bg-neutral-900 text-white font-mono text-[0.5625rem] px-3 py-1 tracking-widest rounded-xs">
                 *{order.orderNumber}*
               </div>
             </div>
-            <p className="text-[10px] text-neutral-400">Powered by Lush View Hotel POS</p>
+            <p className="text-[0.625rem] text-neutral-400">Powered by Lush View Hotel POS</p>
           </div>
         </div>
 

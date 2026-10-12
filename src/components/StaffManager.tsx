@@ -208,7 +208,7 @@ export const StaffManager: React.FC<{ currentUser?: any }> = ({ currentUser }) =
 
                     <div className="flex flex-col items-end gap-1">
                       <span
-                        className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
+                        className={`px-2 py-0.5 rounded-md text-[0.625rem] font-bold ${
                           u.isActive
                             ? "bg-emerald-500/20 text-emerald-300"
                             : "bg-neutral-800 text-neutral-500"
@@ -217,7 +217,7 @@ export const StaffManager: React.FC<{ currentUser?: any }> = ({ currentUser }) =
                         {u.isActive ? "Active" : "Inactive"}
                       </span>
                       {!roleInfo?.terminalAccess && (
-                        <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-orange-500/20 text-orange-300 border border-orange-500/40">
+                        <span className="px-2 py-0.5 rounded-md text-[0.625rem] font-bold bg-orange-500/20 text-orange-300 border border-orange-500/40">
                           No Terminal Access
                         </span>
                       )}
@@ -236,7 +236,7 @@ export const StaffManager: React.FC<{ currentUser?: any }> = ({ currentUser }) =
                       </div>
                     )}
                     <div className="flex items-center justify-between pt-1">
-                      <span className="text-[11px] text-neutral-500">POS Login PIN:</span>
+                      <span className="text-[0.6875rem] text-neutral-500">POS Login PIN:</span>
                       <span className="font-mono font-bold text-neutral-300">
                         Hidden
                       </span>
@@ -244,7 +244,7 @@ export const StaffManager: React.FC<{ currentUser?: any }> = ({ currentUser }) =
                   </div>
 
                   {/* Permissions tags */}
-                  <div className="pt-2 text-[10px] text-neutral-400 flex flex-wrap gap-1">
+                  <div className="pt-2 text-[0.625rem] text-neutral-400 flex flex-wrap gap-1">
                     {roleInfo?.canAccessPos && (
                       <span className="px-1.5 py-0.5 rounded-md bg-neutral-800 text-neutral-300">
                         POS

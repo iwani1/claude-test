@@ -147,71 +147,71 @@ export const ReportsDashboard: React.FC = () => {
         {/* KPI Cards Grid */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3.5">
           <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-4 shadow-lg">
-            <span className="text-[10px] text-neutral-400 uppercase font-bold tracking-wider block">
+            <span className="text-[0.625rem] text-neutral-400 uppercase font-bold tracking-wider block">
               Gross Billed Sales
             </span>
             <div className="text-2xl font-bold font-mono text-emerald-400 mt-1">
               GH₵{Number(summary.totalSales).toLocaleString()}
             </div>
-            <div className="text-[11px] text-neutral-500 mt-1 flex items-center gap-1">
+            <div className="text-[0.6875rem] text-neutral-500 mt-1 flex items-center gap-1">
               <span>{summary.totalOrdersCount} bills created (before refunds)</span>
             </div>
           </div>
 
           <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-4 shadow-lg">
-            <span className="text-[10px] text-neutral-400 uppercase font-bold tracking-wider block">
+            <span className="text-[0.625rem] text-neutral-400 uppercase font-bold tracking-wider block">
               Gross Bill Margin (Estimate)
             </span>
             <div className="text-2xl font-bold font-mono text-white mt-1">
               GH₵{Number(summary.grossProfit).toLocaleString()}
             </div>
-            <div className="text-[11px] text-neutral-500 mt-1">
+            <div className="text-[0.6875rem] text-neutral-500 mt-1">
               COGS: GH₵{Number(summary.totalCostOfGoods).toFixed(2)}
             </div>
           </div>
 
           <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-4 shadow-lg">
-            <span className="text-[10px] text-neutral-400 uppercase font-bold tracking-wider block">
+            <span className="text-[0.625rem] text-neutral-400 uppercase font-bold tracking-wider block">
               Food Cost Ratio
             </span>
             <div className="text-2xl font-bold font-mono text-amber-400 mt-1">
               {summary.foodCostPercentage}%
             </div>
-            <div className="text-[11px] text-neutral-500 mt-1">Industry target: 28-35%</div>
+            <div className="text-[0.6875rem] text-neutral-500 mt-1">Industry target: 28-35%</div>
           </div>
 
           <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-4 shadow-lg">
-            <span className="text-[10px] text-neutral-400 uppercase font-bold tracking-wider block">
+            <span className="text-[0.625rem] text-neutral-400 uppercase font-bold tracking-wider block">
               Average Check (AOV)
             </span>
             <div className="text-2xl font-bold font-mono text-sky-400 mt-1">
               GH₵{Number(summary.avgOrderValue).toFixed(2)}
             </div>
-            <div className="text-[11px] text-neutral-500 mt-1">
+            <div className="text-[0.6875rem] text-neutral-500 mt-1">
               Across {summary.paidOrderCount ?? 0} paid bills
             </div>
           </div>
 
           {/* Eat-in room charge collected — separate from dish revenue */}
           <div className="bg-neutral-900 border border-sky-500/30 rounded-2xl p-4 shadow-lg">
-            <span className="text-[10px] text-sky-300/80 uppercase font-bold tracking-wider block">
+            <span className="text-[0.625rem] text-sky-300/80 uppercase font-bold tracking-wider block">
               Room Charge Collected
             </span>
             <div className="text-2xl font-bold font-mono text-sky-300 mt-1">
               GH₵{Number(summary.totalRoomCharge || 0).toFixed(2)}
             </div>
-            <div className="text-[11px] text-neutral-500 mt-1">Eat-in fee on dine-in bills</div>
+            <div className="text-[0.6875rem] text-neutral-500 mt-1">Eat-in fee on dine-in bills</div>
           </div>
 
           {/* Complimentary breakfast exposure */}
           <div className="bg-neutral-900 border border-amber-500/30 rounded-2xl p-4 shadow-lg">
-            <span className="text-[10px] text-amber-300/80 uppercase font-bold tracking-wider block">
+            <span className="text-[0.625rem] text-amber-300/80 uppercase font-bold tracking-wider block">
               Complimentary Value
             </span>
             <div className="text-2xl font-bold font-mono text-amber-300 mt-1">
               GH₵{Number(summary.totalCompValue || 0).toFixed(2)}
             </div>
-            <div className="text-[11px] text-neutral-500 mt-1">
+            <div className="text-[0.6875rem] text-neutral-500 mt-1">
               {summary.compOrderCount ?? 0} free order{(summary.compOrderCount ?? 0) === 1 ? "" : "s"}
             </div>
           </div>
@@ -269,7 +269,7 @@ export const ReportsDashboard: React.FC = () => {
               <div className="p-3 bg-neutral-850 rounded-xl border border-neutral-800 flex justify-between items-center text-xs">
                 <div>
                   <span className="font-semibold text-white block">Mobile Money (MoMo)</span>
-                  <span className="text-[10px] text-neutral-400">Recorded by staff</span>
+                  <span className="text-[0.625rem] text-neutral-400">Recorded by staff</span>
                 </div>
                 <span className="font-mono font-bold text-amber-400 text-sm">
                   GH₵{Number(payments.momo || payments.stripe || 0).toFixed(2)}
@@ -279,7 +279,7 @@ export const ReportsDashboard: React.FC = () => {
               <div className="p-3 bg-neutral-850 rounded-xl border border-neutral-800 flex justify-between items-center text-xs">
                 <div>
                   <span className="font-semibold text-white block">Cash (GH₵)</span>
-                  <span className="text-[10px] text-neutral-400">Physical register drawer</span>
+                  <span className="text-[0.625rem] text-neutral-400">Physical register drawer</span>
                 </div>
                 <span className="font-mono font-bold text-emerald-400 text-sm">
                   GH₵{Number(payments.cash || 0).toFixed(2)}
@@ -289,7 +289,7 @@ export const ReportsDashboard: React.FC = () => {
               <div className="p-3 bg-neutral-850 rounded-xl border border-neutral-800 flex justify-between items-center text-xs">
                 <div>
                   <span className="font-semibold text-white block">Total Collections</span>
-                  <span className="text-[10px] text-neutral-400">MoMo + Cash combined</span>
+                  <span className="text-[0.625rem] text-neutral-400">MoMo + Cash combined</span>
                 </div>
                 <span className="font-mono font-bold text-white text-sm">
                   GH₵
@@ -308,12 +308,12 @@ export const ReportsDashboard: React.FC = () => {
             <h3 className="text-xs font-bold text-white uppercase tracking-wider">
               Top Selling Dishes & Beverages
             </h3>
-            <span className="text-[11px] text-neutral-400 font-mono">Volume Rank</span>
+            <span className="text-[0.6875rem] text-neutral-400 font-mono">Volume Rank</span>
           </div>
 
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
-              <thead className="bg-neutral-850 text-neutral-400 uppercase text-[10px] tracking-wider border-b border-neutral-800">
+              <thead className="bg-neutral-850 text-neutral-400 uppercase text-[0.625rem] tracking-wider border-b border-neutral-800">
                 <tr>
                   <th className="px-4 py-2.5">Rank</th>
                   <th className="px-4 py-2.5">Menu Item</th>
@@ -344,14 +344,14 @@ export const ReportsDashboard: React.FC = () => {
               <h3 className="text-xs font-bold text-amber-300 uppercase tracking-wider">
                 Complimentary Orders (GH₵0.00 bills)
               </h3>
-              <span className="text-[11px] text-neutral-400 font-mono">
+              <span className="text-[0.6875rem] text-neutral-400 font-mono">
                 {compOrders.length} order{compOrders.length === 1 ? "" : "s"} · GH₵
                 {Number(summary.totalCompValue || 0).toFixed(2)} value given free
               </span>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
-                <thead className="bg-neutral-850 text-neutral-400 uppercase text-[10px] tracking-wider border-b border-neutral-800">
+                <thead className="bg-neutral-850 text-neutral-400 uppercase text-[0.625rem] tracking-wider border-b border-neutral-800">
                   <tr>
                     <th className="px-4 py-2.5">Order #</th>
                     <th className="px-4 py-2.5">Date</th>
@@ -364,7 +364,7 @@ export const ReportsDashboard: React.FC = () => {
                   {compOrders.map((c: any) => (
                     <tr key={c.id} className="hover:bg-neutral-850/50">
                       <td className="px-4 py-2.5 font-mono font-bold text-white">{c.orderNumber}</td>
-                      <td className="px-4 py-2.5 text-neutral-400 text-[11px]">
+                      <td className="px-4 py-2.5 text-neutral-400 text-[0.6875rem]">
                         {new Date(c.createdAt).toLocaleString()}
                       </td>
                       <td className="px-4 py-2.5 text-neutral-200">{c.customerName || "—"}</td>

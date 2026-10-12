@@ -102,7 +102,7 @@ export const KitchenTicketModal: React.FC<KitchenTicketModalProps> = ({
         </div>
 
         {/* Instructions banner */}
-        <div className="px-4 py-2.5 bg-amber-50 border-b border-amber-200 text-[11px] text-amber-900 print:hidden">
+        <div className="px-4 py-2.5 bg-amber-50 border-b border-amber-200 text-[0.6875rem] text-amber-900 print:hidden">
           Hand this printed slip to the kitchen. The kitchen has no screen
           access — this paper ticket is the order.
         </div>
@@ -121,11 +121,11 @@ export const KitchenTicketModal: React.FC<KitchenTicketModalProps> = ({
                   *** Complimentary ***
                 </div>
                 {order.complimentaryReason && (
-                  <div className="text-[11px] font-bold uppercase">
+                  <div className="text-[0.6875rem] font-bold uppercase">
                     {order.complimentaryReason}
                   </div>
                 )}
-                <div className="text-[10px] font-semibold">Cook as normal — no charge to guest</div>
+                <div className="text-[0.625rem] font-semibold">Cook as normal — no charge to guest</div>
               </div>
             )}
           </div>
@@ -156,7 +156,7 @@ export const KitchenTicketModal: React.FC<KitchenTicketModalProps> = ({
               </div>
             )}
             {order.notes && (
-              <div className="pt-1 text-[11px] font-bold uppercase">
+              <div className="pt-1 text-[0.6875rem] font-bold uppercase">
                 TICKET NOTE: {order.notes}
               </div>
             )}
@@ -218,11 +218,11 @@ export const KitchenTicketModal: React.FC<KitchenTicketModalProps> = ({
           })}
 
           {/* Footer */}
-          <div className="mt-3 pt-2 border-t-2 border-black text-center text-[11px] space-y-0.5">
+          <div className="mt-3 pt-2 border-t-2 border-black text-center text-[0.6875rem] space-y-0.5">
             <div className="font-bold uppercase">--- End of Order ---</div>
             <div>Started cooking: ____________</div>
             <div>Completed &amp; plated: ____________</div>
-            <div className="pt-1 text-[10px]">
+            <div className="pt-1 text-[0.625rem]">
               Printed {new Date().toLocaleTimeString()} • Lush View Hotel
             </div>
           </div>

@@ -195,7 +195,7 @@ export const InventoryManager: React.FC = () => {
         {/* Metric Badges */}
         <div className="flex items-center gap-2 sm:gap-3 text-xs">
           <div className="px-3 py-1.5 rounded-xl bg-neutral-800 border border-neutral-700">
-            <span className="text-[10px] text-neutral-400 uppercase font-semibold block">
+            <span className="text-[0.625rem] text-neutral-400 uppercase font-semibold block">
               Total Valuation
             </span>
             <span className="text-emerald-400 font-mono font-bold text-sm">
@@ -204,7 +204,7 @@ export const InventoryManager: React.FC = () => {
           </div>
 
           <div className="px-3 py-1.5 rounded-xl bg-neutral-800 border border-neutral-700">
-            <span className="text-[10px] text-neutral-400 uppercase font-semibold block">
+            <span className="text-[0.625rem] text-neutral-400 uppercase font-semibold block">
               Low Stock Alerts
             </span>
             <span
@@ -298,7 +298,7 @@ export const InventoryManager: React.FC = () => {
           <div className="bg-neutral-900 border border-neutral-800 rounded-2xl overflow-hidden shadow-xl">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
-                <thead className="bg-neutral-850 text-neutral-400 uppercase text-[10px] tracking-wider border-b border-neutral-800">
+                <thead className="bg-neutral-850 text-neutral-400 uppercase text-[0.625rem] tracking-wider border-b border-neutral-800">
                   <tr>
                     <th className="px-4 py-3">Ingredient</th>
                     <th className="px-4 py-3">SKU</th>
@@ -325,7 +325,7 @@ export const InventoryManager: React.FC = () => {
                           <div className="flex items-center gap-2">
                             <span>{ing.name}</span>
                             {isLow && (
-                              <span className="px-1.5 py-0.5 rounded-xs bg-rose-500/20 text-rose-300 text-[9px] font-bold uppercase tracking-wider border border-rose-500/40">
+                              <span className="px-1.5 py-0.5 rounded-xs bg-rose-500/20 text-rose-300 text-[0.5625rem] font-bold uppercase tracking-wider border border-rose-500/40">
                                 Low
                               </span>
                             )}
@@ -353,7 +353,7 @@ export const InventoryManager: React.FC = () => {
                               setAdjustDelta("");
                               setAdjustType("adjustment");
                             }}
-                            className="px-2.5 py-1 bg-neutral-800 hover:bg-neutral-700 text-amber-400 hover:text-amber-300 font-semibold rounded-md text-[11px] border border-neutral-700 transition"
+                            className="px-2.5 py-1 bg-neutral-800 hover:bg-neutral-700 text-amber-400 hover:text-amber-300 font-semibold rounded-md text-[0.6875rem] border border-neutral-700 transition"
                           >
                             Adjust Stock
                           </button>
@@ -378,7 +378,7 @@ export const InventoryManager: React.FC = () => {
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
-                <thead className="bg-neutral-850 text-neutral-400 uppercase text-[10px] tracking-wider border-b border-neutral-800">
+                <thead className="bg-neutral-850 text-neutral-400 uppercase text-[0.625rem] tracking-wider border-b border-neutral-800">
                   <tr>
                     <th className="px-4 py-3">Timestamp</th>
                     <th className="px-4 py-3">Ingredient</th>
@@ -395,13 +395,13 @@ export const InventoryManager: React.FC = () => {
                     const isPositive = delta > 0;
                     return (
                       <tr key={m.id} className="hover:bg-neutral-850/50">
-                        <td className="px-4 py-2.5 text-neutral-400 text-[11px]">
+                        <td className="px-4 py-2.5 text-neutral-400 text-[0.6875rem]">
                           {new Date(m.createdAt).toLocaleString()}
                         </td>
                         <td className="px-4 py-2.5 font-sans font-semibold text-white">
                           {ingredients.find((i) => i.id === m.ingredientId)?.name || `#${m.ingredientId}`}
                         </td>
-                        <td className="px-4 py-2.5 font-sans capitalize text-[11px]">
+                        <td className="px-4 py-2.5 font-sans capitalize text-[0.6875rem]">
                           <span
                             className={`px-2 py-0.5 rounded-md ${
                               m.movementType === "order_deduction"
@@ -429,7 +429,7 @@ export const InventoryManager: React.FC = () => {
                         <td className="px-4 py-2.5 text-right text-white">
                           {Number(m.newStock).toFixed(3)}
                         </td>
-                        <td className="px-4 py-2.5 font-sans text-neutral-400 text-[11px]">
+                        <td className="px-4 py-2.5 font-sans text-neutral-400 text-[0.6875rem]">
                           {m.referenceId && <span className="font-mono text-neutral-300 mr-2">{m.referenceId}:</span>}
                           {m.reason}
                         </td>
@@ -473,7 +473,7 @@ export const InventoryManager: React.FC = () => {
 
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
-                <thead className="bg-neutral-850 text-neutral-400 uppercase text-[10px] tracking-wider border-b border-neutral-800">
+                <thead className="bg-neutral-850 text-neutral-400 uppercase text-[0.625rem] tracking-wider border-b border-neutral-800">
                   <tr>
                     <th className="px-4 py-2.5">Ingredient</th>
                     <th className="px-4 py-2.5">Category</th>
@@ -555,7 +555,7 @@ export const InventoryManager: React.FC = () => {
               <div>
                 <h3 className="text-sm font-bold text-white">Adjust Stock</h3>
                 <p className="text-xs text-amber-400 mt-0.5">{showAdjustModal.name}</p>
-                <p className="text-[11px] text-neutral-400 font-mono">
+                <p className="text-[0.6875rem] text-neutral-400 font-mono">
                   Current: {Number(showAdjustModal.currentStock).toFixed(3)} {showAdjustModal.unit}
                 </p>
               </div>

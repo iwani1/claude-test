@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { ROLE_PERMISSIONS, UserRole, hasTerminalAccess } from "@/lib/permissions";
 import { getOfflineQueue, syncOfflineQueueToServer } from "@/lib/offline-storage";
+import { DisplaySizeControl } from "@/components/DisplaySizeControl";
 
 interface NavbarProps {
   currentUser: any;
@@ -117,11 +118,11 @@ export const Navbar: React.FC<NavbarProps> = ({
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <span className="font-bold text-[15px] tracking-tight text-neutral-100 truncate">
+              <span className="font-bold text-[0.9375rem] tracking-tight text-neutral-100 truncate">
                 Lush View Hotel
               </span>
             </div>
-            <div className="flex items-center gap-1.5 text-[12px] text-neutral-400">
+            <div className="flex items-center gap-1.5 text-[0.75rem] text-neutral-400">
               <Clock className="w-3.5 h-3.5 text-neutral-500 shrink-0" />
               {openShift ? (
                 <span className="text-emerald-400 font-medium">Register Open</span>
@@ -134,13 +135,15 @@ export const Navbar: React.FC<NavbarProps> = ({
 
         {/* Right: Actions, Network Status & Profile */}
         <div className="flex items-center gap-2 sm:gap-2.5">
+          {/* Per-terminal text & touch size — each screen can differ. */}
+          <DisplaySizeControl />
           {/* POS quick jumps — New Order / Tables / Orders / Drawer always visible */}
           {(onNewOrder || onGoTables || onGoOrders || onOpenDrawer) && (
             <div className="hidden md:flex items-center gap-2 mr-1">
               {onNewOrder && (
                 <button
                   onClick={onNewOrder}
-                  className={`h-11 px-4 font-bold rounded-xl flex items-center gap-2 shadow-lg transition active:scale-[0.97] text-[13px] ${
+                  className={`h-11 px-4 font-bold rounded-xl flex items-center gap-2 shadow-lg transition active:scale-[0.97] text-[0.8125rem] ${
                     currentTab === "pos"
                       ? "bg-amber-400 text-black shadow-amber-500/20 ring-2 ring-amber-200"
                       : "bg-amber-500 hover:bg-amber-400 active:bg-amber-600 text-black shadow-amber-500/20"
@@ -154,7 +157,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               {onGoTables && (
                 <button
                   onClick={onGoTables}
-                  className={`h-11 px-3.5 font-bold rounded-xl flex items-center gap-2 border transition active:scale-[0.97] text-[13px] ${
+                  className={`h-11 px-3.5 font-bold rounded-xl flex items-center gap-2 border transition active:scale-[0.97] text-[0.8125rem] ${
                     currentTab === "tables"
                       ? "bg-neutral-100 text-black border-neutral-100"
                       : "bg-neutral-800 hover:bg-neutral-750 text-white border-neutral-700"
@@ -168,7 +171,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               {onGoOrders && (
                 <button
                   onClick={onGoOrders}
-                  className={`h-11 px-3.5 font-bold rounded-xl flex items-center gap-2 border transition active:scale-[0.97] text-[13px] ${
+                  className={`h-11 px-3.5 font-bold rounded-xl flex items-center gap-2 border transition active:scale-[0.97] text-[0.8125rem] ${
                     currentTab === "orders"
                       ? "bg-neutral-100 text-black border-neutral-100"
                       : "bg-neutral-800 hover:bg-neutral-750 text-white border-neutral-700"
@@ -182,7 +185,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               {onOpenDrawer && (
                 <button
                   onClick={onOpenDrawer}
-                  className={`h-11 px-3.5 font-bold rounded-xl flex items-center gap-2 border transition active:scale-[0.97] text-[13px] ${
+                  className={`h-11 px-3.5 font-bold rounded-xl flex items-center gap-2 border transition active:scale-[0.97] text-[0.8125rem] ${
                     currentTab === "shifts"
                       ? "bg-emerald-400 text-black border-emerald-400"
                       : "bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border-emerald-500/50"
@@ -204,7 +207,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           )}
 
           {/* Network status */}
-          <div className="flex items-center gap-1.5 px-3 h-11 rounded-xl bg-neutral-800/80 border border-neutral-700/60 text-[12px]">
+          <div className="flex items-center gap-1.5 px-3 h-11 rounded-xl bg-neutral-800/80 border border-neutral-700/60 text-[0.75rem]">
             {isOnline ? (
               <span className="flex items-center gap-1.5 text-emerald-400 font-medium">
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
@@ -222,7 +225,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               <button
                 onClick={handleManualSync}
                 disabled={isSyncing}
-                className="ml-1 px-2.5 h-7 bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 border border-amber-500/40 rounded-lg text-[11px] font-bold flex items-center gap-1.5 transition"
+                className="ml-1 px-2.5 h-7 bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 border border-amber-500/40 rounded-lg text-[0.6875rem] font-bold flex items-center gap-1.5 transition"
                 title="Sync offline queue"
               >
                 <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? "animate-spin" : ""}`} />
@@ -233,7 +236,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           {/* Low stock alerts badge */}
           {lowStockCount > 0 && (
-            <div className="hidden xl:flex items-center gap-1.5 px-3 h-11 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 text-[12px] font-semibold">
+            <div className="hidden xl:flex items-center gap-1.5 px-3 h-11 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 text-[0.75rem] font-semibold">
               <ShieldAlert className="w-4 h-4" />
               <span>{lowStockCount} low stock</span>
             </div>
@@ -251,7 +254,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           {/* Fast PIN switch */}
           <button
             onClick={() => setShowPinModal(true)}
-            className="h-11 px-3.5 text-neutral-200 hover:text-white hover:bg-neutral-800 rounded-xl border border-neutral-700/60 flex items-center gap-2 text-[12px] font-semibold transition active:bg-neutral-750"
+            className="h-11 px-3.5 text-neutral-200 hover:text-white hover:bg-neutral-800 rounded-xl border border-neutral-700/60 flex items-center gap-2 text-[0.75rem] font-semibold transition active:bg-neutral-750"
             title="Switch employee with PIN"
           >
             <KeyRound className="w-5 h-5 text-amber-400" />
@@ -264,14 +267,14 @@ export const Navbar: React.FC<NavbarProps> = ({
               onClick={() => setShowRoleDropdown(!showRoleDropdown)}
               className="flex items-center gap-2.5 h-11 pl-2 pr-3 rounded-xl bg-neutral-800 hover:bg-neutral-750 border border-neutral-700 transition active:bg-neutral-750"
             >
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-amber-600 to-orange-500 flex items-center justify-center text-[13px] font-bold text-white shadow-xs">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-amber-600 to-orange-500 flex items-center justify-center text-[0.8125rem] font-bold text-white shadow-xs">
                 {currentUser?.name ? currentUser.name.charAt(0) : "U"}
               </div>
               <div className="text-left hidden md:block max-w-[150px]">
-                <div className="text-[12.5px] font-semibold leading-tight text-neutral-100 truncate">
+                <div className="text-[0.78125rem] font-semibold leading-tight text-neutral-100 truncate">
                   {currentUser?.name || "Staff"}
                 </div>
-                <div className="text-[10.5px] text-amber-400 font-medium truncate">
+                <div className="text-[0.65625rem] text-amber-400 font-medium truncate">
                   {currentRoleInfo?.label || currentUser?.role || "Staff"}
                 </div>
               </div>
@@ -294,7 +297,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                       {currentRoleInfo?.label || currentUser?.role}
                     </div>
                     {currentUser?.email && (
-                      <div className="text-[11px] text-neutral-400 truncate mt-0.5 font-mono">
+                      <div className="text-[0.6875rem] text-neutral-400 truncate mt-0.5 font-mono">
                         {currentUser.email}
                       </div>
                     )}
@@ -306,7 +309,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                         setShowRoleDropdown(false);
                         setShowPinModal(true);
                       }}
-                      className="w-full text-left px-4 py-2.5 text-[13px] font-medium text-neutral-200 hover:bg-neutral-700/60 flex items-center gap-2.5 transition"
+                      className="w-full text-left px-4 py-2.5 text-[0.8125rem] font-medium text-neutral-200 hover:bg-neutral-700/60 flex items-center gap-2.5 transition"
                     >
                       <KeyRound className="w-4 h-4 text-amber-400" />
                       <span>Switch Employee (Enter PIN)</span>
@@ -319,7 +322,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                         setShowRoleDropdown(false);
                         onLogout?.();
                       }}
-                      className="w-full text-left px-4 py-2.5 text-[13px] font-semibold text-rose-400 hover:bg-rose-500/10 flex items-center gap-2.5 transition"
+                      className="w-full text-left px-4 py-2.5 text-[0.8125rem] font-semibold text-rose-400 hover:bg-rose-500/10 flex items-center gap-2.5 transition"
                     >
                       <LogOut className="w-4 h-4" />
                       <span>Sign Out of Terminal</span>
@@ -340,7 +343,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               <KeyRound className="w-7 h-7" />
             </div>
             <h3 className="text-lg font-bold text-white mb-1">Enter Employee PIN</h3>
-            <p className="text-[13px] text-neutral-400 mb-5">
+            <p className="text-[0.8125rem] text-neutral-400 mb-5">
               Enter your assigned 4-digit code to switch active operator
             </p>
 
@@ -356,7 +359,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 className="w-full text-center text-4xl tracking-[0.3em] font-mono py-3 bg-neutral-800 border border-neutral-700 rounded-2xl text-white focus:outline-none focus:border-amber-500"
               />
 
-              {pinError && <p className="text-[13px] text-rose-400">{pinError}</p>}
+              {pinError && <p className="text-[0.8125rem] text-rose-400">{pinError}</p>}
 
               {/* On-screen numeric pad: POS terminals often have no keyboard */}
               <div className="grid grid-cols-3 gap-2">
@@ -373,7 +376,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <button
                   type="button"
                   onClick={() => setPinInput("")}
-                  className="h-14 rounded-xl bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 text-[12px] font-bold text-neutral-400 transition"
+                  className="h-14 rounded-xl bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 text-[0.75rem] font-bold text-neutral-400 transition"
                 >
                   Clear
                 </button>
@@ -387,13 +390,13 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <button
                   type="button"
                   onClick={() => setPinInput((p) => p.slice(0, -1))}
-                  className="h-14 rounded-xl bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 text-[12px] font-bold text-neutral-400 transition"
+                  className="h-14 rounded-xl bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 text-[0.75rem] font-bold text-neutral-400 transition"
                 >
                   Del
                 </button>
               </div>
 
-              <div className="text-[11.5px] text-neutral-400 bg-neutral-800/80 p-3 rounded-xl text-left space-y-0.5">
+              <div className="text-[0.71875rem] text-neutral-400 bg-neutral-800/80 p-3 rounded-xl text-left space-y-0.5">
                 <span className="font-semibold text-neutral-300">Staff Authorization:</span>
                 <div>Individual PINs are configured in Staff Management.</div>
                 <div className="text-neutral-500 italic">Kitchen personnel operate via printed dockets.</div>
@@ -403,13 +406,13 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <button
                   type="button"
                   onClick={() => setShowPinModal(false)}
-                  className="flex-1 h-12 text-[13px] font-semibold bg-neutral-800 text-neutral-300 rounded-xl hover:bg-neutral-700 transition"
+                  className="flex-1 h-12 text-[0.8125rem] font-semibold bg-neutral-800 text-neutral-300 rounded-xl hover:bg-neutral-700 transition"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 h-12 text-[13px] font-bold bg-amber-500 text-black rounded-xl hover:bg-amber-400 transition"
+                  className="flex-1 h-12 text-[0.8125rem] font-bold bg-amber-500 text-black rounded-xl hover:bg-amber-400 transition"
                 >
                   Unlock
                 </button>

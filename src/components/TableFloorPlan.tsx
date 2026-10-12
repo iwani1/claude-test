@@ -214,7 +214,7 @@ export const TableFloorPlan: React.FC<TableFloorPlanProps> = ({
                     <span className="font-mono font-bold text-base text-white">
                       {tbl.tableNumber}
                     </span>
-                    <span className="flex items-center gap-1 text-[11px] text-neutral-400">
+                    <span className="flex items-center gap-1 text-[0.6875rem] text-neutral-400">
                       <Users className="w-3.5 h-3.5" />
                       <span>{tbl.capacity}p</span>
                     </span>
@@ -223,7 +223,7 @@ export const TableFloorPlan: React.FC<TableFloorPlanProps> = ({
                   {/* Status Indicator */}
                   <div className="mb-3">
                     <span
-                      className={`inline-block px-2 py-0.5 rounded-md text-[11px] font-bold capitalize ${
+                      className={`inline-block px-2 py-0.5 rounded-md text-[0.6875rem] font-bold capitalize ${
                         isOccupied
                           ? "bg-rose-500/20 text-rose-300"
                           : isAvailable
@@ -243,7 +243,7 @@ export const TableFloorPlan: React.FC<TableFloorPlanProps> = ({
                       <div className="font-semibold text-neutral-200 truncate">
                         {tbl.activeOrder.customerName || "Dine-in Guest"}
                       </div>
-                      <div className="flex justify-between text-[11px] text-neutral-400 font-mono">
+                      <div className="flex justify-between text-[0.6875rem] text-neutral-400 font-mono">
                         <span>{tbl.activeOrder.orderNumber}</span>
                         <span className="text-amber-400 font-bold">
                           GH₵{Number(tbl.activeOrder.totalAmount).toFixed(2)}
@@ -268,7 +268,7 @@ export const TableFloorPlan: React.FC<TableFloorPlanProps> = ({
                       <>
                         <button
                           onClick={() => setMovingTable(tbl)}
-                          className="flex-1 py-1 rounded-md bg-neutral-800 hover:bg-neutral-750 text-neutral-300 text-[10px] flex items-center justify-center gap-1 transition"
+                          className="flex-1 py-1 rounded-md bg-neutral-800 hover:bg-neutral-750 text-neutral-300 text-[0.625rem] flex items-center justify-center gap-1 transition"
                           title="Move order to another table"
                         >
                           <ArrowRightLeft className="w-3 h-3 text-sky-400" />
@@ -276,7 +276,7 @@ export const TableFloorPlan: React.FC<TableFloorPlanProps> = ({
                         </button>
                         <button
                           onClick={() => handleUpdateStatus(tbl.id, "cleaning")}
-                          className="flex-1 py-1 rounded-md bg-neutral-800 hover:bg-neutral-750 text-neutral-300 text-[10px] transition"
+                          className="flex-1 py-1 rounded-md bg-neutral-800 hover:bg-neutral-750 text-neutral-300 text-[0.625rem] transition"
                         >
                           Clean
                         </button>
@@ -290,14 +290,14 @@ export const TableFloorPlan: React.FC<TableFloorPlanProps> = ({
                               isAvailable ? "reserved" : "available"
                             )
                           }
-                          className="flex-1 py-1 rounded-md bg-neutral-800 hover:bg-neutral-750 text-neutral-300 text-[10px] transition"
+                          className="flex-1 py-1 rounded-md bg-neutral-800 hover:bg-neutral-750 text-neutral-300 text-[0.625rem] transition"
                         >
                           {isReserved ? "Available" : "Reserve"}
                         </button>
                         {isCleaning && (
                           <button
                             onClick={() => handleUpdateStatus(tbl.id, "available")}
-                            className="flex-1 py-1 rounded-md bg-emerald-500/20 text-emerald-300 text-[10px] font-semibold transition"
+                            className="flex-1 py-1 rounded-md bg-emerald-500/20 text-emerald-300 text-[0.625rem] font-semibold transition"
                           >
                             Ready
                           </button>

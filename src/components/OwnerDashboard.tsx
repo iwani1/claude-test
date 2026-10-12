@@ -106,7 +106,7 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ onNavigate, open
             className="bg-neutral-900 border border-neutral-800 hover:border-amber-500/50 rounded-2xl p-4 shadow-lg cursor-pointer transition group"
           >
             <div className="flex justify-between items-center text-neutral-400">
-              <span className="text-[10px] uppercase font-bold tracking-wider">
+              <span className="text-[0.625rem] uppercase font-bold tracking-wider">
                 Total Sales Today
               </span>
               <DollarSign className="w-4 h-4 text-emerald-400" />
@@ -114,7 +114,7 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ onNavigate, open
             <div className="text-2xl font-bold font-mono text-emerald-400 mt-1">
               GH₵{Number(summary.netCollections ?? 0).toFixed(2)}
             </div>
-            <div className="text-[11px] text-neutral-500 mt-1 flex justify-between">
+            <div className="text-[0.6875rem] text-neutral-500 mt-1 flex justify-between">
               <span>{summary.totalOrdersCount} orders placed</span>
               <span className="text-amber-400 group-hover:translate-x-0.5 transition">View &rarr;</span>
             </div>
@@ -125,7 +125,7 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ onNavigate, open
             className="bg-neutral-900 border border-neutral-800 hover:border-amber-500/50 rounded-2xl p-4 shadow-lg cursor-pointer transition group"
           >
             <div className="flex justify-between items-center text-neutral-400">
-              <span className="text-[10px] uppercase font-bold tracking-wider">
+              <span className="text-[0.625rem] uppercase font-bold tracking-wider">
                 Active Dine-in Tables
               </span>
               <Grid className="w-4 h-4 text-sky-400" />
@@ -133,7 +133,7 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ onNavigate, open
             <div className="text-2xl font-bold font-mono text-white mt-1">
               {occupiedTables.length} / {tables.length}
             </div>
-            <div className="text-[11px] text-neutral-500 mt-1 flex justify-between">
+            <div className="text-[0.6875rem] text-neutral-500 mt-1 flex justify-between">
               <span>{tables.length > 0 ? `${Math.round((occupiedTables.length / tables.length) * 100)}% occupancy` : "0%"}</span>
               <span className="text-amber-400 group-hover:translate-x-0.5 transition">Floor &rarr;</span>
             </div>
@@ -144,7 +144,7 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ onNavigate, open
             className="bg-neutral-900 border border-neutral-800 hover:border-amber-500/50 rounded-2xl p-4 shadow-lg cursor-pointer transition group"
           >
             <div className="flex justify-between items-center text-neutral-400">
-              <span className="text-[10px] uppercase font-bold tracking-wider">
+              <span className="text-[0.625rem] uppercase font-bold tracking-wider">
                 Active Kitchen Tickets
               </span>
               <ChefHat className="w-4 h-4 text-orange-400" />
@@ -152,7 +152,7 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ onNavigate, open
             <div className="text-2xl font-bold font-mono text-amber-400 mt-1">
               {activeTickets.length} tickets
             </div>
-            <div className="text-[11px] text-neutral-500 mt-1 flex justify-between">
+            <div className="text-[0.6875rem] text-neutral-500 mt-1 flex justify-between">
               <span>On prep lines</span>
               <span className="text-amber-400 group-hover:translate-x-0.5 transition">KDS &rarr;</span>
             </div>
@@ -163,7 +163,7 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ onNavigate, open
             className="bg-neutral-900 border border-neutral-800 hover:border-amber-500/50 rounded-2xl p-4 shadow-lg cursor-pointer transition group"
           >
             <div className="flex justify-between items-center text-neutral-400">
-              <span className="text-[10px] uppercase font-bold tracking-wider">
+              <span className="text-[0.625rem] uppercase font-bold tracking-wider">
                 Inventory Valuation
               </span>
               <Boxes className="w-4 h-4 text-emerald-400" />
@@ -171,7 +171,7 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ onNavigate, open
             <div className="text-2xl font-bold font-mono text-white mt-1">
               GH₵{Number(inventoryStats?.totalValuation || 0).toLocaleString()}
             </div>
-            <div className="text-[11px] text-neutral-500 mt-1 flex justify-between">
+            <div className="text-[0.6875rem] text-neutral-500 mt-1 flex justify-between">
               <span className={lowStockAlerts.length > 0 ? "text-rose-400 font-semibold" : ""}>
                 {lowStockAlerts.length} low stock alerts
               </span>
@@ -205,7 +205,7 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ onNavigate, open
                 >
                   <div>
                     <span className="font-bold text-white font-mono">{tbl.tableNumber}</span>
-                    <span className="text-neutral-400 text-[11px] ml-2">
+                    <span className="text-neutral-400 text-[0.6875rem] ml-2">
                       {tbl.activeOrder?.customerName || "Dine-in"}
                     </span>
                   </div>
@@ -246,11 +246,11 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ onNavigate, open
                 >
                   <div>
                     <span className="font-bold text-white font-mono">#{t.ticketNumber}</span>
-                    <span className="text-[11px] text-neutral-400 ml-2">
+                    <span className="text-[0.6875rem] text-neutral-400 ml-2">
                       {t.tableNumber} ({t.items?.length || 1} items)
                     </span>
                   </div>
-                  <span className="px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 text-[10px] font-bold uppercase">
+                  <span className="px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 text-[0.625rem] font-bold uppercase">
                     {t.status}
                   </span>
                 </div>
@@ -287,7 +287,7 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ onNavigate, open
                 >
                   <div>
                     <span className="font-semibold text-rose-200">{ing.name}</span>
-                    <span className="text-[10px] text-rose-400 block">
+                    <span className="text-[0.625rem] text-rose-400 block">
                       Min threshold: {Number(ing.minStockLevel).toFixed(1)} {ing.unit}
                     </span>
                   </div>

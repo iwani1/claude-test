@@ -189,7 +189,7 @@ export const MenuManager: React.FC<MenuManagerProps> = ({
       <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
         <div className="bg-neutral-900 border border-neutral-800 rounded-2xl overflow-hidden shadow-xl">
           <table className="w-full text-left text-xs">
-            <thead className="bg-neutral-850 text-neutral-400 uppercase text-[10px] tracking-wider border-b border-neutral-800">
+            <thead className="bg-neutral-850 text-neutral-400 uppercase text-[0.625rem] tracking-wider border-b border-neutral-800">
               <tr>
                 <th className="px-4 py-3">Photo & Dish</th>
                 <th className="px-4 py-3">SKU</th>
@@ -212,7 +212,7 @@ export const MenuManager: React.FC<MenuManagerProps> = ({
                     />
                     <div>
                       <div className="font-semibold text-white">{item.name}</div>
-                      <div className="text-[10px] text-neutral-400 truncate max-w-xs">
+                      <div className="text-[0.625rem] text-neutral-400 truncate max-w-xs">
                         {item.description}
                       </div>
                     </div>
@@ -227,15 +227,15 @@ export const MenuManager: React.FC<MenuManagerProps> = ({
                   </td>
                   <td className="px-4 py-2.5 text-right">
                     {item.hasRecipe ? (
-                      <span className="text-emerald-400 font-semibold text-[11px]">Linked</span>
+                      <span className="text-emerald-400 font-semibold text-[0.6875rem]">Linked</span>
                     ) : (
-                      <span className="text-neutral-500 text-[11px]">Direct</span>
+                      <span className="text-neutral-500 text-[0.6875rem]">Direct</span>
                     )}
                   </td>
                   <td className="px-4 py-2.5 text-center">
                     <button
                       onClick={() => handleToggleAvailable(item)}
-                      className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
+                      className={`px-2 py-0.5 rounded-md text-[0.625rem] font-bold ${
                         item.isAvailable
                           ? "bg-emerald-500/20 text-emerald-300"
                           : "bg-rose-500/20 text-rose-300"

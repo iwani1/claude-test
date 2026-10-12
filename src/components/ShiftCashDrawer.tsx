@@ -179,7 +179,7 @@ export const ShiftCashDrawer: React.FC<{ currentUser: any }> = ({ currentUser })
           <div className="flex flex-wrap gap-2">
             <button
               onClick={handleOpenDrawer}
-              className="h-12 px-4 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-2xl text-[13px] shadow-md flex items-center gap-2 transition active:scale-[0.97]"
+              className="h-12 px-4 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-2xl text-[0.8125rem] shadow-md flex items-center gap-2 transition active:scale-[0.97]"
               title="Pop the cash drawer open without a sale"
             >
               <Banknote className="w-5 h-5" />
@@ -187,7 +187,7 @@ export const ShiftCashDrawer: React.FC<{ currentUser: any }> = ({ currentUser })
             </button>
             <button
               onClick={() => setShowPayoutModal(true)}
-              className="h-12 px-4 bg-neutral-800 hover:bg-neutral-750 text-neutral-200 font-semibold rounded-2xl text-[13px] border border-neutral-700 flex items-center gap-1.5 transition"
+              className="h-12 px-4 bg-neutral-800 hover:bg-neutral-750 text-neutral-200 font-semibold rounded-2xl text-[0.8125rem] border border-neutral-700 flex items-center gap-1.5 transition"
             >
               <ArrowDownRight className="w-4 h-4 text-rose-400" />
               <span>Cash Drop / Payout</span>
@@ -197,7 +197,7 @@ export const ShiftCashDrawer: React.FC<{ currentUser: any }> = ({ currentUser })
                 setCountedCashInput(expectedInDrawer.toFixed(2));
                 setShowCloseModal(true);
               }}
-              className="h-12 px-4 bg-rose-600 hover:bg-rose-500 text-white font-semibold rounded-2xl text-[13px] shadow-md shadow-rose-600/20 flex items-center gap-1.5 transition"
+              className="h-12 px-4 bg-rose-600 hover:bg-rose-500 text-white font-semibold rounded-2xl text-[0.8125rem] shadow-md shadow-rose-600/20 flex items-center gap-1.5 transition"
             >
               <Lock className="w-4 h-4" />
               <span>Close Shift</span>
@@ -227,7 +227,7 @@ export const ShiftCashDrawer: React.FC<{ currentUser: any }> = ({ currentUser })
           <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-5 shadow-xl space-y-4">
             <div className="flex justify-between items-start">
               <div>
-                <span className="px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 text-[10px] font-bold uppercase tracking-wider border border-emerald-500/40">
+                <span className="px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 text-[0.625rem] font-bold uppercase tracking-wider border border-emerald-500/40">
                   Register #1 Currently Open
                 </span>
                 <h3 className="text-base font-bold text-white mt-1.5">
@@ -239,7 +239,7 @@ export const ShiftCashDrawer: React.FC<{ currentUser: any }> = ({ currentUser })
               </div>
 
               <div className="text-right">
-                <span className="text-[10px] text-neutral-500 block uppercase font-bold">
+                <span className="text-[0.625rem] text-neutral-500 block uppercase font-bold">
                   Expected Drawer Cash
                 </span>
                 <span className="text-xl font-mono font-bold text-amber-400">
@@ -252,7 +252,7 @@ export const ShiftCashDrawer: React.FC<{ currentUser: any }> = ({ currentUser })
             {/* Metrics Breakdown Grid */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
               <div className="bg-neutral-850 p-3 rounded-xl border border-neutral-800 text-xs">
-                <span className="text-neutral-400 block text-[10px] uppercase font-semibold">
+                <span className="text-neutral-400 block text-[0.625rem] uppercase font-semibold">
                   Starting Float
                 </span>
                 <span className="text-white font-mono font-bold text-sm">
@@ -261,7 +261,7 @@ export const ShiftCashDrawer: React.FC<{ currentUser: any }> = ({ currentUser })
               </div>
 
               <div className="bg-neutral-850 p-3 rounded-xl border border-neutral-800 text-xs">
-                <span className="text-neutral-400 block text-[10px] uppercase font-semibold">
+                <span className="text-neutral-400 block text-[0.625rem] uppercase font-semibold">
                   Cash Sales Collected
                 </span>
                 <span className="text-emerald-400 font-mono font-bold text-sm">
@@ -270,7 +270,7 @@ export const ShiftCashDrawer: React.FC<{ currentUser: any }> = ({ currentUser })
               </div>
 
               <div className="bg-neutral-850 p-3 rounded-xl border border-neutral-800 text-xs">
-                  <span className="text-neutral-400 block text-[10px] uppercase font-semibold">
+                  <span className="text-neutral-400 block text-[0.625rem] uppercase font-semibold">
                     Mobile Money Sales
                   </span>
                 <span className="text-sky-400 font-mono font-bold text-sm">
@@ -279,7 +279,7 @@ export const ShiftCashDrawer: React.FC<{ currentUser: any }> = ({ currentUser })
               </div>
 
               <div className="bg-neutral-850 p-3 rounded-xl border border-neutral-800 text-xs">
-                <span className="text-neutral-400 block text-[10px] uppercase font-semibold">
+                <span className="text-neutral-400 block text-[0.625rem] uppercase font-semibold">
                   Total Cash Outflows
                 </span>
                 <span className="text-rose-400 font-mono font-bold text-sm">
@@ -305,7 +305,7 @@ export const ShiftCashDrawer: React.FC<{ currentUser: any }> = ({ currentUser })
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
-              <thead className="bg-neutral-850 text-neutral-400 uppercase text-[10px] tracking-wider border-b border-neutral-800">
+              <thead className="bg-neutral-850 text-neutral-400 uppercase text-[0.625rem] tracking-wider border-b border-neutral-800">
                 <tr>
                   <th className="px-4 py-3">Shift ID</th>
                   <th className="px-4 py-3">Cashier</th>
@@ -327,10 +327,10 @@ export const ShiftCashDrawer: React.FC<{ currentUser: any }> = ({ currentUser })
                     <tr key={s.id} className="hover:bg-neutral-850/50">
                       <td className="px-4 py-3 font-bold text-white">#{s.id}</td>
                       <td className="px-4 py-3 font-sans text-neutral-200">{s.userName}</td>
-                      <td className="px-4 py-3 text-neutral-400 text-[11px]">
+                      <td className="px-4 py-3 text-neutral-400 text-[0.6875rem]">
                         {new Date(s.openedAt).toLocaleDateString()} {new Date(s.openedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </td>
-                      <td className="px-4 py-3 text-neutral-400 text-[11px]">
+                      <td className="px-4 py-3 text-neutral-400 text-[0.6875rem]">
                         {s.closedAt ? new Date(s.closedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "Active"}
                       </td>
                       <td className="px-4 py-3 text-right">GH₵{Number(s.openingCash).toFixed(2)}</td>
@@ -353,7 +353,7 @@ export const ShiftCashDrawer: React.FC<{ currentUser: any }> = ({ currentUser })
                       </td>
                       <td className="px-4 py-3 font-sans capitalize">
                         <span
-                          className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
+                          className={`px-2 py-0.5 rounded-md text-[0.625rem] font-bold ${
                             isClosed
                               ? "bg-neutral-800 text-neutral-400"
                               : "bg-emerald-500/20 text-emerald-300"

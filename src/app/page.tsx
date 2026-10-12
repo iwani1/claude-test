@@ -23,6 +23,8 @@ import { OwnerDashboard } from "@/components/OwnerDashboard";
 import { MenuManager } from "@/components/MenuManager";
 import { saveMenuToCache, getCachedMenu } from "@/lib/offline-storage";
 import { ROLE_PERMISSIONS, UserRole } from "@/lib/permissions";
+import { readTicketDraft, clearTicketDraft } from "@/lib/active-ticket";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 
 /** Landing tab per role so each user starts on a screen they can actually use. */
 const DEFAULT_TAB: Record<UserRole, NavTab> = {
@@ -132,10 +134,29 @@ export default function App() {
    *  controls in the sidebar rail and the top bar, so a cashier can begin a
    *  sale from anywhere in the app without hunting for the till. Bumping the
    *  reset key forces the till to drop its previous ticket. */
-  const handleStartNewOrder = () => {
+  /* ------------------------------------------------------------------
+   *  "New Order" is reachable from the top bar and the sidebar, and it drops
+   *  whatever ticket the till is holding. When a ticket has items we ask
+   *  first — a misplaced finger should never silently destroy a sale. */
+  const [lostTicket, setLostTicket] = useState<{ items: number; total: number } | null>(null);
+
+  const beginNewOrder = () => {
+    clearTicketDraft(currentUser?.id ?? "anon");
     setActiveTableId(null);
     setPosResetKey((k) => k + 1);
     setActiveTab("pos");
+  };
+
+  const handleStartNewOrder = () => {
+    const draft = readTicketDraft<any>(currentUser?.id ?? "anon");
+    if (draft.length > 0) {
+      setLostTicket({
+        items: draft.length,
+        total: draft.reduce((sum, it) => sum + Number(it.totalPrice || 0), 0),
+      });
+      return;
+    }
+    beginNewOrder();
   };
 
   const handleOpenDrawer = () => setActiveTab("shifts");
@@ -299,6 +320,23 @@ export default function App() {
           {renderTab()}
         </main>
       </div>
+
+      <ConfirmDialog
+        open={!!lostTicket}
+        title="Start a new ticket?"
+        message={
+          lostTicket
+            ? `The current ticket has ${lostTicket.items} item${lostTicket.items === 1 ? "" : "s"} (GH₵${lostTicket.total.toFixed(2)}). Starting a new ticket discards it.`
+            : ""
+        }
+        cancelLabel="Keep the ticket"
+        confirmLabel="Discard & start new"
+        onCancel={() => setLostTicket(null)}
+        onConfirm={() => {
+          setLostTicket(null);
+          beginNewOrder();
+        }}
+      />
     </div>
   );
 }

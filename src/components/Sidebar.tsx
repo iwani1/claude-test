@@ -146,7 +146,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             title="Start a new order"
           >
             <Plus className="w-6 h-6 shrink-0" strokeWidth={3} />
-            {!isCollapsed && <span className="text-[15px]">New Order</span>}
+            {!isCollapsed && <span className="text-[0.9375rem]">New Order</span>}
           </button>
         </div>
       )}
@@ -159,7 +159,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {navSections.map((sec, sIdx) => (
           <div key={sIdx} className="space-y-1.5">
             {!isCollapsed && (
-              <div className="px-3 text-[10px] font-bold tracking-[0.12em] text-neutral-500 uppercase">
+              <div className="px-3 text-[0.625rem] font-bold tracking-[0.12em] text-neutral-500 uppercase">
                 {sec.title}
               </div>
             )}
@@ -191,10 +191,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   />
                   {!isCollapsed && (
                     <div className="flex-1 flex items-center justify-between text-left min-w-0">
-                      <span className="truncate text-[13.5px] font-semibold">{it.label}</span>
+                      <span className="truncate text-[0.84375rem] font-semibold">{it.label}</span>
                       {it.badge !== undefined && it.badge !== "" && (
                         <span
-                          className={`ml-2 shrink-0 text-[11px] px-2 py-0.5 rounded-full font-bold ${
+                          className={`ml-2 shrink-0 text-[0.6875rem] px-2 py-0.5 rounded-full font-bold ${
                             isActive
                               ? "bg-black/20 text-black"
                               : "bg-amber-500/10 text-amber-400 border border-amber-500/30"
@@ -220,15 +220,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {/* Footer Info */}
       {!isCollapsed ? (
         <div className="p-3.5 border-t border-neutral-800 bg-neutral-950/60 space-y-1">
-          <div className="flex items-center justify-between text-[11px]">
+          <div className="flex items-center justify-between text-[0.6875rem]">
             <span className="font-medium text-neutral-400">Lush View POS</span>
             <span className="text-emerald-400 font-semibold">GH₵ · GHS</span>
           </div>
-          <div className="text-[10px] text-neutral-600">v2.5.0 · Touch Terminal Build</div>
+          <div className="text-[0.625rem] text-neutral-600">v2.5.0 · Touch Terminal Build</div>
         </div>
       ) : (
         <div className="py-3 border-t border-neutral-800 bg-neutral-950/60 flex justify-center">
-          <span className="text-[10px] font-bold text-neutral-600">v2.5</span>
+          <span className="text-[0.625rem] font-bold text-neutral-600">v2.5</span>
         </div>
       )}
     </aside>

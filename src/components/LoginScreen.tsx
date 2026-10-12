@@ -99,7 +99,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onAuthenticated }) => 
             <div className="text-xs font-bold text-orange-300 uppercase tracking-wide">
               Kitchen Docket Hand-Off Workflow
             </div>
-            <div className="text-[11px] text-neutral-300 mt-1 leading-relaxed">
+            <div className="text-[0.6875rem] text-neutral-300 mt-1 leading-relaxed">
               Kitchen personnel operate without digital screens. Front-of-house staff print the thermal
               order docket immediately upon ticket creation and hand it to the kitchen line.
             </div>
@@ -116,13 +116,13 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onAuthenticated }) => 
                 className="p-3 rounded-xl bg-white/5 border border-white/10 backdrop-blur-sm"
               >
                 <div className="text-xs font-bold text-amber-400">{f.value}</div>
-                <div className="text-[10px] text-neutral-400 mt-0.5">{f.label}</div>
+                <div className="text-[0.625rem] text-neutral-400 mt-0.5">{f.label}</div>
               </div>
             ))}
           </div>
         </div>
 
-        <div className="relative z-10 text-[11px] text-neutral-500 flex items-center gap-1.5">
+        <div className="relative z-10 text-[0.6875rem] text-neutral-500 flex items-center gap-1.5">
           <ShieldCheck className="w-4 h-4 text-emerald-400" />
           <span>Scrypt password hashing &amp; signed, expiring sessions</span>
         </div>
@@ -138,7 +138,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onAuthenticated }) => 
             </div>
             <div>
               <div className="font-bold text-white">Lush View Hotel</div>
-              <div className="text-[11px] text-amber-400">Terminal Authentication</div>
+              <div className="text-[0.6875rem] text-amber-400">Terminal Authentication</div>
             </div>
           </div>
 
@@ -287,7 +287,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onAuthenticated }) => 
 
           {/* Security advisory */}
           <div className="pt-3 border-t border-neutral-800/80 text-center">
-            <p className="text-[11px] text-neutral-500">
+            <p className="text-[0.6875rem] text-neutral-500">
               Authorized personnel only. All access attempts and transactions are logged in the GRA-compliant security audit trail.
             </p>
           </div>

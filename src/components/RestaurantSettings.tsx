@@ -210,7 +210,7 @@ export const RestaurantSettings: React.FC = () => {
               <span>Room-Service Charge &amp; Complimentary Breakfast</span>
             </h3>
 
-            <div className="p-3 rounded-xl bg-sky-500/10 border border-sky-500/25 text-[11.5px] text-sky-100">
+            <div className="p-3 rounded-xl bg-sky-500/10 border border-sky-500/25 text-[0.71875rem] text-sky-100">
               A flat charge is added only when food is delivered to and eaten in a hotel room.
               Restaurant table dining, takeaway and delivery are never charged it. VAT is applied
               on top. Change the amount here and it takes effect on the very next room-service order.
@@ -229,7 +229,7 @@ export const RestaurantSettings: React.FC = () => {
                   onChange={(e) => setRoomCharge(e.target.value)}
                   className="w-full bg-neutral-800 border border-neutral-700 rounded-xl px-3 py-2.5 text-white font-mono font-bold text-base focus:outline-none focus:border-sky-500"
                 />
-                <p className="text-[10.5px] text-neutral-500 mt-1">
+                <p className="text-[0.65625rem] text-neutral-500 mt-1">
                   Currently GH₵{roomCharge || "0.00"} per room-service order. Set to 0.00 to disable.
                 </p>
               </div>
@@ -244,7 +244,7 @@ export const RestaurantSettings: React.FC = () => {
                       key={amt}
                       type="button"
                       onClick={() => setRoomCharge(`${amt}.00`)}
-                      className={`h-10 rounded-xl border font-bold text-[12px] transition ${
+                      className={`h-10 rounded-xl border font-bold text-[0.75rem] transition ${
                         Number(roomCharge) === Number(amt)
                           ? "bg-sky-500 border-sky-400 text-black"
                           : "bg-neutral-800 border-neutral-700 text-neutral-300 hover:bg-neutral-750"
@@ -254,7 +254,7 @@ export const RestaurantSettings: React.FC = () => {
                     </button>
                   ))}
                 </div>
-                <p className="text-[10.5px] text-neutral-500 mt-1.5">
+                <p className="text-[0.65625rem] text-neutral-500 mt-1.5">
                   Any value can be typed in the field above.
                 </p>
               </div>
