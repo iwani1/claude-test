@@ -109,7 +109,7 @@ what is still open, and what cannot be checked without hardware or the server.
 Re-run it with:
 
 ```sh
-npm run test:security      # 175 security + 78 pilot + 30 accounting checks
+npm run test:security      # 180 security + 78 pilot + 30 accounting checks
 npm run audit:responsive   # phone/tablet/laptop layout rules
 npm run audit:workflows    # failure-feedback, money-guard and schema-guard rules
 ```
@@ -121,6 +121,11 @@ command that fixes it (`npm run db:migrate`). Everything else keeps working, so 
 half-applied deploy degrades the till rather than stopping the venue.
 `scripts/audit-workflows.py` fails when a migration adds a column that
 `src/lib/schema-guard.ts` does not list.
+
+A database the app cannot *reach* at all is named too, so it never reads as a
+wrong password: `/api/health` answers `{"ok":false,"reason":"database-unreachable"}`
+and sign-in explains that the server's own connection is down (verified against
+a wrong password and a stopped service).
 
 ### Editing a saved order (owner only)
 

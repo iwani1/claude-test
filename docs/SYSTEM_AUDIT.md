@@ -14,7 +14,7 @@ not from the production server, not with a browser, not with hardware.
 
 | Method | What it covered |
 |---|---|
-| `npm run test:security` | 175 security (including a stale-database scenario and staff removal) + 78 pilot + 30 accounting checks against a disposable database and a production build |
+| `npm run test:security` | 180 security (including a stale-database scenario and staff removal) + 78 pilot + 30 accounting checks against a disposable database and a production build |
 | `npm run audit:responsive` | 28 components + 2 app files: tables scroll or become cards, dialogs scroll, no `h-screen`/`w-screen`, no unguarded fixed widths |
 | `npm run audit:workflows` | **new** — swallowed failures in client code, fetches parsed without a status check, money routes without an idempotency guard, routes without a permission check, tables without a phone view |
 | Route sweep | all 27 route handlers read for permission gates, error envelopes and money/stock writes |
@@ -227,6 +227,37 @@ catalogue (`columnExists`) *before* choosing which query to run, because asking
 never fails. On the un-migrated preview the list then answered `200` with all
 fifteen accounts while the removal itself answered `503` naming
 `users.deleted_at` and the `npm run db:migrate` command.
+
+## Final pass before cutover, 13 October
+
+Re-run end to end on the release the venue is getting:
+
+| Check | Result |
+|---|---|
+| `npm run test:security` | **180 security / 78 pilot / 30 accounting**, exit 0 (fresh database, production build, RLS enforced) |
+| `npm run audit:workflows` | 0 failures, 27 warnings, 56 advisories — unchanged baseline |
+| `npm run audit:responsive` | 0 failures, 0 warnings |
+| `tsc --noEmit`, `eslint` | clean |
+| Live walkthrough (preview, real imported data) | 23/23 — every screen, then the money cycle: sale → partial cash payment → refund → erase → stock restored → drawer closed flat |
+| Staff removal, live | 25/25 — employee with a sale and an open till removed by the owner; sign-in and the live session die; the sale keeps the name; activity log written; rehire works on the freed email and PIN |
+| Concurrent removal of the same account | one `200`, one `409` — the row lock and the tombstone check hold under a double tap |
+| Cross-branch removal attempt | `404` (RLS hides the row) |
+
+**Found and fixed in this pass:** a database the app cannot reach was answered
+with `{"error":"Request failed"}` — indistinguishable from a wrong password, and
+on 12 October that sent the owner hunting for a password reset while the till was
+down for a different reason (a `.env`/role password mismatch made by the
+deployment steps themselves). The app now names it: `503` with *"The server
+cannot reach its database: the database rejected the app's login (not your
+password — this is the app's own connection)…"*, or *"the database service is not
+answering"* when PostgreSQL is stopped; `/api/health` answers
+`{"ok":false,"reason":"database-unreachable"}` and the server log line carries the
+driver code. Proven against real broken configurations (a wrong password and a
+closed port), not by inspection. 5 new checks.
+
+**Re-stated, not softened:** nothing here proves the thermal printer, the cash
+drawer hardware, MoMo settlement timing, or a real GRA filing — those need the
+venue and the people in it. See "Cannot be verified here".
 
 ## Live environment smoke (every screen)
 

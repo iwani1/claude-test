@@ -4,6 +4,7 @@ import { readFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { createHmac, randomUUID } from "node:crypto";
 import { createToken, verifyToken } from "../src/lib/auth";
+import { databaseUnreachableMessage } from "../src/lib/schema-guard";
 const base = "http://127.0.0.1:3100";
 const admin = new Pool({ connectionString: process.env.TEST_ADMIN_URL });
 let checks = 0;
@@ -179,6 +180,16 @@ async function main() {
   ]);
   check(branchWrites[0].body.order.branchId === 1 && branchWrites[1].body.order.branchId === 2, "parallel requests do not leak branch context");
   check((await request("/api/staff", "POST", { action: "toggle_active", userId: 7, isActive: false }, owner)).status === 404, "owner cannot change staff in another branch");
+  check((await request("/api/staff", "POST", { action: "delete_user", userId: 7 }, owner)).status === 404, "owner cannot remove staff in another branch");
+
+  // A database outage must never read as a password problem: on 12 October a
+  // .env/role mismatch answered "Request failed" everywhere, and the owner
+  // asked how to reset the admin password. The messages are pure functions,
+  // so they are asserted directly.
+  check(/rejected the app's login/i.test(String(databaseUnreachableMessage("28P01", 'password authentication failed for user "pos_runtime"'))), "a refused database login is explained as the app's connection, not the user's password");
+  check(/does not exist/i.test(String(databaseUnreachableMessage("3D000", 'database "pos" does not exist'))), "a missing database is named as such");
+  check(/not answering/i.test(String(databaseUnreachableMessage("ECONNREFUSED", "connect ECONNREFUSED 127.0.0.1:5432"))), "a database service that is down is named as such");
+  check(databaseUnreachableMessage("42703", 'column "x" does not exist') === null && databaseUnreachableMessage("23505", "duplicate key value violates unique constraint") === null, "ordinary query errors are not mislabelled as connection failures");
 
   // Removing a staff account: the owner takes away the ability to sign in, the
   // roster stops showing the account, and the sales that person made keep the

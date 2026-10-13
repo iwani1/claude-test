@@ -72,6 +72,31 @@ export function schemaDriftMessage(code: string, detail: string): string | null 
   return null;
 }
 
+/**
+ * Turn "the app cannot reach its own database" into instructions. This is the
+ * connection failing, not a query: the budget of the person reading it is that
+ * they cannot sign in, and the wrong fix (hunting for a password reset) costs
+ * an evening. Seen in the wild on 12 October: a .env/role password mismatch
+ * left every screen answering "Request failed", and the owner asked how to
+ * reset the admin password.
+ */
+export function databaseUnreachableMessage(code: string, detail: string): string | null {
+  const signal = `${code} ${detail}`;
+  if (/28P01|password authentication failed/i.test(signal)) {
+    return "The server cannot reach its database: the database rejected the app's login (not your password — this is the app's own connection). Nothing was saved. An operator should make the password in DATABASE_URL match the database role's, then restart the app.";
+  }
+  if (/3D000|database "[^"]*" does not exist/i.test(signal)) {
+    return "The server cannot reach its database: that database name does not exist on the server. An operator should check DATABASE_URL in the app's environment.";
+  }
+  if (/ECONNREFUSED|57P03|the database system is starting up/i.test(signal)) {
+    return "The server cannot reach its database: the database service is not answering. Nothing was saved. An operator should check that PostgreSQL is running, then try again.";
+  }
+  if (/ETIMEDOUT|ENOTFOUND|EAI_AGAIN|08006|08001/i.test(signal)) {
+    return "The server cannot reach its database: the database host did not respond. Nothing was saved. An operator should check the server and DATABASE_URL.";
+  }
+  return null;
+}
+
 /** Anything that can run SQL: the connection pool, or the request's transaction. */
 export type Executor = { execute: (query: ReturnType<typeof sql>) => Promise<{ rows: Array<Record<string, unknown>> }> };
 

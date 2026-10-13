@@ -6,7 +6,7 @@ import { rootDb, requestContext, Transaction } from "@/db";
 import { users, branches } from "@/db/schema";
 import { authSecret, hasTerminalAccess, ROLE_PERMISSIONS, SessionUser, UserRole, verifyToken } from "./auth";
 import type { Permission } from "./guard";
-import { schemaDriftMessage } from "./schema-guard";
+import { databaseUnreachableMessage, schemaDriftMessage } from "./schema-guard";
 export class ApiError extends Error {
   constructor(public status: number, message: string) { super(message); }
 }
@@ -95,6 +95,10 @@ export function secureRoute(handler: Handler, permission: Permission | "session"
       // instructions instead of "Request failed".
       const drift = driver.code ? schemaDriftMessage(String(driver.code), String(driver.message || detail)) : null;
       if (drift) return errorResponse({ error: drift }, 503);
+      // The app could not reach its database at all: that is the operator's
+      // problem, not the user's, and it must not read as a wrong password.
+      const unreachable = databaseUnreachableMessage(String(driver.code || ""), String(driver.message || detail));
+      if (unreachable) return errorResponse({ error: unreachable }, 503);
       if (driver.code === "23505" || /duplicate key/i.test(detail)) {
         const label = /pin/i.test(detail) ? "That PIN is already used by another staff member in this branch. Choose a different PIN."
           : /email/i.test(detail) ? "That email is already registered."

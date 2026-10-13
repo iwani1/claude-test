@@ -32,7 +32,12 @@ export async function GET() {
       );
     }
     return Response.json({ ok: true, commit: COMMIT, ...place }, { headers: NO_STORE });
-  } catch {
-    return Response.json({ ok: false, commit: COMMIT }, { status: 500, headers: NO_STORE });
+  } catch (err) {
+    // Name it: a missing database is not the same failure as an app that never
+    // started, and the deploy script and the operator both read this.
+    const code = (() => { for (let node: any = err, depth = 0; node && depth < 5; node = node.cause, depth++) { if (node.code) return String(node.code); } return ""; })();
+    console.error(`Health check failed on ${COMMIT}: ${code || (err as any)?.message}`);
+    return Response.json({ ok: false, reason: "database-unreachable", commit: COMMIT },
+      { status: 503, headers: NO_STORE });
   }
 }
