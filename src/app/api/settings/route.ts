@@ -48,6 +48,12 @@ async function handlePOST(req: Request) {
       }
     }
 
+    // Saving a valid VAT rate is the owner's confirmation; until then the till refuses sales.
+    const savedRate = restaurantData?.defaultTaxRate;
+    if (savedRate !== undefined && savedRate !== "" && Number.isFinite(Number(savedRate)) && Number(savedRate) >= 0 && Number(savedRate) <= 100) {
+      await db.update(applicationSettings).set({ value: "true", updatedAt: new Date() }).where(eq(applicationSettings.key, "tax_rate_confirmed"));
+    }
+
     if (settingsData && typeof settingsData === "object") {
       for (const [key, value] of Object.entries(settingsData)) {
         const [existing] = await db.select().from(applicationSettings).where(eq(applicationSettings.key, key)).limit(1);

@@ -10,16 +10,26 @@ import {
   auditLogs,
   menuItems,
   modifierOptions,
+  applicationSettings,
 } from "@/db/schema";
-import { eq, desc, inArray, sql } from "drizzle-orm";
+import { and, eq, desc, inArray, sql } from "drizzle-orm";
 import { deductStockForOrder } from "@/lib/inventory-deduction";
 import { requireSession } from "@/lib/guard";
 import { loadBillingConfig, priceOrder, fromCents } from "@/lib/pricing";
+
+/** Settings key: "false" from the seed until the owner saves a VAT rate. */
+export const TAX_RATE_CONFIRMED = "tax_rate_confirmed";
 
 export async function createOrder(req: Request) {
   try {
     const guard = await requireSession();
     if (!guard.ok) return guard.response;
+
+    // A new installation is seeded with its VAT rate unconfirmed. No sale may be
+    // rung up until the owner has saved the rate in Settings.
+    const [unconfirmedTax] = await db.select({ id: applicationSettings.id }).from(applicationSettings)
+      .where(and(eq(applicationSettings.key, TAX_RATE_CONFIRMED), eq(applicationSettings.value, "false"))).limit(1);
+    if (unconfirmedTax) return NextResponse.json({ error: "Save the VAT rate in Settings before selling." }, { status: 409 });
 
     const body = await req.json();
     const {

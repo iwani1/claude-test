@@ -33,6 +33,7 @@ async function routes(dir: string): Promise<string[]> {
   }
   return files;
 }
+const counter = async (key: string) => Number((await admin.query("SELECT count FROM auth_attempts WHERE key=$1 AND reset_at > now()", [key])).rows[0]?.count ?? 0);
 const order = (key: string, extra = {}) => ({ idempotencyKey: key, orderType: "takeaway", items: [{ menuItemId: 1, quantity: 1 }], ...extra });
 async function main() {
   await (await import("./offline-storage")).testOfflineStorage();
@@ -146,10 +147,16 @@ async function main() {
   check(pay.filter(r => r.status === 200).length === 1 && pay.filter(r => r.status === 409).length === 1, "concurrent payments cannot overpay");
   check(Number((await admin.query("SELECT sum(amount) AS amount FROM payments WHERE order_id=$1", [id])).rows[0].amount) === 10, "split payment ledger equals sale total");
   for (const amount of ["-1", "0", "NaN", "0.001", "1e2"]) check((await request(`/api/orders/${id}/refund`, "POST", { amount, reason: "Test", managerPin: "2222" }, cashier)).status === 400, `refund rejects ${amount}`);
+  await admin.query("DELETE FROM auth_attempts WHERE key='refund:branch:1'");
   check((await request(`/api/orders/${id}/refund`, "POST", { amount: "1", reason: "Test", managerPin: "8888" }, cashier)).status === 403, "other-branch manager cannot authorize refund");
+  check((await counter("refund:branch:1")) === 1, "a wrong manager PIN counts once against the refund key");
   check((await request(`/api/orders/${id}/refund`, "POST", { amount: "4", reason: "Partial", managerPin: "2222", returnStock: true }, cashier)).status === 400, "partial refund cannot restore all stock");
   const partial = await request(`/api/orders/${id}/refund`, "POST", { amount: "4", reason: "Partial", managerPin: "2222" }, cashier);
   check(partial.status === 200, "partial refund succeeds");
+  check((await counter("refund:branch:1")) === 1, "an approved refund is not counted against the refund key");
+  await admin.query("UPDATE auth_attempts SET count=10, reset_at=now()+interval '15 minutes' WHERE key='refund:branch:1'");
+  check((await request(`/api/orders/${id}/refund`, "POST", { amount: "1", reason: "Test", managerPin: "2222" }, cashier)).status === 429, "a locked refund key refuses even a valid manager approval");
+  await admin.query("DELETE FROM auth_attempts WHERE key='refund:branch:1'");
   check((await admin.query("SELECT payment_status FROM orders WHERE id=$1", [id])).rows[0].payment_status === "partially_refunded", "partial refund preserves distinct state");
   // Change recipe after sale: restoration must use original ledger.
   await admin.query("UPDATE recipe_ingredients SET quantity=9 WHERE recipe_id=1");
@@ -264,6 +271,18 @@ async function main() {
   let limited = 0;
   for (let i=0; i<11; i++) limited = (await request("/api/auth/login", "POST", { email: "unknown@test.invalid", password: "wrong" })).status;
   check(limited === 429, "login throttling persists across failed request rollbacks");
+  // Only wrong credentials count. Successful sign-ins never lock a busy venue out,
+  // and a locked account refuses even the right password until the window passes.
+  const ownerLogin = { email: "user1@test.invalid", password: "Test-password-only-123!" };
+  await admin.query("DELETE FROM auth_attempts WHERE key='email:user1@test.invalid'");
+  let successes = 0;
+  for (let i = 0; i < 12; i++) if ((await request("/api/auth/login", "POST", ownerLogin)).status === 200) successes++;
+  check(successes === 12 && (await counter("email:user1@test.invalid")) === 0, "twelve successful sign-ins are never throttled or counted");
+  check((await request("/api/auth/login", "POST", { ...ownerLogin, password: "wrong-password-123" })).status === 401 && (await counter("email:user1@test.invalid")) === 1, "a wrong password counts once");
+  await admin.query("UPDATE auth_attempts SET count=10, reset_at=now()+interval '15 minutes' WHERE key='email:user1@test.invalid'");
+  check((await request("/api/auth/login", "POST", ownerLogin)).status === 429, "a locked account refuses the right password");
+  await admin.query("DELETE FROM auth_attempts WHERE key='email:user1@test.invalid'");
+  check((await request("/api/auth/login", "POST", ownerLogin)).status === 200, "the account opens again once the lock is cleared");
   const runtime = new Pool({ connectionString: process.env.DATABASE_URL });
   try { check((await runtime.query("SELECT * FROM orders")).rowCount === 0, "runtime DB connection without request scope sees no orders"); } finally { await runtime.end(); }
   // --- A database that has not been migrated must say so, not fail randomly --
@@ -271,6 +290,15 @@ async function main() {
   // code expected a column the database did not have yet. The app now names the
   // missing update, and /api/health reports it, so a stale environment is
   // diagnosable from the first request instead of from a log hunt.
+  // A seeded installation refuses sales until the owner saves the VAT rate.
+  await admin.query("INSERT INTO application_settings(branch_id,key,value) VALUES(1,'tax_rate_confirmed','false')");
+  const unconfirmed = await request("/api/orders", "POST", order("tax-unconfirmed"), owner);
+  check(unconfirmed.status === 409 && /VAT rate/.test(String(unconfirmed.body.error)), "a sale is refused until the VAT rate has been saved");
+  check((await admin.query("SELECT count(*)::int AS n FROM orders WHERE idempotency_key='tax-unconfirmed'")).rows[0].n === 0, "the refused sale leaves no order behind");
+  const restaurant = (await request("/api/settings", "GET", undefined, owner)).body.restaurant;
+  check((await request("/api/settings", "POST", { restaurantData: restaurant }, owner)).status === 200, "the owner saves the VAT rate in Settings");
+  check((await admin.query("SELECT value FROM application_settings WHERE branch_id=1 AND key='tax_rate_confirmed'")).rows[0].value === "true", "saving the rate confirms it");
+  check((await request("/api/orders", "POST", order("tax-confirmed"), owner)).status === 200, "a sale rings up once the rate is saved");
   const beforeDrift = await request("/api/orders", "POST", order("drift-probe"), owner);
   check(beforeDrift.status === 200, "order created before the drift");
   const driftId = beforeDrift.body.order.id;

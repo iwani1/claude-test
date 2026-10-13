@@ -312,7 +312,7 @@ over HTTPS; don't test logins over plain HTTP.
 ## Phase 9 — First-run business setup (with your accountant)
 
 1. Sign in with the bootstrap owner email/password.
-2. Configure **tax rates** with your accountant (initial rate is deliberately 0%).
+2. Configure **tax rates** with your accountant. A new install starts at 15% and refuses sales until the rate is saved in Settings, so save it deliberately after checking it.
 3. Create branches/staff, menu categories/items, recipes and opening stock.
 4. Set each user's branch and role; enroll manager PINs for refund approvals.
 5. Work through `docs/PILOT_RUNBOOK.md` before trading real money.
@@ -463,7 +463,7 @@ Notes
 | `EADDRINUSE` | Another process on port 3000: `ss -lntp \| grep 3000` |
 | nginx `502 Bad Gateway` | `systemctl status pos`, `journalctl -u pos -n 50` |
 | Login works on server but not from browsers | `APP_ORIGIN` mismatch or not HTTPS |
-| `429 Too many attempts` | Login/refund throttles are working; wait 15 minutes |
+| `429 Too many attempts` | Too many wrong passwords, PINs, or manager PINs; correct sign-ins are never throttled. Wait 15 minutes |
 | A deploy stopped half-way | Re-run `sudo ./scripts/deploy-vps.sh`; it sees `/var/backups/pos/deploy-incomplete` and finishes the job |
 | Some operations answer 503 *"The database is missing an update this version needs (…)"* (the rest of the till keeps working) | The code is newer than the database. Run `sudo -E -u pos env MIGRATION_DATABASE_URL='postgresql://pos_owner:…@127.0.0.1:5432/pos' npm run db:migrate` in `/opt/pos`, then `systemctl restart pos`. `/api/health` reports the same thing as `{"ok":false,"reason":"schema-behind"}` |
 | `scripts/deploy-vps.sh` stops with *"The app is up but the database is behind this release — do not roll the code back"* | The fetched release needs its migrations and they were not applied (for example the checkout already held the new migration file, so the run saw no *new* file to gate on). Run the `db:migrate` command it prints, then `sudo systemctl restart pos` |

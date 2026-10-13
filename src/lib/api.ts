@@ -137,13 +137,19 @@ export function secureRoute(handler: Handler, permission: Permission | "session"
   };
 }
 const rateDb = drizzle(new Pool({ connectionString: process.env.DATABASE_URL, max: 2 }));
-// Counters commit independently of a rejected login's request transaction.
-export async function rateLimit(key: string, maximum = 10) {
-  const result = await rateDb.execute(sql`
-    insert into auth_attempts (key, count, reset_at) values (${key}, 1, now() + interval '15 minutes')
+// Counters commit on their own connection, so a failure survives the rollback
+// of the rejected request that caused it.
+/** Refuses when `key` has already failed `maximum` times in the current window.
+ *  Successful attempts are never counted, so a correct PIN or password is never
+ *  throttled by earlier successes. */
+export async function assertNotThrottled(key: string, maximum = 10) {
+  const result = await rateDb.execute(sql`select count from auth_attempts where key = ${key} and reset_at > now()`);
+  if (result.rows[0] && Number(result.rows[0].count) >= maximum) throw new ApiError(429, "Too many attempts. Try again in 15 minutes.");
+}
+/** Records one failed attempt against `key`. Call it only for a wrong credential. */
+export async function recordFailedAttempt(key: string) {
+  await rateDb.execute(sql`insert into auth_attempts (key, count, reset_at) values (${key}, 1, now() + interval '15 minutes')
     on conflict (key) do update set
       count = case when auth_attempts.reset_at <= now() then 1 else auth_attempts.count + 1 end,
-      reset_at = case when auth_attempts.reset_at <= now() then now() + interval '15 minutes' else auth_attempts.reset_at end
-    returning count`);
-  if (Number(result.rows[0].count) > maximum) throw new ApiError(429, "Too many attempts. Try again in 15 minutes.");
+      reset_at = case when auth_attempts.reset_at <= now() then now() + interval '15 minutes' else auth_attempts.reset_at end`);
 }
