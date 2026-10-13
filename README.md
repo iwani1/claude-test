@@ -136,9 +136,9 @@ every push and pull request — the release-archive check, lint, typecheck, both
 static audits, the legacy-import test, the full security suite and a
 production-dependency audit — so a regression is caught on the branch rather than
 on the till. The archive check is built for the way CI runs: a branch merged with
-`main`, where the owner's uploaded database backup lives. Data files (`.db`,
-`.sqlite`, `.dump`) are never packaged and never required, but any other new file
-still makes a stale archive fail.
+`main`, which is where the owner's uploaded database backup has lived. Data files
+(`.db`, `.sqlite`, `.dump`) are never packaged and never required, but any other
+new file still makes a stale archive fail.
 
 The app reports a database that has not run this version's migrations instead of
 failing obscurely: `/api/health` answers `{"ok":false,"reason":"schema-behind"}`

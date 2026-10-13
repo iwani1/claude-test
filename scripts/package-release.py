@@ -3,11 +3,12 @@
 The archive is the source of the application and nothing else: never secrets
 (`.env`), never other ZIPs, and never a database dump. The owner's repository
 also carries the legacy business backup (`2026-10-12_restpos.db`, uploaded to
-`main` by hand) and releases are always built from a branch merged with `main`,
-so a dump that was merely sitting in the repository used to land in the release
-archive — and, once it did, the file-list check below failed on every CI run
-before a single test could start. Data files are skipped here, and the check
-compares against exactly the same list.
+`main` by hand on 12 October 2026) and releases are always built from a branch
+merged with `main`, so a dump that was merely sitting in the repository used to
+land in the release archive — and, once it did, the file-list check below failed
+on every CI run before a single test could start. Data files are skipped here and
+the check compares against exactly the same list, so a backup in the repository
+can neither ship inside a release nor break the build.
 """
 from pathlib import Path
 import subprocess
