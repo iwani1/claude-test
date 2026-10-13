@@ -1,5 +1,5 @@
 import { createOrder } from "@/lib/create-order";
-import { secureRoute } from "@/lib/api";
+import { secureRoute, isDatabaseFailure } from "@/lib/api";
 import { NextResponse } from "next/server";
 import { db, requestContext } from "@/db";
 import {
@@ -49,6 +49,7 @@ async function handleGET(req: Request) {
 
     return NextResponse.json({ orders: populatedOrders, total: Number(total) });
   } catch (err: any) {
+    if (isDatabaseFailure(err)) throw err;
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }

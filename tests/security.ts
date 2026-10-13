@@ -282,6 +282,13 @@ async function main() {
   check(driftedDelete.status === 503, `the work that needs the missing column answers 503, not a mystery 500 (${driftedDelete.status})`);
   check(/idempotency_key/.test(String(driftedDelete.body.error)) && /db:migrate/.test(String(driftedDelete.body.error)), "the refusal names the missing column and the command that fixes it");
   check(driftedDelete.headers.get("cache-control") === "no-store", "and the 503 itself is never cached");
+  // The pay route catches its own errors, so it used to hide this explanation
+  // behind "Could not record the payment". A refused payment must name the
+  // missing column and take no money.
+  const driftedPay = await request(`/api/orders/${driftSale.body.order.id}/pay`, "POST", { amount: "1.00", paymentMethod: "cash", cashTendered: "1.00", idempotencyKey: "drift-pay-probe-1" }, owner);
+  check(driftedPay.status === 503, `a payment during the drift answers 503, not a generic 500 (${driftedPay.status})`);
+  check(/idempotency_key/.test(String(driftedPay.body.error)) && /db:migrate/.test(String(driftedPay.body.error)), "the payment refusal names the missing column and the command that fixes it");
+  check(Number((await admin.query("SELECT paid_amount FROM orders WHERE id=$1", [driftSale.body.order.id])).rows[0].paid_amount) === 0, "the refused payment took no money");
   const driftedHealth = await request("/api/health");
   check(driftedHealth.status === 503 && driftedHealth.body.reason === "schema-behind" && (driftedHealth.body.missing || []).includes("payments.idempotency_key"), "health reports the schema gap for the deploy gate and the operator");
   await admin.query(await readFile("migrations/0004_payment_idempotency.sql", "utf8"));

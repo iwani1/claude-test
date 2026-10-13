@@ -1,4 +1,4 @@
-import { secureRoute } from "@/lib/api";
+import { secureRoute, isDatabaseFailure } from "@/lib/api";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { suppliers, auditLogs } from "@/db/schema";
@@ -9,6 +9,7 @@ async function handleGET() {
     const list = await db.select().from(suppliers).orderBy(asc(suppliers.name));
     return NextResponse.json({ suppliers: list });
   } catch (err: any) {
+    if (isDatabaseFailure(err)) throw err;
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
@@ -44,6 +45,7 @@ async function handlePOST(req: Request) {
 
     return NextResponse.json({ success: true, supplier: newSup });
   } catch (err: any) {
+    if (isDatabaseFailure(err)) throw err;
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }

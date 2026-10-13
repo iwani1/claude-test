@@ -1,4 +1,4 @@
-import { secureRoute, ApiError } from "@/lib/api";
+import { secureRoute, ApiError, isDatabaseFailure } from "@/lib/api";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { orders, orderItems, diningTables, auditLogs, stockMovements, ingredients, refunds, payments, kitchenTickets, shifts, drawerMovements } from "@/db/schema";
@@ -25,6 +25,7 @@ async function handleGET(req: Request, { params }: { params: Promise<{ id: strin
 
     return NextResponse.json({ order: { ...order, items, refundedAmount: fromCents(refundedCents) } });
   } catch (err: any) {
+    if (isDatabaseFailure(err)) throw err;
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
@@ -80,6 +81,7 @@ async function handlePATCH(req: Request, { params }: { params: Promise<{ id: str
 
     return NextResponse.json({ success: true, order: updatedOrder });
   } catch (err: any) {
+    if (isDatabaseFailure(err)) throw err;
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }

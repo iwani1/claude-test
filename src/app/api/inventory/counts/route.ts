@@ -1,4 +1,4 @@
-import { secureRoute } from "@/lib/api";
+import { secureRoute, isDatabaseFailure } from "@/lib/api";
 import { NextResponse } from "next/server";
 import { db, requestContext } from "@/db";
 import { stockCounts, ingredients, stockMovements, auditLogs } from "@/db/schema";
@@ -9,6 +9,7 @@ async function handleGET() {
     const counts = await db.select().from(stockCounts).orderBy(desc(stockCounts.countDate)).limit(20);
     return NextResponse.json({ counts });
   } catch (err: any) {
+    if (isDatabaseFailure(err)) throw err;
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
@@ -73,6 +74,7 @@ async function handlePOST(req: Request) {
 
     return NextResponse.json({ success: true, count: newCount });
   } catch (err: any) {
+    if (isDatabaseFailure(err)) throw err;
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }

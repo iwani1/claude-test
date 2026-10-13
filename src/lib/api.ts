@@ -24,6 +24,19 @@ function driverError(err: unknown): any {
   }
   return {};
 }
+/** A database failure the wrapper can explain: a stale schema, a database that
+ *  cannot be reached, or a constraint. A handler that catches its own errors
+ *  must rethrow these — otherwise its generic message replaces the explanation
+ *  (the migration command, the wrong database login, the duplicate field). */
+export function isDatabaseFailure(err: unknown): boolean {
+  const driver: any = driverError(err);
+  if (!driver.code) return false;
+  const code = String(driver.code);
+  const message = String(driver.message || "");
+  return ["23505", "23503", "23514"].includes(code) ||
+    schemaDriftMessage(code, message) !== null ||
+    databaseUnreachableMessage(code, message) !== null;
+}
 /** Every API answer is uncacheable — including failures. A cached 503 or 401
  *  once made a repaired system look broken for an hour, to the browser and to
  *  whoever was checking it. */

@@ -1,5 +1,5 @@
 import { collectionSummary, reportWindow } from "@/lib/collection-report";
-import { secureRoute, ApiError } from "@/lib/api";
+import { secureRoute, ApiError, isDatabaseFailure } from "@/lib/api";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import {
@@ -152,6 +152,7 @@ async function handleGET(req: Request) {
       })),
     });
   } catch (err: any) {
+    if (isDatabaseFailure(err)) throw err;
     if (err instanceof ApiError) throw err;
     return NextResponse.json({ error: err.message }, { status: 500 });
   }

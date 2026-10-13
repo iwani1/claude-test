@@ -1,4 +1,4 @@
-import { secureRoute, ApiError } from "@/lib/api";
+import { secureRoute, ApiError, isDatabaseFailure } from "@/lib/api";
 import { moneyCents } from "@/lib/money";
 import { NextResponse } from "next/server";
 import { db, requestContext } from "@/db";
@@ -36,6 +36,7 @@ async function handleGET() {
       drawerMovements: movements,
     });
   } catch (err: any) {
+    if (isDatabaseFailure(err)) throw err;
     if (err instanceof ApiError) throw err;
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
@@ -183,6 +184,7 @@ async function handlePOST(req: Request) {
 
     return NextResponse.json({ error: "Invalid action" }, { status: 400 });
   } catch (err: any) {
+    if (isDatabaseFailure(err)) throw err;
     if (err instanceof ApiError) throw err;
     return NextResponse.json({ error: err.message }, { status: 500 });
   }

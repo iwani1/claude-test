@@ -14,7 +14,7 @@ not from the production server, not with a browser, not with hardware.
 
 | Method | What it covered |
 |---|---|
-| `npm run test:security` | 199 security (including a stale-database scenario, staff removal and the read-only finance role) + 78 pilot + 30 accounting checks against a disposable database and a production build |
+| `npm run test:security` | 202 security (including a stale-database scenario, staff removal and the read-only finance role) + 78 pilot + 30 accounting checks against a disposable database and a production build |
 | `npm run audit:responsive` | 28 components + 2 app files: tables scroll or become cards, dialogs scroll, no `h-screen`/`w-screen`, no unguarded fixed widths |
 | `npm run audit:workflows` | **new** — swallowed failures in client code, fetches parsed without a status check, money routes without an idempotency guard, routes without a permission check, tables without a phone view |
 | Route sweep | all 27 route handlers read for permission gates, error envelopes and money/stock writes |
@@ -234,7 +234,7 @@ Re-run end to end on the release the venue is getting:
 
 | Check | Result |
 |---|---|
-| `npm run test:security` | **199 security / 78 pilot / 30 accounting**, exit 0 (fresh database, production build, RLS enforced) |
+| `npm run test:security` | **202 security / 78 pilot / 30 accounting**, exit 0 (fresh database, production build, RLS enforced) |
 | `npm run audit:workflows` | 0 failures, 27 warnings, 56 advisories — unchanged baseline |
 | `npm run audit:responsive` | 0 failures, 0 warnings |
 | `tsc --noEmit`, `eslint` | clean |
@@ -337,7 +337,7 @@ drawer. **23/23 pass** after the fixes above.
 ```sh
 # all of the commands below also run in CI on every push:
 #   .github/workflows/security.yml
-npm run test:security      # 199 + 78 + 30 checks, disposable database, production build
+npm run test:security      # 202 + 78 + 30 checks, disposable database, production build
 npm run audit:responsive   # layout rules, exits 1 on a regression
 npm run audit:workflows    # feedback/money-guard rules, exits 1 on a regression
 npx eslint src tests scripts --max-warnings=0

@@ -1,4 +1,4 @@
-import { ApiError } from "@/lib/api";
+import { ApiError, isDatabaseFailure } from "@/lib/api";
 import { createHash, randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { db, requestContext } from "@/db";
@@ -351,6 +351,7 @@ export async function createOrder(req: Request) {
       },
     });
   } catch (err: any) {
+    if (isDatabaseFailure(err)) throw err;
     // Validation failures thrown while resolving menu prices are client errors.
     if (err instanceof ApiError) throw err;
     if (err?.statusCode === 400) {

@@ -1,4 +1,4 @@
-import { secureRoute } from "@/lib/api";
+import { secureRoute, isDatabaseFailure } from "@/lib/api";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { auditLogs } from "@/db/schema";
@@ -18,6 +18,7 @@ async function handleGET(req: Request) {
     const logs = await db.select().from(auditLogs).orderBy(desc(auditLogs.createdAt)).limit(limit);
     return NextResponse.json({ logs });
   } catch (err: any) {
+    if (isDatabaseFailure(err)) throw err;
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
