@@ -19,6 +19,8 @@ import {
   UserCheck,
 } from "lucide-react";
 import { ROLE_PERMISSIONS, UserRole } from "@/lib/permissions";
+import { apiErrorMessage, apiFetch } from "@/lib/api-client";
+import { notify } from "@/lib/notify";
 
 export const StaffManager: React.FC<{ currentUser?: any }> = ({ currentUser }) => {
   const [staff, setStaff] = useState<any[]>([]);
@@ -61,7 +63,7 @@ export const StaffManager: React.FC<{ currentUser?: any }> = ({ currentUser }) =
   const handleAddEmployee = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const res = await fetch("/api/staff", {
+      const data = await apiFetch("/api/staff", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -74,7 +76,6 @@ export const StaffManager: React.FC<{ currentUser?: any }> = ({ currentUser }) =
           phone,
         }),
       });
-      const data = await res.json();
       if (data.success) {
         setShowAddModal(false);
         setName("");
@@ -86,7 +87,7 @@ export const StaffManager: React.FC<{ currentUser?: any }> = ({ currentUser }) =
       } else { setError(data.error || "Staff update failed"); }
     } catch (e) {
       console.error(e);
-      setError("Could not reach the server. Please try again.");
+      setError(apiErrorMessage(e, "Could not reach the server. Please try again."));
     }
   };
 
@@ -94,7 +95,7 @@ export const StaffManager: React.FC<{ currentUser?: any }> = ({ currentUser }) =
     e.preventDefault();
     if (!showPinModal || !newPin) return;
     try {
-      const res = await fetch("/api/staff", {
+      const data = await apiFetch("/api/staff", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -103,11 +104,10 @@ export const StaffManager: React.FC<{ currentUser?: any }> = ({ currentUser }) =
           pin: newPin,
         }),
       });
-      const data = await res.json();
       if (data.success) {
         setShowPinModal(null);
         setNewPin("");
-        alert(`PIN updated for ${showPinModal.name}. Sessions for this account were signed out; a changed PIN must be used from a fresh sign-in.`);
+        notify(`PIN updated for ${showPinModal.name}. Sessions for this account were signed out; a changed PIN must be used from a fresh sign-in.`, "ok");
         if (data.employee?.id === currentUser?.id) {
           await fetch("/api/auth/logout", {
             method: "POST",
@@ -121,7 +121,7 @@ export const StaffManager: React.FC<{ currentUser?: any }> = ({ currentUser }) =
       } else { setError(data.error || "Staff update failed"); }
     } catch (e) {
       console.error(e);
-      setError("Could not reach the server. Please try again.");
+      setError(apiErrorMessage(e, "Could not reach the server. Please try again."));
     }
   };
 
@@ -129,16 +129,15 @@ export const StaffManager: React.FC<{ currentUser?: any }> = ({ currentUser }) =
     e.preventDefault();
     if (!showPasswordModal || !newPassword) return;
     try {
-      const res = await fetch("/api/staff", {
+      const data = await apiFetch("/api/staff", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "reset_password", userId: showPasswordModal.id, password: newPassword }),
       });
-      const data = await res.json();
       if (data.success) {
         setShowPasswordModal(null);
         setNewPassword("");
-        alert(`${showPasswordModal.name}'s password was changed. All existing sessions for this account are now signed out.`);
+        notify(`${showPasswordModal.name}'s password was changed. All existing sessions for this account are now signed out.`, "ok");
         if (data.employee?.id === currentUser?.id) {
           await fetch("/api/auth/logout", {
             method: "POST",
@@ -151,7 +150,7 @@ export const StaffManager: React.FC<{ currentUser?: any }> = ({ currentUser }) =
       } else { setError(data.error || "Password reset failed"); }
     } catch (e) {
       console.error(e);
-      setError("Could not reach the server. Please try again.");
+      setError(apiErrorMessage(e, "Could not reach the server. Please try again."));
     }
   };
 
@@ -195,13 +194,13 @@ export const StaffManager: React.FC<{ currentUser?: any }> = ({ currentUser }) =
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.success) {
-        alert(data.error || "Account status was not changed");
+        notify(data.error || "Account status was not changed", "error");
         return;
       }
       fetchStaff();
     } catch (e) {
       console.error(e);
-      alert("Could not reach the server. Account status was not changed.");
+      notify(apiErrorMessage(e, "Could not reach the server. Account status was not changed."), "error");
     }
   };
 

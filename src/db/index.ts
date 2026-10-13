@@ -56,7 +56,7 @@ export const rootDb: ReturnType<typeof drizzle> = new Proxy({} as ReturnType<typ
 });
 
 export type Transaction = Parameters<Parameters<(typeof rootDb)["transaction"]>[0]>[0];
-export const requestContext = new AsyncLocalStorage<{ tx: Transaction; user?: SessionUser }>();
+export const requestContext = new AsyncLocalStorage<{ tx: Transaction; user?: SessionUser; requestId?: string }>();
 export const db: typeof rootDb = new Proxy(rootDb, {
   get(_target, property) {
     const context = requestContext.getStore();

@@ -14,6 +14,8 @@ import {
   Utensils,
   X,
 } from "lucide-react";
+import { apiErrorMessage, apiFetch } from "@/lib/api-client";
+import { notify } from "@/lib/notify";
 
 interface TableFloorPlanProps {
   areas: any[];
@@ -49,20 +51,20 @@ export const TableFloorPlan: React.FC<TableFloorPlanProps> = ({
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.success) {
-        alert(data.error || "Table status was not changed");
+        notify(data.error || "Table status was not changed", "error");
         return;
       }
       onRefresh();
     } catch (e) {
       console.error(e);
-      alert("Could not reach the server. Table status was not changed.");
+      notify(apiErrorMessage(e, "Could not reach the server. Table status was not changed."), "error");
     }
   };
 
   const handleMoveOrder = async () => {
     if (!movingTable || !targetTableId) return;
     try {
-      const res = await fetch("/api/tables", {
+      const data = await apiFetch("/api/tables", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -71,23 +73,22 @@ export const TableFloorPlan: React.FC<TableFloorPlanProps> = ({
           targetTableId: Number(targetTableId),
         }),
       });
-      const data = await res.json();
       if (data.success) {
         setMovingTable(null);
         setTargetTableId("");
         onRefresh();
       } else {
-        alert(data.error || "Failed to move table");
+        notify(data.error || "Failed to move table", "error");
       }
-    } catch {
-      alert("Error moving table");
+    } catch (e) {
+      notify(apiErrorMessage(e, "Error moving table"), "error");
     }
   };
 
   const handleAddTable = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const res = await fetch("/api/tables", {
+      const data = await apiFetch("/api/tables", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -97,17 +98,16 @@ export const TableFloorPlan: React.FC<TableFloorPlanProps> = ({
           capacity: newTableCapacity,
         }),
       });
-      const data = await res.json();
       if (data.success) {
         setShowAddTableModal(false);
         setNewTableNumber("");
         onRefresh();
       } else {
-        alert(data.error || "Table was not created");
+        notify(data.error || "Table was not created", "error");
       }
     } catch (e) {
       console.error(e);
-      alert("Could not reach the server. Table was not created.");
+      notify(apiErrorMessage(e, "Could not reach the server. Table was not created."), "error");
     }
   };
 

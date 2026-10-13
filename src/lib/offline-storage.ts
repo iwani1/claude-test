@@ -1,5 +1,7 @@
 "use client";
 
+import { apiFetch } from "./api-client";
+
 // Legacy key names are kept so terminals upgraded mid-service never lose
 // already-queued offline orders; the prefix is internal only.
 const OFFLINE_QUEUE_KEY = "bistro_pos_offline_orders_queue";
@@ -210,13 +212,11 @@ export async function syncOfflineQueueToServer(branchId: number): Promise<{ succ
   if (queue.length === 0) return { success: true, count: 0 };
 
   try {
-    const res = await fetch("/api/sync/offline", {
+    const data = await apiFetch("/api/sync/offline", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ offlineOrders: queue }),
     });
-
-    const data = await res.json();
     if (data.success) {
       // Remove only acknowledged entries, preserving orders added during the request.
       const acknowledged = new Set(queue.map(order => order.idempotencyKey));

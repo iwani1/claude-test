@@ -38,8 +38,10 @@ import { useOnlineStatus } from "@/lib/use-terminal-status";
 import { Toaster } from "@/components/Toaster";
 import { notify } from "@/lib/notify";
 import { ROLE_PERMISSIONS, UserRole } from "@/lib/permissions";
+import type { CurrentUser, DiningAreaRow, DiningTableRow, MenuCategoryRow, MenuItemRow, ShiftRow } from "@/lib/api-types";
 import { readTicketDraft, clearTicketDraft } from "@/lib/active-ticket";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { apiFetch } from "@/lib/api-client";
 
 /** Landing tab per role so each user starts on a screen they can actually use. */
 const DEFAULT_TAB: Record<UserRole, NavTab> = {
@@ -53,7 +55,7 @@ const DEFAULT_TAB: Record<UserRole, NavTab> = {
 
 export default function App() {
   const [authState, setAuthState] = useState<"checking" | "out" | "in">("checking");
-  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [activeTab, setActiveTab] = useState<NavTab>("pos");
   /**
    * True when the shell is running from this device's last sign-in because the
@@ -62,11 +64,11 @@ export default function App() {
    */
   const [offlineSession, setOfflineSession] = useState(false);
 
-  const [categories, setCategories] = useState<any[]>([]);
-  const [menuItems, setMenuItems] = useState<any[]>([]);
-  const [areas, setAreas] = useState<any[]>([]);
-  const [tables, setTables] = useState<any[]>([]);
-  const [openShift, setOpenShift] = useState<any | null>(null);
+  const [categories, setCategories] = useState<MenuCategoryRow[]>([]);
+  const [menuItems, setMenuItems] = useState<MenuItemRow[]>([]);
+  const [areas, setAreas] = useState<DiningAreaRow[]>([]);
+  const [tables, setTables] = useState<DiningTableRow[]>([]);
+  const [openShift, setOpenShift] = useState<ShiftRow | null>(null);
   const [lowStockCount, setLowStockCount] = useState(0);
   const [activeTableId, setActiveTableId] = useState<number | null>(null);
   // Bumped every time "New Order" is tapped so the till clears its ticket.
@@ -114,8 +116,7 @@ export default function App() {
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch("/api/auth/me");
-        const data = await res.json();
+        const data = await apiFetch("/api/auth/me");
         if (data.authenticated && data.user) {
           setCurrentUser(data.user);
           setActiveTab(DEFAULT_TAB[data.user.role as UserRole] ?? "pos");
@@ -255,8 +256,7 @@ export default function App() {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch("/api/auth/me");
-        const data = await res.json();
+        const data = await apiFetch("/api/auth/me");
         if (cancelled || !data?.authenticated) return;
         setCurrentUser(data.user);
         saveIdentity(data.user);
@@ -332,7 +332,7 @@ export default function App() {
     );
   }
 
-  if (authState === "out") {
+  if (authState === "out" || !currentUser) {
     return <LoginScreen onAuthenticated={handleAuthenticated} />;
   }
 
@@ -381,7 +381,7 @@ export default function App() {
         return <OwnerDashboard onNavigate={setActiveTab} openShift={openShift} perms={perms} />;
       case "pos":
         return (
-          <PosTerminal key={`${currentUser.id}:${posResetKey}`}
+          <PosTerminal key={`${currentUser?.id ?? "anon"}:${posResetKey}`}
             categories={categories}
             menuItems={menuItems}
             tables={tables}
@@ -478,6 +478,7 @@ export default function App() {
           {isOnline && queuedOrders > 0 && (
             <button
               onClick={async () => {
+                if (!currentUser) return;
                 const { syncOfflineQueueToServer } = await import("@/lib/offline-storage");
                 const result = await syncOfflineQueueToServer(currentUser.branchId);
                 if (result.success && result.count > 0) {

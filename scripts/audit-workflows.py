@@ -108,7 +108,11 @@ for path in sorted(list(SRC.rglob("*.ts")) + list(SRC.rglob("*.tsx"))):
             continue
         if "audit-ok" in text[max(0, match.start() - 200) : match.start()]:
             continue
-        warnings.append(f"{rel}:{line_of(text, match.start())} fetch response parsed without checking ok/status")
+        # Promoted from warning to failure in the P2 pass: every site now goes
+        # through apiFetch (src/lib/api-client.ts), which checks the status and
+        # throws the server's message. A raw fetch that parses without checking
+        # is a regression, not a style note.
+        failures.append(f"{rel}:{line_of(text, match.start())} fetch response parsed without checking ok/status (use apiFetch)")
 
     # 3. Blocking browser alerts (finger-hostile on a phone, and they vanish).
     for match in re.finditer(r"(?<![\w.])alert\s*\(", text):
@@ -116,7 +120,9 @@ for path in sorted(list(SRC.rglob("*.ts")) + list(SRC.rglob("*.tsx"))):
         line = text[line_start : text.find("\n", match.start())]
         if "audit-ok" in line:
             continue
-        notes.append(f"alert {rel}:{line_of(text, match.start())} {line.strip()[:100]}")
+        # Promoted from advisory to failure in the P2 pass: blocking alert()
+        # was fully migrated to the in-app Toaster (notify in src/lib/notify.ts).
+        failures.append(f"alert {rel}:{line_of(text, match.start())} blocking alert() (use notify) {line.strip()[:80]}")
 
     # 4. A mutation route must refuse or answer; never silently no-op.
     if "/api/" in str(rel) and rel.name == "route.ts":

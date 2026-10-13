@@ -15,6 +15,8 @@ import {
   X,
   Layers,
 } from "lucide-react";
+import { apiErrorMessage, apiFetch } from "@/lib/api-client";
+import { notify } from "@/lib/notify";
 
 export const RecipeManager: React.FC = () => {
   const [recipes, setRecipes] = useState<any[]>([]);
@@ -74,12 +76,12 @@ export const RecipeManager: React.FC = () => {
 
     const validRows = recipeIngRows.filter((r) => r.ingredientId && Number(r.quantity) > 0);
     if (validRows.length === 0) {
-      alert("At least one ingredient row is required");
+      notify("At least one ingredient row is required", "warn");
       return;
     }
 
     try {
-      const res = await fetch("/api/inventory/recipes", {
+      const data = await apiFetch("/api/inventory/recipes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -89,8 +91,6 @@ export const RecipeManager: React.FC = () => {
           ingredients: validRows,
         }),
       });
-
-      const data = await res.json();
       if (data.success) {
         setShowAddModal(false);
         setSelectedMenuItemId("");
@@ -98,11 +98,11 @@ export const RecipeManager: React.FC = () => {
         setPrepInstructions("");
         fetchRecipes();
       } else {
-        alert(data.error || "Recipe was not saved");
+        notify(data.error || "Recipe was not saved", "error");
       }
     } catch (e) {
       console.error(e);
-      alert("Could not reach the server. Recipe was not saved.");
+      notify(apiErrorMessage(e, "Could not reach the server. Recipe was not saved."), "error");
     }
   };
 
