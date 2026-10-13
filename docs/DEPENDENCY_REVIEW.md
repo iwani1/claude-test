@@ -15,6 +15,14 @@ advisory remains. `npm audit fix --force` proposes older incompatible Next ESLin
 and Drizzle toolchains; it was deliberately not used. Unverified major-version
 transitive overrides were not applied merely to make the report green.
 
+**Update 2026-10-13 (P2, F6):** eslint upgraded 9.39.4 (EOL) → ^10.12.0; the
+full lint gate passes unchanged. Both advisory chains were re-checked against
+the latest published versions: `eslint-config-next` is at its latest (16.4.0,
+matching Next) and `drizzle-kit` at its latest stable (0.31.11), and both
+still carry the chains above — there is currently no compatible patched
+release to move to. `npm audit --omit=dev` remains **0**. Re-check monthly;
+the moment either upstream ships a fix, this exception should be closed.
+
 ## Release decision
 
 This is a documented, **pending owner acceptance**, tooling-only risk exception,

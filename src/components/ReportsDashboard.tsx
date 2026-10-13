@@ -18,6 +18,8 @@ import {
   FileSpreadsheet,
   Smartphone,
 } from "lucide-react";
+import { apiErrorMessage, apiFetch } from "@/lib/api-client";
+import { notify } from "@/lib/notify";
 
 export const ReportsDashboard: React.FC<{ canExportTransactions?: boolean }> = ({ canExportTransactions = false }) => {
   const [timeframe, setTimeframe] = useState<"today" | "7days" | "30days" | "all">("all");
@@ -39,13 +41,11 @@ export const ReportsDashboard: React.FC<{ canExportTransactions?: boolean }> = (
 
   const handleExportCSV = async (format: "quickbooks" | "xero") => {
     try {
-      const res = await fetch("/api/integrations", {
+      const exportData = await apiFetch("/api/integrations", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "export_accounting", format, timeframe }),
       });
-      const exportData = await res.json();
-
       if (exportData.csvContent) {
         const blob = new Blob([exportData.csvContent], { type: "text/csv;charset=utf-8;" });
         const url = URL.createObjectURL(blob);
@@ -56,10 +56,10 @@ export const ReportsDashboard: React.FC<{ canExportTransactions?: boolean }> = (
         link.click();
         document.body.removeChild(link);
       } else {
-        alert(data.error || "Export produced no data");
+        notify(data.error || "Export produced no data", "error");
       }
-    } catch {
-      alert("Failed to export accounting CSV");
+    } catch (e) {
+      notify(apiErrorMessage(e, "Failed to export accounting CSV"), "error");
     }
   };
 

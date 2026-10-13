@@ -17,6 +17,9 @@ import {
   CreditCard,
   Banknote,
 } from "lucide-react";
+import { apiErrorMessage, apiFetch } from "@/lib/api-client";
+import { notify } from "@/lib/notify";
+import type { CurrentUser } from "@/lib/api-types";
 
 /**
  * Shift operations and the reconciliation ledger.
@@ -25,7 +28,7 @@ import {
  * reads the drawer history while every control that moves cash, opens a shift
  * or pops the till stays with the till roles.
  */
-export const ShiftCashDrawer: React.FC<{ currentUser: any; readOnly?: boolean }> = ({ currentUser, readOnly = false }) => {
+export const ShiftCashDrawer: React.FC<{ currentUser: CurrentUser; readOnly?: boolean }> = ({ currentUser, readOnly = false }) => {
   const [activeShift, setActiveShift] = useState<any | null>(null);
   const [shiftHistory, setShiftHistory] = useState<any[]>([]);
 
@@ -61,7 +64,7 @@ export const ShiftCashDrawer: React.FC<{ currentUser: any; readOnly?: boolean }>
   const handleOpenShift = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const res = await fetch("/api/shifts", {
+      const data = await apiFetch("/api/shifts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -71,15 +74,14 @@ export const ShiftCashDrawer: React.FC<{ currentUser: any; readOnly?: boolean }>
           notes: openNotes,
         }),
       });
-      const data = await res.json();
       if (data.success) {
         setShowOpenModal(false);
         fetchShifts();
       } else {
-        alert(data.error || "Failed to open shift");
+        notify(data.error || "Failed to open shift", "error");
       }
-    } catch {
-      alert("Error opening shift");
+    } catch (e) {
+      notify(apiErrorMessage(e, "Error opening shift"), "error");
     }
   };
 
@@ -87,7 +89,7 @@ export const ShiftCashDrawer: React.FC<{ currentUser: any; readOnly?: boolean }>
     e.preventDefault();
     if (!activeShift) return;
     try {
-      const res = await fetch("/api/shifts", {
+      const data = await apiFetch("/api/shifts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -98,40 +100,38 @@ export const ShiftCashDrawer: React.FC<{ currentUser: any; readOnly?: boolean }>
           userId: currentUser?.id || 1,
         }),
       });
-      const data = await res.json();
       if (data.success) {
         setShowPayoutModal(false);
         setPayoutAmount("");
         setPayoutReason("");
         fetchShifts();
       } else {
-        alert(data.error || "Payout was not recorded");
+        notify(data.error || "Payout was not recorded", "error");
       }
-    } catch {
-      alert("Error recording payout");
+    } catch (e) {
+      notify(apiErrorMessage(e, "Error recording payout"), "error");
     }
   };
 
   const handleOpenDrawer = async () => {
     if (!activeShift) {
-      alert("Open a shift first — the drawer stays locked while the register is closed.");
+      notify("Open a shift first — the drawer stays locked while the register is closed.", "warn");
       return;
     }
     try {
-      const res = await fetch("/api/shifts", {
+      const data = await apiFetch("/api/shifts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "open_drawer", shiftId: activeShift.id, reason: "No-sale drawer open from till" }),
       });
-      const data = await res.json();
       if (data.success) {
         setDrawerMessage(data.message || "Drawer-open request logged.");
         setTimeout(() => setDrawerMessage(null), 4000);
       } else {
-        alert(data.error || "Could not open drawer");
+        notify(data.error || "Could not open drawer", "error");
       }
-    } catch {
-      alert("Could not reach the drawer service");
+    } catch (e) {
+      notify(apiErrorMessage(e, "Could not reach the drawer service"), "error");
     }
   };
 
@@ -139,7 +139,7 @@ export const ShiftCashDrawer: React.FC<{ currentUser: any; readOnly?: boolean }>
     e.preventDefault();
     if (!activeShift) return;
     try {
-      const res = await fetch("/api/shifts", {
+      const data = await apiFetch("/api/shifts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -150,18 +150,17 @@ export const ShiftCashDrawer: React.FC<{ currentUser: any; readOnly?: boolean }>
           reconciledBy: currentUser?.id || 1,
         }),
       });
-      const data = await res.json();
       if (data.success) {
-        alert(`Shift closed and reconciled! Variance: GH₵${data.difference}`);
+        notify(`Shift closed and reconciled! Variance: GH₵${data.difference}`, "ok");
         setShowCloseModal(false);
         setCountedCashInput("");
         setCloseNotes("");
         fetchShifts();
       } else {
-        alert(data.error || "Shift was not closed");
+        notify(data.error || "Shift was not closed", "error");
       }
-    } catch {
-      alert("Error closing shift");
+    } catch (e) {
+      notify(apiErrorMessage(e, "Error closing shift"), "error");
     }
   };
 

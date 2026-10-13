@@ -22,8 +22,11 @@ import { KitchenTicketModal } from "./KitchenTicketModal";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { EditOrderModal } from "./EditOrderModal";
 import { ROLE_PERMISSIONS, UserRole } from "@/lib/permissions";
+import { apiErrorMessage, apiFetch } from "@/lib/api-client";
+import { notify } from "@/lib/notify";
+import type { CurrentUser } from "@/lib/api-types";
 
-export const OrdersHistory: React.FC<{ currentUser: any }> = ({ currentUser }) => {
+export const OrdersHistory: React.FC<{ currentUser: CurrentUser }> = ({ currentUser }) => {
   const perms = ROLE_PERMISSIONS[currentUser?.role as UserRole] ?? ROLE_PERMISSIONS.cashier;
   /** Finance and stock roles read this screen; only till roles can act on it.
    *  A visible button that always answers 403 is worse than no button. */
@@ -51,13 +54,12 @@ export const OrdersHistory: React.FC<{ currentUser: any }> = ({ currentUser }) =
   const [refundLimits, setRefundLimits] = useState({ cashRemaining: "0.00", momoRemaining: "0.00" });
   const openRefund = async (order: any) => {
     try {
-      const response = await fetch(`/api/orders/${order.id}/refund`);
-      const data = await response.json();
-      if (!response.ok || data.requiresReconciliation) { alert(data.error || "Historical tender records require reconciliation before refunding"); return; }
+      const data = await apiFetch(`/api/orders/${order.id}/refund`);
+      if (data.requiresReconciliation) { notify(data.error || "Historical tender records require reconciliation before refunding", "warn"); return; }
       setRefundLimits(data); setRefundCash(data.cashRemaining); setRefundMomo(data.momoRemaining);
       setRefundKey(crypto.randomUUID()); setRefundLocked(false); setRefundBusy(false);
       setRefundReason(""); setRefundManagerPin(""); setReturnStock(false); setRefundOrderTarget(order);
-    } catch { alert("Could not load refundable tender balances"); }
+    } catch (e) { notify(apiErrorMessage(e, "Could not load refundable tender balances"), "error"); }
   };
 
 
@@ -138,7 +140,7 @@ export const OrdersHistory: React.FC<{ currentUser: any }> = ({ currentUser }) =
     setRefundBusy(true); setRefundLocked(true);
 
     try {
-      const res = await fetch(`/api/orders/${refundOrderTarget.id}/refund`, {
+      const data = await apiFetch(`/api/orders/${refundOrderTarget.id}/refund`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -149,19 +151,17 @@ export const OrdersHistory: React.FC<{ currentUser: any }> = ({ currentUser }) =
           returnStock,
         }),
       });
-
-      const data = await res.json();
       if (data.success) {
-        alert(`Order ${refundOrderTarget.orderNumber} successfully refunded!`);
+        notify(`Order ${refundOrderTarget.orderNumber} successfully refunded!`, "ok");
         setRefundOrderTarget(null);
         setRefundReason("");
         fetchOrders();
       } else {
         setRefundLocked(false);
-        alert(data.error || "Refund failed");
+        notify(data.error || "Refund failed", "error");
       }
-    } catch {
-      alert("Refund result is unknown. Retry this unchanged request to check its result; do not issue a second refund.");
+    } catch (e) {
+      notify(apiErrorMessage(e, "Refund result is unknown. Retry this unchanged request to check its result; do not issue a second refund."), "warn");
     } finally { setRefundBusy(false); }
   };
 

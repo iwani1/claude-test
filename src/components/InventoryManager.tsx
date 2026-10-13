@@ -17,6 +17,8 @@ import {
   X,
   FileSpreadsheet,
 } from "lucide-react";
+import { apiErrorMessage, apiFetch } from "@/lib/api-client";
+import { notify } from "@/lib/notify";
 
 export const InventoryManager: React.FC = () => {
   const [ingredients, setIngredients] = useState<any[]>([]);
@@ -78,7 +80,7 @@ export const InventoryManager: React.FC = () => {
 
     try {
       const deltaNum = Number(adjustDelta);
-      const res = await fetch("/api/inventory", {
+      const data = await apiFetch("/api/inventory", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -89,19 +91,17 @@ export const InventoryManager: React.FC = () => {
           reason: adjustReason,
         }),
       });
-
-      const data = await res.json();
       if (data.success) {
         setShowAdjustModal(null);
         setAdjustDelta("");
         setAdjustReason("");
         fetchInventory();
       } else {
-        alert(data.error || "Stock adjustment failed");
+        notify(data.error || "Stock adjustment failed", "error");
       }
     } catch (e) {
       console.error(e);
-      alert("Could not reach the server. Stock was not adjusted.");
+      notify(apiErrorMessage(e, "Could not reach the server. Stock was not adjusted."), "error");
     } finally {
       setAdjusting(false);
     }
@@ -110,7 +110,7 @@ export const InventoryManager: React.FC = () => {
   const handleAddIngredient = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const res = await fetch("/api/inventory", {
+      const data = await apiFetch("/api/inventory", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -125,7 +125,6 @@ export const InventoryManager: React.FC = () => {
           location: newLocation,
         }),
       });
-      const data = await res.json();
       if (data.success) {
         setShowAddModal(false);
         setNewName("");
@@ -134,11 +133,11 @@ export const InventoryManager: React.FC = () => {
         setNewCost("");
         fetchInventory();
       } else {
-        alert(data.error || "Could not create ingredient");
+        notify(data.error || "Could not create ingredient", "error");
       }
     } catch (e) {
       console.error(e);
-      alert("Could not reach the server. Ingredient was not saved.");
+      notify(apiErrorMessage(e, "Could not reach the server. Ingredient was not saved."), "error");
     }
   };
 
@@ -158,7 +157,7 @@ export const InventoryManager: React.FC = () => {
     });
 
     try {
-      const res = await fetch("/api/inventory/counts", {
+      const data = await apiFetch("/api/inventory/counts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -167,17 +166,16 @@ export const InventoryManager: React.FC = () => {
           reconcileToSystem: reconcile,
         }),
       });
-      const data = await res.json();
       if (data.success) {
-        alert(reconcile ? "Physical stock count reconciled and system stock updated!" : "Cycle count saved!");
+        notify(reconcile ? "Physical stock count reconciled and system stock updated!" : "Cycle count saved!", "ok");
         setAuditItems({});
         setAuditNotes("");
         fetchInventory();
       } else {
-        alert(data.error || "Count was not saved");
+        notify(data.error || "Count was not saved", "error");
       }
-    } catch {
-      alert("Error saving count");
+    } catch (e) {
+      notify(apiErrorMessage(e, "Error saving count"), "error");
     }
   };
 

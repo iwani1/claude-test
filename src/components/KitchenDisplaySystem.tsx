@@ -16,6 +16,8 @@ import {
   Printer,
 } from "lucide-react";
 import { KitchenTicketModal } from "./KitchenTicketModal";
+import { apiErrorMessage, apiFetch } from "@/lib/api-client";
+import { notify } from "@/lib/notify";
 
 export const KitchenDisplaySystem: React.FC = () => {
   const [tickets, setTickets] = useState<any[]>([]);
@@ -53,20 +55,19 @@ export const KitchenDisplaySystem: React.FC = () => {
 
   const updateTicketStatus = async (ticketId: number, status: "preparing" | "ready" | "completed") => {
     try {
-      const res = await fetch("/api/kds", {
+      const data = await apiFetch("/api/kds", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ticketId, status }),
       });
-      const data = await res.json();
       if (data.success) {
         fetchTickets();
       } else {
-        alert(data.error || "Ticket status was not changed");
+        notify(data.error || "Ticket status was not changed", "error");
       }
     } catch (e) {
       console.error(e);
-      alert("Could not reach the server. Ticket status was not changed.");
+      notify(apiErrorMessage(e, "Could not reach the server. Ticket status was not changed."), "error");
     }
   };
 

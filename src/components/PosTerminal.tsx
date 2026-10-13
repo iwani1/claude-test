@@ -35,12 +35,14 @@ import {
 import { notify } from "@/lib/notify";
 import { priceOrder, fromCents, toCents } from "@/lib/pricing-core";
 import type { BillingConfig } from "@/lib/pricing-core";
+import { apiErrorMessage, apiFetch } from "@/lib/api-client";
+import type { CurrentUser } from "@/lib/api-types";
 
 interface PosTerminalProps {
   categories: any[];
   menuItems: any[];
   tables: any[];
-  currentUser: any;
+  currentUser: CurrentUser;
   onOrderCreated?: () => void;
   activeTableId?: number | null;
   onOpenDrawer?: () => void;
@@ -192,16 +194,15 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
     const branchId = currentUser?.branchId;
     (async () => {
       try {
-        const res = await fetch("/api/billing-config");
-        const data = await res.json();
-        if (cancelled || !res.ok || !data) return;
+        const data = await apiFetch("/api/billing-config");
+        if (cancelled || !data) return;
         setBillingConfig({
           roomChargeCents: Number(data.roomChargeCents ?? 3000),
           taxRatePercent: Number(data.taxRatePercent ?? 15),
           compBreakfastEnabled: data.compBreakfastEnabled !== false,
         });
         if (branchId) saveBillingConfigToCache(data, branchId);
-      } catch {
+      } catch (e) {
         if (cancelled) return;
         const cached = branchId ? getCachedBillingConfig(branchId) : null;
         if (cached) {
@@ -210,7 +211,7 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
             taxRatePercent: Number(cached.taxRatePercent ?? 15),
             compBreakfastEnabled: cached.compBreakfastEnabled !== false,
           });
-          notify("Offline — using the room charge and VAT last confirmed by the server.", "warn");
+          notify(apiErrorMessage(e, "Offline — using the room charge and VAT last confirmed by the server."), "warn");
         }
       }
     })();
@@ -401,7 +402,7 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
   const handleSendToKitchen = async () => {
     if (cart.length === 0) return;
     if (orderType === "room_service" && !roomNumber.trim()) {
-      alert("Enter the hotel room number before sending a Room Service order.");
+      notify("Enter the hotel room number before sending a Room Service order.", "warn");
       return;
     }
     setIsSubmitting(true);
@@ -461,13 +462,11 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
         return;
       }
 
-      const res = await fetch("/api/orders", {
+      const data = await apiFetch("/api/orders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-
-      const data = await res.json();
       if (data.success) {
         clearCart();
         if (onOrderCreated) onOrderCreated();
@@ -476,9 +475,9 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
         setCartOpen(false);
         setShowKitchenTicket(true);
       } else {
-        alert(data.error || "Failed to create order");
+        notify(data.error || "Failed to create order", "error");
       }
-    } catch {
+    } catch (e) {
       // The connection died somewhere between the tap and the answer. The order
       // identity travels with the payload, so queueing it here is safe even if
       // the server did receive it: the replay returns the existing order rather
@@ -497,8 +496,7 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
         totalAmount,
       });
       if (stored) {
-        notify(
-          "Connection lost while sending. The order is saved on this device and syncs automatically — nothing was sent to the kitchen yet, so start the ticket on paper now.",
+        notify(apiErrorMessage(e, "Connection lost while sending. The order is saved on this device and syncs automatically — nothing was sent to the kitchen yet, so start the ticket on paper now."),
           "warn"
         );
         clearCart();
@@ -618,13 +616,11 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
     let createdOrder: any = null;
 
     try {
-      const resOrder = await fetch("/api/orders", {
+      const orderData = await apiFetch("/api/orders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(orderPayload),
       });
-      const orderData = await resOrder.json();
-
       if (!orderData.success) {
         notify(orderData.error || "Failed to create order", "error");
         setIsSubmitting(false);
@@ -658,7 +654,7 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
       }
 
       // Now process payment
-      const payRes = await fetch(`/api/orders/${createdOrder.id}/pay`, {
+      const payData = await apiFetch(`/api/orders/${createdOrder.id}/pay`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -674,8 +670,6 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
           idempotencyKey: payAttemptKey(),
         }),
       });
-
-      const payData = await payRes.json();
       if (payData.success) {
         // Settled: the next tender on this ticket is a new attempt, not a retry.
         payAttemptRef.current = null;

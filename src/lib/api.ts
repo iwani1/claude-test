@@ -1,4 +1,5 @@
 import { Pool } from "pg";
+import { randomUUID } from "node:crypto";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { NextResponse } from "next/server";
 import { eq, sql } from "drizzle-orm";
@@ -47,6 +48,25 @@ function noStore(response: NextResponse) {
 function errorResponse(body: Record<string, unknown>, status: number) {
   return noStore(NextResponse.json(body, { status }));
 }
+/** One structured JSON line per failed request (F9). Every API request passes
+ *  through secureRoute, so this is the single place production failures become
+ *  greppable: request id (also returned as x-request-id and accepted from the
+ *  caller), method, path, status and driver code — never bodies, cookies,
+ *  credentials or SQL. Client answers stay generic exactly as before. */
+function logRequestFailure(requestId: string, req: Request, status: number, err: unknown) {
+  const driver: any = driverError(err);
+  const entry = {
+    level: status >= 500 ? "error" : "warn",
+    event: "api_request_failed",
+    requestId,
+    method: req.method,
+    path: (() => { try { return new URL(req.url).pathname; } catch { /* audit-ok: a malformed URL is logged as unknown, never propagated */ return "unknown"; } })(),
+    status,
+    code: driver.code ? String(driver.code) : null,
+    error: err instanceof Error ? err.message : String(err),
+  };
+  console.error(JSON.stringify(entry));
+}
 export function safeSession(row: typeof users.$inferSelect): SessionUser {
   return { id: row.id, restaurantId: row.restaurantId, branchId: row.branchId, name: row.name, email: row.email,
     role: row.role as UserRole, avatarUrl: row.avatarUrl, sessionVersion: row.sessionVersion };
@@ -71,10 +91,16 @@ function checkRequest(req: Request) {
 // roll back too: legacy handlers sometimes catch database errors themselves.
 export function secureRoute(handler: Handler, permission: Permission | "session" | "public") {
   return async (req: Request, context: { params: Promise<Record<string, string>> } = { params: Promise.resolve({}) }): Promise<Response> => {
+    const requestId = req.headers.get("x-request-id")?.slice(0, 64) || randomUUID();
+    /** Attach the correlation id to every answer, success or failure. */
+    const withRequestId = (response: Response) => {
+      response.headers.set("x-request-id", requestId);
+      return response;
+    };
     try {
       authSecret();
       checkRequest(req);
-      return await rootDb.transaction(async tx => requestContext.run({ tx }, async () => {
+      return await rootDb.transaction(async tx => requestContext.run({ tx, requestId }, async () => {
         const role = await tx.execute(sql`select rolsuper, rolbypassrls from pg_roles where rolname = current_user`);
         if (role.rows[0]?.rolsuper || role.rows[0]?.rolbypassrls) throw new Error("Runtime database role must not bypass row security");
         await tx.execute(sql`select version from security_meta where version = 1`);
@@ -92,13 +118,14 @@ export function secureRoute(handler: Handler, permission: Permission | "session"
         const response = await handler(req, { params: Promise.resolve({ id: params.id || "" }) });
         if (response.status >= 400) throw new RollbackResponse(response);
         response.headers.set("Cache-Control", "no-store");
-        return response;
+        return withRequestId(response);
       }));
     } catch (err) {
       if (err instanceof RollbackResponse) {
         // Do not expose legacy handlers' SQL/error internals to the browser.
-        if (err.response.status >= 500) return errorResponse({ error: "Request failed" }, 500);
-        return noStore(err.response as NextResponse);
+        logRequestFailure(requestId, req, err.response.status, err);
+        if (err.response.status >= 500) return withRequestId(errorResponse({ error: "Request failed", requestId }, 500));
+        return withRequestId(noStore(err.response as NextResponse));
       }
       // Database constraint rejections become clear 409/400 explanations,
       // never anonymous 500s (Drizzle may wrap the driver error).
@@ -107,11 +134,11 @@ export function secureRoute(handler: Handler, permission: Permission | "session"
       // A stale database (migration not applied, or grants not re-run) gets
       // instructions instead of "Request failed".
       const drift = driver.code ? schemaDriftMessage(String(driver.code), String(driver.message || detail)) : null;
-      if (drift) return errorResponse({ error: drift }, 503);
+      if (drift) { logRequestFailure(requestId, req, 503, err); return withRequestId(errorResponse({ error: drift, requestId }, 503)); }
       // The app could not reach its database at all: that is the operator's
       // problem, not the user's, and it must not read as a wrong password.
       const unreachable = databaseUnreachableMessage(String(driver.code || ""), String(driver.message || detail));
-      if (unreachable) return errorResponse({ error: unreachable }, 503);
+      if (unreachable) { logRequestFailure(requestId, req, 503, err); return withRequestId(errorResponse({ error: unreachable, requestId }, 503)); }
       if (driver.code === "23505" || /duplicate key/i.test(detail)) {
         const label = /pin/i.test(detail) ? "That PIN is already used by another staff member in this branch. Choose a different PIN."
           : /email/i.test(detail) ? "That email is already registered."
@@ -121,18 +148,21 @@ export function secureRoute(handler: Handler, permission: Permission | "session"
           : /grn_number/i.test(detail) ? "A goods receipt with that number already exists."
           : /settings/i.test(detail) ? "That setting key is already in use."
           : "That record already exists.";
-        return errorResponse({ error: label }, 409);
+        logRequestFailure(requestId, req, 409, err);
+        return withRequestId(errorResponse({ error: label, requestId }, 409));
       }
       if (driver.code === "23503" || /foreign key/i.test(detail)) {
-        return errorResponse({ error: "A linked record is missing or belongs to another branch." }, 409);
+        logRequestFailure(requestId, req, 409, err);
+        return withRequestId(errorResponse({ error: "A linked record is missing or belongs to another branch.", requestId }, 409));
       }
       if (driver.code === "23514" || /check constraint/i.test(detail)) {
-        return errorResponse({ error: "One of the values is not allowed." }, 400);
+        logRequestFailure(requestId, req, 400, err);
+        return withRequestId(errorResponse({ error: "One of the values is not allowed.", requestId }, 400));
       }
-      if (err instanceof ApiError) return errorResponse({ error: err.message }, err.status);
-      if (err instanceof SyntaxError) return errorResponse({ error: "Invalid JSON" }, 400);
-      console.error("API request failed", err);
-      return errorResponse({ error: "Request failed" }, 500);
+      if (err instanceof ApiError) { if (err.status >= 400) logRequestFailure(requestId, req, err.status, err); return withRequestId(errorResponse({ error: err.message, requestId }, err.status)); }
+      if (err instanceof SyntaxError) { logRequestFailure(requestId, req, 400, err); return withRequestId(errorResponse({ error: "Invalid JSON", requestId }, 400)); }
+      logRequestFailure(requestId, req, 500, err);
+      return withRequestId(errorResponse({ error: "Request failed", requestId }, 500));
     }
   };
 }

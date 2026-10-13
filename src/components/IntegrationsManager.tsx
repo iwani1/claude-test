@@ -2,6 +2,8 @@
 
 import React, { useState } from "react";
 import { Cable, Printer, Smartphone, QrCode, Coins, CheckCircle2, DollarSign, Download, FileSpreadsheet } from "lucide-react";
+import { apiErrorMessage, apiFetch } from "@/lib/api-client";
+import { notify } from "@/lib/notify";
 
 export const IntegrationsManager: React.FC = () => {
   const [printerIp, setPrinterIp] = useState("192.168.1.200:9100");
@@ -10,7 +12,7 @@ export const IntegrationsManager: React.FC = () => {
   const handleTestPrinter = async () => {
     setPrinterStatus("Sending ESC/POS raw socket payload...");
     try {
-      const res = await fetch("/api/integrations", {
+      const data = await apiFetch("/api/integrations", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -19,21 +21,19 @@ export const IntegrationsManager: React.FC = () => {
           testText: "Lush View Hotel Kitchen Ticket & Docket Test\nCutter: PASS\nFeed: PASS\n",
         }),
       });
-      const data = await res.json();
       setPrinterStatus(data.success ? data.message : data.error || "Printer test could not run");
-    } catch {
-      setPrinterStatus("Failed to reach printer bridge");
+    } catch (e) {
+      setPrinterStatus(apiErrorMessage(e, "Failed to reach printer bridge"));
     }
   };
 
   const handleExportAccounting = async (format: "quickbooks" | "xero") => {
     try {
-      const res = await fetch("/api/integrations", {
+      const data = await apiFetch("/api/integrations", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "export_accounting", format }),
       });
-      const data = await res.json();
       if (data.csvContent) {
         const blob = new Blob([data.csvContent], { type: "text/csv;charset=utf-8;" });
         const url = URL.createObjectURL(blob);
@@ -44,10 +44,10 @@ export const IntegrationsManager: React.FC = () => {
         link.click();
         document.body.removeChild(link);
       } else {
-        alert(data.error || "Export produced no data");
+        notify(data.error || "Export produced no data", "error");
       }
-    } catch {
-      alert("Failed to export accounting journal");
+    } catch (e) {
+      notify(apiErrorMessage(e, "Failed to export accounting journal"), "error");
     }
   };
 

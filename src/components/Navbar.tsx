@@ -24,9 +24,11 @@ import { ROLE_PERMISSIONS, UserRole, hasTerminalAccess } from "@/lib/permissions
 import { getOfflineQueue, syncOfflineQueueToServer } from "@/lib/offline-storage";
 import { DisplaySizeControl } from "@/components/DisplaySizeControl";
 import { notify } from "@/lib/notify";
+import { apiErrorMessage, apiFetch } from "@/lib/api-client";
+import type { CurrentUser } from "@/lib/api-types";
 
 interface NavbarProps {
-  currentUser: any;
+  currentUser: CurrentUser;
   onUserChange: (user: any) => void;
   lowStockCount?: number;
   openShift?: any;
@@ -96,12 +98,11 @@ export const Navbar: React.FC<NavbarProps> = ({
     e.preventDefault();
     setPinError("");
     try {
-      const res = await fetch("/api/auth/switch-pin", {
+      const data = await apiFetch("/api/auth/switch-pin", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ pin: pinInput }),
       });
-      const data = await res.json();
       if (data.success && data.user) {
         onUserChange(data.user);
         setShowPinModal(false);
@@ -109,8 +110,8 @@ export const Navbar: React.FC<NavbarProps> = ({
       } else {
         setPinError(data.error || "Invalid PIN code");
       }
-    } catch {
-      setPinError("Failed to authenticate PIN");
+    } catch (e) {
+      setPinError(apiErrorMessage(e, "Failed to authenticate PIN"));
     }
   };
 

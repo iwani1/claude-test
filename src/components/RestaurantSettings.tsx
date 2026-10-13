@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { Sliders, Save, CheckCircle2, Building, DollarSign, Smartphone } from "lucide-react";
+import { notify } from "@/lib/notify";
 
 export const RestaurantSettings: React.FC = () => {
   const [restaurant, setRestaurant] = useState<any>({
@@ -65,10 +66,10 @@ export const RestaurantSettings: React.FC = () => {
         setIsSaved(true);
         setTimeout(() => setIsSaved(false), 3000);
       } else {
-        alert(data.error || "Settings were not saved");
+        notify(data.error || "Settings were not saved", "error");
       }
     } catch {
-      alert("Error saving settings");
+      notify("Error saving settings", "error");
     }
   };
 

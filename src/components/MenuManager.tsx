@@ -15,6 +15,7 @@ import {
   Edit2,
   Trash2,
 } from "lucide-react";
+import { notify } from "@/lib/notify";
 
 interface MenuManagerProps {
   categories: any[];
@@ -74,7 +75,7 @@ export const MenuManager: React.FC<MenuManagerProps> = ({
           });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.success) {
-        alert(data.error || "Menu item was not saved");
+        notify(data.error || "Menu item was not saved", "error");
         return;
       }
 
@@ -87,7 +88,7 @@ export const MenuManager: React.FC<MenuManagerProps> = ({
       onRefresh();
     } catch (e) {
       console.error(e);
-      alert("Could not reach the server. Menu item was not saved.");
+      notify("Could not reach the server. Menu item was not saved.", "error");
     }
   };
 
@@ -100,13 +101,13 @@ export const MenuManager: React.FC<MenuManagerProps> = ({
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.success) {
-        alert(data.error || "Availability was not changed");
+        notify(data.error || "Availability was not changed", "error");
         return;
       }
       onRefresh();
     } catch (e) {
       console.error(e);
-      alert("Could not reach the server. Availability was not changed.");
+      notify("Could not reach the server. Availability was not changed.", "error");
     }
   };
 

@@ -17,6 +17,8 @@ import {
   Mail,
   Phone,
 } from "lucide-react";
+import { apiErrorMessage, apiFetch } from "@/lib/api-client";
+import { notify } from "@/lib/notify";
 
 export const PurchasingManager: React.FC = () => {
   const [purchaseOrders, setPurchaseOrders] = useState<any[]>([]);
@@ -77,7 +79,7 @@ export const PurchasingManager: React.FC = () => {
     if (validItems.length === 0) return;
 
     try {
-      const res = await fetch("/api/purchasing/orders", {
+      const data = await apiFetch("/api/purchasing/orders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -91,18 +93,17 @@ export const PurchasingManager: React.FC = () => {
           notes: poNotes,
         }),
       });
-      const data = await res.json();
       if (data.success) {
         setShowNewPoModal(false);
         setPoItems([{ ingredientId: "", quantity: "10", unitPrice: "5.00", unit: "kg" }]);
         setPoNotes("");
         fetchData();
       } else {
-        alert(data.error || "Purchase order was not created");
+        notify(data.error || "Purchase order was not created", "error");
       }
     } catch (e) {
       console.error(e);
-      alert("Could not reach the server. Purchase order was not created.");
+      notify(apiErrorMessage(e, "Could not reach the server. Purchase order was not created."), "error");
     }
   };
 
@@ -119,7 +120,7 @@ export const PurchasingManager: React.FC = () => {
     }));
 
     try {
-      const res = await fetch("/api/purchasing/orders", {
+      const data = await apiFetch("/api/purchasing/orders", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -129,25 +130,24 @@ export const PurchasingManager: React.FC = () => {
           receivedItems: receivedPayload,
         }),
       });
-      const data = await res.json();
       if (data.success) {
-        alert(`Goods received under GRN #${data.grnNumber}. Inventory quantities stocked automatically!`);
+        notify(`Goods received under GRN #${data.grnNumber}. Inventory quantities stocked automatically!`, "ok");
         setShowGrnModal(null);
         setGrnInvoiceNo("");
         fetchData();
       } else {
-        alert(data.error || "Goods receipt was not recorded");
+        notify(data.error || "Goods receipt was not recorded", "error");
       }
     } catch (e) {
       console.error(e);
-      alert("Could not reach the server. Goods were not received.");
+      notify(apiErrorMessage(e, "Could not reach the server. Goods were not received."), "error");
     }
   };
 
   const handleAddSupplier = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const res = await fetch("/api/purchasing/suppliers", {
+      const data = await apiFetch("/api/purchasing/suppliers", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -158,7 +158,6 @@ export const PurchasingManager: React.FC = () => {
           paymentTerms: supTerms,
         }),
       });
-      const data = await res.json();
       if (data.success) {
         setShowAddSupplierModal(false);
         setSupName("");
@@ -167,11 +166,11 @@ export const PurchasingManager: React.FC = () => {
         setSupPhone("");
         fetchData();
       } else {
-        alert(data.error || "Supplier was not saved");
+        notify(data.error || "Supplier was not saved", "error");
       }
     } catch (e) {
       console.error(e);
-      alert("Could not reach the server. Supplier was not saved.");
+      notify(apiErrorMessage(e, "Could not reach the server. Supplier was not saved."), "error");
     }
   };
 
