@@ -118,7 +118,9 @@ install -d -o admin -g admin /opt/pos && cd /opt/pos
 git clone -b main https://github.com/iwani1/claude-test.git .
 
 # Option B — upload the reviewed archive instead
-#   Download 11claude-fixed.zip from the repository page, then:
+#   Download the `pos-release-archive` artifact from the latest successful
+#   "Security regression" run on GitHub Actions (or build it with
+#   python3 scripts/package-release.py on a trusted machine), then:
 #   unzip 11claude-fixed.zip -d /opt/pos
 ```
 
@@ -406,7 +408,7 @@ sudo ls -lh /root/backups | tail -2          # a non-zero file, or stop here
 
 # 2. Code. /opt/pos belongs to the service account, so pull as that account —
 #    a plain `git pull` answers "cannot open '.git/FETCH_HEAD': Permission denied".
-sudo -u pos git -C /opt/pos pull             # or upload the new 11claude-fixed.zip
+sudo -u pos git -C /opt/pos pull             # or upload the new release archive from CI
 
 # 3. Dependencies, only when package-lock.json moved
 sudo -u pos npm --prefix /opt/pos ci

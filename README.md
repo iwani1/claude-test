@@ -201,5 +201,7 @@ need a reviewed ownership conversion before cutover. Cash/MoMo are manual tender
 records, not payment gateway integrations.
 
 Release archive: `python3 scripts/package-release.py` builds `11claude-fixed.zip`;
-`python3 scripts/package-release.py --check` verifies it matches the source.
-The original ZIP is retained in Git but excluded from the new source archive.
+`python3 scripts/package-release.py --check` verifies it matches the source. CI builds
+it on every run and keeps it as the `pos-release-archive` artifact (90 days). The
+archive is git-ignored, never committed. The original ZIP is kept on the owner's
+machine, not in Git, and is excluded from the release archive.

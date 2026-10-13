@@ -101,6 +101,7 @@ not from the production server, not with a browser, not with hardware.
 | **Medium** | **Legacy credentials were in the repository.** `11claude.zip` (the original code) contains a default owner password and a fallback signing key, and `tests/e2e.mjs` carried a demo password. | Both are out of the tree: the ZIP is git-ignored and kept on the owner's machine, and `tests/e2e.mjs` is removed. History is not rewritten, so the old files remain in past commits and in `main`'s history. Confirmed by the owner that the live server never used these values. |
 | **Low** | **The public health endpoint disclosed internals.** It named the database, the schema, the missing columns and the build commit to anyone. | It returns only `ok` and a reason code. The details go to the server log. |
 | **Low** | **The deploy script defaulted to another session's branch.** `POS_BRANCH` defaulted to `arena/181e4004-claude-test`. | The default is `main`, and the deployment guide clones `main`. Set `POS_BRANCH` only on purpose. |
+| **Process** | **The release archive was committed by hand.** It had to be rebuilt after every source change, and a stale copy failed CI. | CI builds the archive from the commit, checks it, and keeps it as an artifact. It is git-ignored and no longer committed. |
 
 ## Missed on the first pass: order deletion on a stale database
 
