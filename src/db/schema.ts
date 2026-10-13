@@ -255,7 +255,7 @@ export const suppliers = pgTable("suppliers", {
 
 export const purchaseOrders = pgTable("purchase_orders", {
   id: serial("id").primaryKey(),
-  poNumber: text("po_number").notNull().unique(), // e.g. "PO-2025-001"
+  poNumber: text("po_number").notNull().unique(), // e.g. "PO-20261013-3F9A2C1B"
   supplierId: integer("supplier_id").notNull(),
   branchId: integer("branch_id").notNull().default(sql`nullif(current_setting('app.branch_id', true), '')::integer`),
   createdById: integer("created_by_id").notNull(),

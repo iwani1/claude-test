@@ -14,7 +14,7 @@ not from the production server, not with a browser, not with hardware.
 
 | Method | What it covered |
 |---|---|
-| `npm run test:security` | 202 security (including a stale-database scenario, staff removal and the read-only finance role) + 78 pilot + 30 accounting checks against a disposable database and a production build |
+| `npm run test:security` | 202 security (including a stale-database scenario, staff removal and the read-only finance role) + 80 pilot + 30 accounting checks against a disposable database and a production build |
 | `npm run audit:responsive` | 28 components + 2 app files: tables scroll or become cards, dialogs scroll, no `h-screen`/`w-screen`, no unguarded fixed widths |
 | `npm run audit:workflows` | **new** — swallowed failures in client code, fetches parsed without a status check, money routes without an idempotency guard, routes without a permission check, tables without a phone view |
 | Route sweep | all 27 route handlers read for permission gates, error envelopes and money/stock writes |
@@ -91,6 +91,7 @@ not from the production server, not with a browser, not with hardware.
 | **Low** | The stock-adjustment submit button was a 28px target (below the touch floor) and could be double-tapped. | 44px minimum, in-flight guard, "Committing…" state. |
 | **Medium** *(13 Oct)* | **A staff account could not be removed at all.** The owner asked for it; the capability had never been built, and a raw row delete is refused by Postgres while orders point at the person. | Owner-only removal from the roster: `migrations/0005_staff_removal.sql`, `delete_user` action, Delete in Staff behind a confirm dialog. Credentials wiped, sessions revoked, sales and their names kept, activity-log entry written. 14 security checks + 25 live checks. See the section below. |
 | **Low** | An offline payment notice promised "it will not be charged twice" before the server could guarantee it. | The promise is now backed by payment idempotency, and the notice points at the safe action (retry, or check Order History). |
+| **Medium** | **Purchase-order and goods-receipt numbers could collide.** They were built from the last six digits of the millisecond clock, which repeat about every 16 minutes; around 1,000 documents would likely produce a duplicate, and the duplicate answered 409 on PO creation or receipt. | `src/lib/document-numbers.ts`: a UTC date plus 32 random bits (`PO-20261013-3F9A2C1B`). The unique constraints are kept; pilot checks confirm the format. |
 
 ## Missed on the first pass: order deletion on a stale database
 
@@ -234,7 +235,7 @@ Re-run end to end on the release the venue is getting:
 
 | Check | Result |
 |---|---|
-| `npm run test:security` | **202 security / 78 pilot / 30 accounting**, exit 0 (fresh database, production build, RLS enforced) |
+| `npm run test:security` | **202 security / 80 pilot / 30 accounting**, exit 0 (fresh database, production build, RLS enforced) |
 | `npm run audit:workflows` | 0 failures, 27 warnings, 56 advisories — unchanged baseline |
 | `npm run audit:responsive` | 0 failures, 0 warnings |
 | `tsc --noEmit`, `eslint` | clean |
@@ -338,7 +339,7 @@ drawer. **23/23 pass** after the fixes above.
 ```sh
 # all of the commands below also run in CI on every push:
 #   .github/workflows/security.yml
-npm run test:security      # 202 + 78 + 30 checks, disposable database, production build
+npm run test:security      # 202 + 80 + 30 checks, disposable database, production build
 npm run audit:responsive   # layout rules, exits 1 on a regression
 npm run audit:workflows    # feedback/money-guard rules, exits 1 on a regression
 npx eslint src tests scripts --max-warnings=0

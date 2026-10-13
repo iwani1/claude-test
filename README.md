@@ -130,7 +130,7 @@ what is still open, and what cannot be checked without hardware or the server.
 Re-run it with:
 
 ```sh
-npm run test:security      # 202 security + 78 pilot + 30 accounting checks
+npm run test:security      # 202 security + 80 pilot + 30 accounting checks
 npm run audit:responsive   # phone/tablet/laptop layout rules
 npm run audit:workflows    # failure-feedback, money-guard and schema-guard rules
 ```
