@@ -33,6 +33,8 @@ export const REQUIRED_COLUMNS: ReadonlyArray<readonly [string, string]> = [
   // 0004_payment_idempotency.sql
   ["payments", "idempotency_key"],
   ["payments", "request_fingerprint"],
+  // 0005_staff_removal.sql
+  ["users", "deleted_at"],
 ];
 
 /**
@@ -96,4 +98,28 @@ export async function findMissingSchema(executor: Executor): Promise<string[]> {
   `);
   const present = new Set(result.rows.map(row => String(row.name)));
   return [...REQUIRED_TABLES, ...columns].filter(name => !present.has(name));
+}
+
+/**
+ * Does this database have that column yet? Reads the catalogue, so it always
+ * succeeds — which matters, because a *failed* statement poisons the request's
+ * transaction: asking first lets one query shape be chosen over another, while
+ * a try/catch around a query that dies can only ever roll the request back.
+ *
+ * Used where the code can keep working on the old schema: `users.deleted_at`
+ * only hides removed accounts from the staff list, and a database that has not
+ * run 0005 has no removed accounts, so listing everyone is exact. Everything
+ * else keeps the existing behaviour — the request that needs the missing piece
+ * is answered with the migration advice, and the venue keeps trading.
+ */
+export async function columnExists(executor: Executor, table: string, column: string): Promise<boolean> {
+  const result = await executor.execute(sql`
+    select 1 from pg_catalog.pg_attribute a
+    join pg_catalog.pg_class c on c.oid = a.attrelid
+    join pg_catalog.pg_namespace n on n.oid = c.relnamespace
+    where n.nspname = current_schema() and c.relname = ${table} and a.attname = ${column}
+      and a.attnum > 0 and not a.attisdropped
+    limit 1
+  `);
+  return result.rows.length > 0;
 }

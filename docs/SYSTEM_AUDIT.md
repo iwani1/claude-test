@@ -14,7 +14,7 @@ not from the production server, not with a browser, not with hardware.
 
 | Method | What it covered |
 |---|---|
-| `npm run test:security` | 159 security (including a stale-database scenario) + 70 pilot + 30 accounting checks against a disposable database and a production build |
+| `npm run test:security` | 175 security (including a stale-database scenario and staff removal) + 78 pilot + 30 accounting checks against a disposable database and a production build |
 | `npm run audit:responsive` | 28 components + 2 app files: tables scroll or become cards, dialogs scroll, no `h-screen`/`w-screen`, no unguarded fixed widths |
 | `npm run audit:workflows` | **new** — swallowed failures in client code, fetches parsed without a status check, money routes without an idempotency guard, routes without a permission check, tables without a phone view |
 | Route sweep | all 27 route handlers read for permission gates, error envelopes and money/stock writes |
@@ -89,6 +89,7 @@ not from the production server, not with a browser, not with hardware.
 | **Medium** | A failed sign-out was silent: the screen cleared while the session cookie could still be alive — dangerous on a shared terminal. | Sign-out now reports the failure and asks for a retry once connected. |
 | **Low** | API **error** responses carried no `Cache-Control`, so a browser or proxy could keep serving a 503/401 after the cause was fixed — it made a repaired production system look broken while the owner and I chased a phantom. Success responses already said `no-store`; failures did not. | Every error answer sets `Cache-Control: no-store`, and `/api/health` too (asserted in the suite; re-check any cached URL with a `?probe=1` suffix). |
 | **Low** | The stock-adjustment submit button was a 28px target (below the touch floor) and could be double-tapped. | 44px minimum, in-flight guard, "Committing…" state. |
+| **Medium** *(13 Oct)* | **A staff account could not be removed at all.** The owner asked for it; the capability had never been built, and a raw row delete is refused by Postgres while orders point at the person. | Owner-only removal from the roster: `migrations/0005_staff_removal.sql`, `delete_user` action, Delete in Staff behind a confirm dialog. Credentials wiped, sessions revoked, sales and their names kept, activity-log entry written. 14 security checks + 25 live checks. See the section below. |
 | **Low** | An offline payment notice promised "it will not be charged twice" before the server could guarantee it. | The promise is now backed by payment idempotency, and the notice points at the safe action (retry, or check Order History). |
 
 ## Missed on the first pass: order deletion on a stale database
@@ -180,6 +181,52 @@ and `/api/health` still reports `schema-behind` — which is where the hard stop
 belongs, because `scripts/deploy-vps.sh` gates on it *before* anyone is serving
 from it. `tests/security.ts` asserts both halves: the venue keeps trading, the
 payment-dependent operation refuses loudly.
+
+## Found by the owner, 13 October: a staff account could not be deleted
+
+**Reported:** "im not able to delete staff account".
+
+**What was actually there:** nothing to fail. `DELETE /api/staff` answered `405`,
+`{"action":"delete_user"}` answered `400 Invalid action`, and the Staff screen
+offered only Add / Change PIN / Reset Password / Deactivate. Removal had never
+been built — the report was a missing capability, not a regression.
+
+**Why it cannot simply be a `DELETE`:** ten of the fifteen imported accounts have
+sold things, and eleven foreign keys point at `users` (`orders.user_id`,
+`payments.processed_by`, `refunds.authorized_by`, `shifts.user_id`,
+`audit_logs.user_id`, the stock and purchasing authors,
+`drawer_movements.created_by`). Postgres refuses the row while any of them exist
+— reproduced as `23503` on `orders_user_id_scope` for a cashier with 17 sales —
+and deleting those sales instead would shrink the books and lose who took the
+money.
+
+**What was built** (owner's choices: off the roster / keep their sales / log it /
+owner only): `migrations/0005_staff_removal.sql` adds `users.deleted_at`. The
+`delete_user` action marks the row, wipes the password hash, PIN, PIN lookup,
+phone and avatar, moves the login address to `removed-<id>@deleted.invalid`
+(freeing the real address and the PIN for a rehire), bumps `session_version` so
+a live session dies at once, and returns a note when the person still has a till
+open. Managers get `403`; nobody can remove themselves; a second attempt gets
+`409`. The roster stops listing the account; every past sale keeps the name of
+whoever took the money; the activity log records who removed whom.
+
+**Verified live** — 25 checks on the running preview, after a 14-check security
+block: an employee with a sale and an open till is removed by the owner, the
+roster drops them, sign-in and the live session both fail, the sale still reads
+under their name in the books, the activity log names the owner who did it, the
+open-till warning appears and that till is still closable, and the freed email
+and PIN work for a new account.
+
+**The fallback that failed first, and why it matters.** The staff list had to
+keep working on a database that had not run 0005 yet — production serves the old
+build until the migration lands. The first version caught the missing-column
+error and retried without the filter, and still answered `500`: in Postgres a
+failed statement **aborts the whole transaction**, so the retry ran inside a
+poisoned transaction and died for a different reason. The screen now asks the
+catalogue (`columnExists`) *before* choosing which query to run, because asking
+never fails. On the un-migrated preview the list then answered `200` with all
+fifteen accounts while the removal itself answered `503` naming
+`users.deleted_at` and the `npm run db:migrate` command.
 
 ## Live environment smoke (every screen)
 

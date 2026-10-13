@@ -1,6 +1,7 @@
 "use client";
 
 import { LoadFailure } from "./LoadFailure";
+import { ConfirmDialog } from "./ConfirmDialog";
 
 import React, { useState, useEffect, useCallback } from "react";
 import {
@@ -14,6 +15,7 @@ import {
   Phone,
   Mail,
   X,
+  Trash2,
   UserCheck,
 } from "lucide-react";
 import { ROLE_PERMISSIONS, UserRole } from "@/lib/permissions";
@@ -25,6 +27,11 @@ export const StaffManager: React.FC<{ currentUser?: any }> = ({ currentUser }) =
   const [showPasswordModal, setShowPasswordModal] = useState<any | null>(null);
   const [newPassword, setNewPassword] = useState("");
   const [newPin, setNewPin] = useState("");
+  // Removing an account is owner-only and asks first: it cannot be undone.
+  const [confirmDelete, setConfirmDelete] = useState<any | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
+  const [notice, setNotice] = useState("");
 
   // New staff form
   const [name, setName] = useState("");
@@ -148,6 +155,33 @@ export const StaffManager: React.FC<{ currentUser?: any }> = ({ currentUser }) =
     }
   };
 
+  const handleDeleteEmployee = async () => {
+    if (!confirmDelete) return;
+    setDeleteBusy(true);
+    setDeleteError("");
+    try {
+      const res = await fetch("/api/staff", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "delete_user", userId: confirmDelete.id }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) {
+        setDeleteError(data.error || "The account was not removed. Nothing changed.");
+        return;
+      }
+      const removedName = confirmDelete.name;
+      setConfirmDelete(null);
+      setNotice(`${removedName}'s account was removed. They can no longer sign in; past sales stay in the reports under that name.${data.note ? " " + data.note : ""}`);
+      fetchStaff();
+    } catch (e) {
+      console.error(e);
+      setDeleteError("Could not reach the server. The account was not removed.");
+    } finally {
+      setDeleteBusy(false);
+    }
+  };
+
   const handleToggleActive = async (userId: number, currentActive: boolean) => {
     try {
       const res = await fetch("/api/staff", {
@@ -197,6 +231,21 @@ export const StaffManager: React.FC<{ currentUser?: any }> = ({ currentUser }) =
 
       {/* Staff List */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
+        {notice && (
+          <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/40 text-emerald-200 text-xs flex items-start justify-between gap-3">
+            <div className="flex items-start gap-2">
+              <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0" />
+              <span>{notice}</span>
+            </div>
+            <button
+              onClick={() => setNotice("")}
+              aria-label="Dismiss message"
+              className="p-1.5 -m-1 text-emerald-300/80 hover:text-white"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {staff.map((u) => {
             const roleInfo = ROLE_PERMISSIONS[u.role as UserRole];
@@ -287,37 +336,50 @@ export const StaffManager: React.FC<{ currentUser?: any }> = ({ currentUser }) =
                   </div>
                 </div>
 
-                <div className="mt-4 pt-3 border-t border-neutral-800 flex justify-between items-center text-xs">
-                  <div className="flex items-center gap-3">
-                    <button
-                      onClick={() => {
-                        setShowPinModal(u);
-                        setNewPin("");
-                      }}
-                      className="text-amber-400 hover:text-amber-300 font-semibold flex items-center gap-1"
-                    >
-                      <KeyRound className="w-3.5 h-3.5" />
-                      <span>Change PIN</span>
-                    </button>
-                    <button
-                      onClick={() => {
-                        setShowPasswordModal(u);
-                        setNewPassword("");
-                        setError("");
-                      }}
-                      className="text-amber-400 hover:text-amber-300 font-semibold flex items-center gap-1"
-                    >
-                      <Lock className="w-3.5 h-3.5" />
-                      <span>Reset Password</span>
-                    </button>
-                  </div>
-
+                <div className="mt-4 pt-3 border-t border-neutral-800 flex flex-wrap items-center gap-2 text-xs">
+                  <button
+                    onClick={() => {
+                      setShowPinModal(u);
+                      setNewPin("");
+                    }}
+                    className="min-h-11 px-3 rounded-xl bg-neutral-800/70 hover:bg-neutral-700 border border-neutral-700 text-amber-300 font-semibold flex items-center gap-1.5 transition"
+                  >
+                    <KeyRound className="w-4 h-4" />
+                    <span>Change PIN</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowPasswordModal(u);
+                      setNewPassword("");
+                      setError("");
+                    }}
+                    className="min-h-11 px-3 rounded-xl bg-neutral-800/70 hover:bg-neutral-700 border border-neutral-700 text-amber-300 font-semibold flex items-center gap-1.5 transition"
+                  >
+                    <Lock className="w-4 h-4" />
+                    <span>Reset Password</span>
+                  </button>
                   <button
                     onClick={() => handleToggleActive(u.id, u.isActive)}
-                    className="text-neutral-400 hover:text-white"
+                    className="min-h-11 px-3 rounded-xl bg-neutral-800/70 hover:bg-neutral-700 border border-neutral-700 text-neutral-300 font-semibold transition"
                   >
                     {u.isActive ? "Deactivate" : "Activate"}
                   </button>
+
+                  {/* Removing an account is the owner's call, and never your own:
+                      the server refuses both, this only hides the button. */}
+                  {currentUser?.role === "super_admin" && u.id !== currentUser?.id && (
+                    <button
+                      onClick={() => {
+                        setConfirmDelete(u);
+                        setDeleteError("");
+                        setNotice("");
+                      }}
+                      className="min-h-11 px-3 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/40 text-rose-300 font-semibold flex items-center gap-1.5 transition sm:ml-auto"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      <span>Delete</span>
+                    </button>
+                  )}
                 </div>
               </div>
             );
@@ -529,6 +591,23 @@ export const StaffManager: React.FC<{ currentUser?: any }> = ({ currentUser }) =
           </form>
         </div>
       )}
+
+      {/* CONFIRM: Remove staff account */}
+      <ConfirmDialog
+        open={!!confirmDelete}
+        title={`Delete ${confirmDelete?.name ?? "this"}${confirmDelete ? "'s" : ""} account?`}
+        message="They disappear from the staff list and can never sign in again — password, PIN and phone number are wiped. Their past sales stay in the reports under their name. This cannot be undone."
+        confirmLabel="Yes, delete account"
+        cancelLabel="Keep the account"
+        busy={deleteBusy}
+        busyLabel="Removing…"
+        error={deleteError}
+        onConfirm={handleDeleteEmployee}
+        onCancel={() => {
+          setConfirmDelete(null);
+          setDeleteError("");
+        }}
+      />
     </div>
   );
 };

@@ -1,0 +1,11 @@
+-- Removing a staff account must not take the money trail with it.
+--
+-- Orders, payments, refunds, shifts and stock movements all point at the user
+-- row, so Postgres refuses to delete it while any of them exist (23503) — and
+-- if it did go, the sales that person made would lose the name of whoever took
+-- the money, and revenue reports would shrink.
+--
+-- So "delete" means: remove the account from the roster, wipe every way back in
+-- (password, PIN, phone, email) and mark the row here. The staff list stops
+-- showing them; their sales keep their name.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS deleted_at timestamptz;

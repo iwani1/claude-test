@@ -171,7 +171,7 @@ cd /opt/pos
 # Migrations use the maintenance URL only — never the web app's DATABASE_URL.
 export MIGRATION_DATABASE_URL='postgresql://pos_owner:OWNER_PASSWORD_HERE@127.0.0.1:5432/pos'
 npm run db:migrate
-# Expected: Applied 0000_initial.sql ... 0003_refund_accounting.sql
+# Expected: Applied 0000_initial.sql ... 0005_staff_removal.sql
 # Safe to re-run; it refuses silently-changed migrations.
 ```
 

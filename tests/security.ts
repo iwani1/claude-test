@@ -179,6 +179,33 @@ async function main() {
   ]);
   check(branchWrites[0].body.order.branchId === 1 && branchWrites[1].body.order.branchId === 2, "parallel requests do not leak branch context");
   check((await request("/api/staff", "POST", { action: "toggle_active", userId: 7, isActive: false }, owner)).status === 404, "owner cannot change staff in another branch");
+
+  // Removing a staff account: the owner takes away the ability to sign in, the
+  // roster stops showing the account, and the sales that person made keep the
+  // name of whoever took the money — Postgres will not let the row go while
+  // orders point at it, and erasing those orders would shrink the books.
+  // Runs late: the sale below moves ingredient stock, and the checks above
+  // assert absolute stock levels.
+  const removable = await request("/api/staff", "POST", { action: "create_employee", name: "Removal Test", email: "removeme@test.invalid", role: "cashier", password: "Removal-test-password-123!", pin: "8383" }, owner);
+  check(removable.status === 200, "owner creates the employee who will be removed");
+  const removableId = removable.body.employee.id;
+  const removableLogin = await request("/api/auth/login", "POST", { email: "removeme@test.invalid", password: "Removal-test-password-123!" });
+  check((await request("/api/orders", "POST", order("removal-sale"), removableLogin.cookie)).status === 200, "the employee rings up a sale before being removed");
+  check((await request("/api/staff", "POST", { action: "delete_user", userId: removableId }, manager)).status === 403, "a manager cannot remove a staff account");
+  check((await request("/api/staff", "POST", { action: "delete_user", userId: 1 }, owner)).status === 400, "the owner cannot remove their own account");
+  const removed = await request("/api/staff", "POST", { action: "delete_user", userId: removableId }, owner);
+  check(removed.status === 200 && removed.body.success === true, `owner removes a staff account (${removed.status})`);
+  const roster = await request("/api/staff", "GET", undefined, owner);
+  check(!roster.body.staff.some((u: any) => u.id === removableId), "the removed account leaves the staff list");
+  const removedRow = (await admin.query("SELECT name, email, is_active, deleted_at FROM users WHERE id = $1", [removableId])).rows[0];
+  check(removedRow.name === "Removal Test" && removedRow.is_active === false && removedRow.deleted_at !== null, "the row stays for the money trail: name kept, access flags set");
+  check(/@deleted\.invalid$/.test(removedRow.email), "the login address is moved off the removed account");
+  check(Number((await admin.query("SELECT count(*)::int AS c FROM orders WHERE user_id = $1", [removableId])).rows[0].c) === 1, "their sale is still in the books");
+  check((await request("/api/auth/me", "GET", undefined, removableLogin.cookie)).status === 401, "removal signs the account out immediately");
+  check((await request("/api/auth/login", "POST", { email: "removeme@test.invalid", password: "Removal-test-password-123!" })).status === 401, "the removed account can never sign in again");
+  check(Number((await admin.query("SELECT count(*)::int AS c FROM audit_logs WHERE action = 'delete_user' AND entity_id = $1", [String(removableId)])).rows[0].c) >= 1, "the removal is recorded in the activity log");
+  check((await request("/api/staff", "POST", { action: "delete_user", userId: removableId }, owner)).status === 409, "removing the same account twice is refused");
+  check((await request("/api/staff", "POST", { action: "create_employee", name: "Rehired Test", email: "removeme@test.invalid", role: "cashier", password: "Rehire-password-123!", pin: "8383" }, owner)).status === 200, "the freed email and PIN can be used by a new account");
   check((await request("/api/health")).status === 200, "public health endpoint works without scoped data access");
   check((await request("/api/orders", "POST", order("bad-origin"), cashier, { Origin: "https://attacker.invalid" })).status === 403, "cross-origin mutation rejected");
   const signed = createToken({ id: 3, sessionVersion: 0 });
