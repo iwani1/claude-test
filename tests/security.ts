@@ -104,6 +104,9 @@ async function main() {
   check((await admin.query("SELECT count(*)::int AS n FROM application_settings WHERE key='not_a_setting'")).rows[0].n === 0, "the refused setting is not written");
   check((await request("/api/settings", "POST", { settingsData: { tax_rate_confirmed: "false" } }, owner)).status === 400, "the VAT confirmation cannot be switched off by hand");
   check((await request("/api/settings", "POST", { settingsData: { currency_symbol: "GH₵" } }, owner)).status === 200, "a known setting key is still saved");
+  // A new restaurant defaults to Ghana cedis, not US dollars.
+  const currencyDefaults = (await admin.query("SELECT column_name, column_default FROM information_schema.columns WHERE table_name='restaurants' AND column_name IN ('currency','currency_symbol')")).rows;
+  check(currencyDefaults.length === 2 && currencyDefaults.every((c: any) => /GHS|GH₵/.test(String(c.column_default))), "new restaurants default to GHS and GH₵");
   // Staff read only the till settings; the owner keeps the full record.
   const staffView = (await request("/api/settings", "GET", undefined, cashier)).body;
   check(staffView.restaurant && !("taxNumber" in staffView.restaurant) && !("email" in staffView.restaurant) && !("phone" in staffView.restaurant) && !("address" in staffView.restaurant) && !("momo_merchant_number" in staffView.settings) && staffView.branches.length === 0, "cashiers do not read contact, registration or payment-number settings");

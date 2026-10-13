@@ -14,7 +14,7 @@ not from the production server, not with a browser, not with hardware.
 
 | Method | What it covered |
 |---|---|
-| `npm run test:security` | 238 security (including a stale-database scenario, staff removal, the read-only finance role, sign-in and refund throttling, and the VAT gate) + 80 pilot + 30 accounting checks against a disposable database and a production build |
+| `npm run test:security` | 239 security (including a stale-database scenario, staff removal, the read-only finance role, sign-in and refund throttling, and the VAT gate) + 80 pilot + 30 accounting checks against a disposable database and a production build |
 | `npm run audit:responsive` | 28 components + 2 app files: tables scroll or become cards, dialogs scroll, no `h-screen`/`w-screen`, no unguarded fixed widths |
 | `npm run audit:workflows` | **new** — swallowed failures in client code, fetches parsed without a status check, money routes without an idempotency guard, routes without a permission check, tables without a phone view |
 | Route sweep | all 27 route handlers read for permission gates, error envelopes and money/stock writes |
@@ -111,6 +111,7 @@ not from the production server, not with a browser, not with hardware.
 | **Low** | **The dev-origin list named `localhost` twice.** Next already allows it by default. | Removed the redundant entry. Development-only: production builds ignore this list. |
 | **Low** | **Menu and login screens loaded images from Unsplash.** | Menu items use a local placeholder image, and the login screen uses a local photo. |
 | **Low** | **The owner dashboard and sidebar showed "GreenGeeks".** | Renamed to "Hosting Package" and "Hosting Deploy". The guide file keeps its name. |
+| **Low** | **New restaurants defaulted to US dollars.** The database defaults were `USD` and `$`, while the seed and the app use GHS and GH₵. | Migration `0006_ghana_currency_default.sql` changes the defaults to GHS and GH₵. Existing rows are not changed by the migration (row-level security hides them from it); change the currency in Settings if the live record still shows `$`. |
 
 ## Missed on the first pass: order deletion on a stale database
 
@@ -255,7 +256,7 @@ Re-run end to end on the release the venue is getting:
 
 | Check | Result |
 |---|---|
-| `npm run test:security` | **238 security / 80 pilot / 30 accounting**, exit 0 (fresh database, production build, RLS enforced) |
+| `npm run test:security` | **239 security / 80 pilot / 30 accounting**, exit 0 (fresh database, production build, RLS enforced) |
 | `npm run audit:workflows` | 0 failures, 27 warnings, 56 advisories — unchanged baseline |
 | `npm run audit:responsive` | 0 failures, 0 warnings |
 | `tsc --noEmit`, `eslint` | clean |
@@ -359,7 +360,7 @@ drawer. **23/23 pass** after the fixes above.
 ```sh
 # all of the commands below also run in CI on every push:
 #   .github/workflows/security.yml
-npm run test:security      # 238 + 80 + 30 checks, disposable database, production build
+npm run test:security      # 239 + 80 + 30 checks, disposable database, production build
 npm run audit:responsive   # layout rules, exits 1 on a regression
 npm run audit:workflows    # feedback/money-guard rules, exits 1 on a regression
 npx eslint src tests scripts --max-warnings=0
