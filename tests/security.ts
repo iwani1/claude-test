@@ -47,11 +47,34 @@ async function main() {
   }
   const anon = await request("/api/menu");
   check(anon.status === 401 && anon.headers.get("cache-control") === "no-store", "refusals are uncacheable, so a repaired system cannot look broken");
-  const owner = await login(1), manager = await login(2), cashier = await login(3), accountant = await login(4), other = await login(7), otherOwner = await login(8), otherTenant = await login(9);
+  const owner = await login(1), manager = await login(2), cashier = await login(3), accountant = await login(4), inventory = await login(5), other = await login(7), otherOwner = await login(8), otherTenant = await login(9);
   check((await request("/api/shifts", "POST", { action: "open_shift", openingCash: "100.00" }, owner)).status === 200, "security fixture opens register");
   check((await request("/api/auth/login", "POST", { email: "user6@test.invalid", password: "Test-password-only-123!" })).status === 401, "kitchen account cannot log in");
   check((await request("/api/reports", "GET", undefined, cashier)).status === 403, "cashier cannot read reports");
   check((await request("/api/orders", "POST", order("accountant-denied"), accountant)).status === 403, "accountant cannot create sales");
+  // --- Read-only finance pass -------------------------------------------------
+  // Accountant / Finance reads the money trail and touches none of it. The tabs
+  // used to be offered on "can see reports" while the APIs behind them demanded
+  // till access, so finance opened screens that answered 403 and dashboard
+  // panels that swallowed the 403 printed zeros as fact.
+  const financeSale = await request("/api/orders", "POST", order("finance-read-probe"), owner);
+  check(financeSale.status === 200, "owner rings up the sale the finance checks read");
+  const financeOrderId = financeSale.body.order.id;
+  const financeList = await request("/api/orders?limit=5", "GET", undefined, accountant);
+  check(financeList.status === 200 && Array.isArray(financeList.body.orders), "accountant reads order history");
+  check((await request(`/api/orders/${financeOrderId}`, "GET", undefined, accountant)).status === 200, "accountant opens a single receipt");
+  check((await request(`/api/orders/${financeOrderId}`, "PATCH", { notes: "adjusted" }, accountant)).status === 403, "accountant cannot modify an order");
+  check((await request(`/api/orders/${financeOrderId}/edit`, "PATCH", {}, accountant)).status === 403, "accountant cannot re-price an order");
+  check((await request(`/api/orders/${financeOrderId}/pay`, "POST", { amount: "1.00", method: "cash" }, accountant)).status === 403, "accountant cannot take a payment");
+  check((await request(`/api/orders/${financeOrderId}/refund`, "POST", { amount: "1.00", reason: "no" }, accountant)).status === 403, "accountant cannot refund");
+  check((await request(`/api/orders/${financeOrderId}`, "DELETE", {}, accountant)).status === 403, "accountant cannot erase an order");
+  const financeDrawer = await request("/api/shifts", "GET", undefined, accountant);
+  check(financeDrawer.status === 200 && "activeShift" in financeDrawer.body, "accountant reads the drawer ledger");
+  check((await request("/api/shifts", "POST", { action: "open_shift", openingCash: "10.00" }, accountant)).status === 403, "accountant cannot open a shift");
+  check((await request("/api/orders?limit=5", "GET", undefined, inventory)).status === 403, "order history is not handed to every report role");
+  // The probe sale rang up stock, so erase it before the absolute stock checks
+  // below — deletion returns exactly what the order consumed.
+  check((await request(`/api/orders/${financeOrderId}`, "DELETE", {}, owner)).status === 200, "the finance probe sale erases cleanly, leaving fixture stock untouched");
   check((await request("/api/menu", "POST", { name: "Bad", categoryId: 1, price: 1 }, cashier)).status === 403, "cashier cannot modify menu");
   const staff = await request("/api/staff", "GET", undefined, manager);
   check(staff.status === 200 && staff.body.staff.every((u: any) => u.branchId === 1 && !('pin' in u) && !('passwordHash' in u) && !('pinLookup' in u)), "staff list scoped and credentials redacted");
@@ -225,7 +248,8 @@ async function main() {
   const expired = `${data}.${createHmac("sha256", process.env.AUTH_SECRET!).update(data).digest("base64url")}`;
   check((await request("/api/menu", "GET", undefined, `pos_session=${expired}`)).status === 401, "server rejects correctly signed expired token");
   await admin.query("UPDATE users SET role='accountant' WHERE id=3");
-  check((await request("/api/orders", "GET", undefined, cashier)).status === 403, "existing token immediately reflects role downgrade");
+  check((await request("/api/orders", "GET", undefined, cashier)).status === 200, "a token downgraded to finance keeps only the read-only history");
+  check((await request("/api/orders", "POST", order("downgraded-to-finance"), cashier)).status === 403, "existing token immediately reflects role downgrade (the till is refused)");
   await admin.query("UPDATE users SET is_active=false WHERE id=3");
   check((await request("/api/menu", "GET", undefined, cashier)).status === 401, "deactivated user loses existing session access");
   check((await request("/api/auth/logout", "POST", {}, manager)).status === 200, "logout succeeds");

@@ -21,8 +21,13 @@ import { ReceiptModal } from "./ReceiptModal";
 import { KitchenTicketModal } from "./KitchenTicketModal";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { EditOrderModal } from "./EditOrderModal";
+import { ROLE_PERMISSIONS, UserRole } from "@/lib/permissions";
 
 export const OrdersHistory: React.FC<{ currentUser: any }> = ({ currentUser }) => {
+  const perms = ROLE_PERMISSIONS[currentUser?.role as UserRole] ?? ROLE_PERMISSIONS.cashier;
+  /** Finance and stock roles read this screen; only till roles can act on it.
+   *  A visible button that always answers 403 is worse than no button. */
+  const canWorkTill = perms.canAccessPos;
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
@@ -179,8 +184,15 @@ export const OrdersHistory: React.FC<{ currentUser: any }> = ({ currentUser }) =
             <span>Orders & Transaction History</span>
           </h2>
           <p className="text-xs text-neutral-400 mt-0.5">
-            Audit transactions, reprint receipts, and process manager refunds
+            {canWorkTill
+              ? "Audit transactions, reprint receipts, and process manager refunds"
+              : "Audit transactions and reprint receipts"}
           </p>
+          {!canWorkTill && (
+            <p className="text-[0.6875rem] text-amber-300/90 mt-1">
+              Read-only: refunds, edits and deletions are done at the till by the owner or a manager.
+            </p>
+          )}
         </div>
 
         {/* Search & Filter */}
@@ -335,7 +347,7 @@ export const OrdersHistory: React.FC<{ currentUser: any }> = ({ currentUser }) =
                       >
                         <Printer className="w-4 h-4" /> Receipt
                       </button>
-                      {Number(ord.paidAmount) > 0 && ord.paymentStatus !== "refunded" && (
+                      {canWorkTill && Number(ord.paidAmount) > 0 && ord.paymentStatus !== "refunded" && (
                         <button
                           onClick={() => openRefund(ord)}
                           className="h-12 px-3.5 rounded-xl bg-neutral-800 border border-neutral-700 text-neutral-200 font-semibold text-xs flex items-center gap-1.5 transition active:scale-[0.97]"
@@ -489,7 +501,7 @@ export const OrdersHistory: React.FC<{ currentUser: any }> = ({ currentUser }) =
                             <Printer className="w-3.5 h-3.5" />
                           </button>
 
-                          {Number(ord.paidAmount) > 0 && ord.paymentStatus !== "refunded" && (
+                          {canWorkTill && Number(ord.paidAmount) > 0 && ord.paymentStatus !== "refunded" && (
                             <button
                               onClick={() => openRefund(ord)}
                               className="px-2 py-1 bg-neutral-800 hover:bg-rose-950/40 text-neutral-300 hover:text-rose-400 rounded-lg text-[0.6875rem] font-medium border border-neutral-700 transition flex items-center gap-1"

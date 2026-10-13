@@ -95,13 +95,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
         { id: "pos", label: "Take Order (Till)", short: "Order", icon: Calculator, visible: perms.canAccessPos },
         { id: "tables", label: "Tables", short: "Tables", icon: Grid, badge: openTableCount > 0 ? `${openTableCount} open` : undefined, visible: perms.canAccessPos },
         { id: "kds", label: "Kitchen", short: "Kitchen", icon: ChefHat, visible: perms.canAccessKds },
-        { id: "orders", label: "Order History", short: "Orders", icon: Receipt, visible: perms.canAccessPos || perms.canViewReports },
+        { id: "orders", label: "Order History", short: "Orders", icon: Receipt, visible: perms.canViewOrderHistory },
       ],
     },
     {
       title: "CASH DRAWER",
       items: [
-        { id: "shifts", label: "Cash Drawer", short: "Cash", icon: Coins, badge: shiftOpen ? "● Open" : "○ Closed", visible: perms.canAccessPos || perms.canViewReports },
+        { id: "shifts", label: "Cash Drawer", short: "Cash", icon: Coins, badge: shiftOpen ? "● Open" : "○ Closed", visible: perms.canViewDrawerHistory },
       ],
     },
     {

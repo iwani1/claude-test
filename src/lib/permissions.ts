@@ -13,6 +13,15 @@ export const ROLE_PERMISSIONS: Record<UserRole, {
   canAccessKds: boolean;
   canManageMenu: boolean;
   canManageSettings: boolean;
+  /** Read the order list and individual receipts. Deliberately separate from
+   *  canAccessPos: finance roles read the transaction trail without gaining the
+   *  till. The menu, the screen and the API gate must all ask this one question,
+   *  because when they disagreed (menu said "can see reports", API said "till
+   *  only") an accountant opened Order History onto a 403. */
+  canViewOrderHistory: boolean;
+  /** Read shift/drawer history. Operating the drawer — opening and closing a
+   *  shift, cash drops, popping the till — stays behind canAccessPos. */
+  canViewDrawerHistory: boolean;
   /** Hard-delete orders. Owner only: this erases the order and its whole
    *  financial trail, so it is deliberately not delegable to managers. */
   canDeleteOrders: boolean;
@@ -32,6 +41,8 @@ export const ROLE_PERMISSIONS: Record<UserRole, {
     canAccessKds: true,
     canManageMenu: true,
     canManageSettings: true,
+    canViewOrderHistory: true,
+    canViewDrawerHistory: true,
     canDeleteOrders: true,
     canEditOrders: true,
   },
@@ -46,6 +57,8 @@ export const ROLE_PERMISSIONS: Record<UserRole, {
     canAccessKds: true,
     canManageMenu: true,
     canManageSettings: false,
+    canViewOrderHistory: true,
+    canViewDrawerHistory: true,
     canDeleteOrders: false,
     canEditOrders: false,
   },
@@ -61,6 +74,8 @@ export const ROLE_PERMISSIONS: Record<UserRole, {
     canAccessKds: true,
     canManageMenu: false,
     canManageSettings: false,
+    canViewOrderHistory: true,
+    canViewDrawerHistory: true,
     canDeleteOrders: false,
     canEditOrders: false,
   },
@@ -76,6 +91,8 @@ export const ROLE_PERMISSIONS: Record<UserRole, {
     canAccessKds: false,
     canManageMenu: false,
     canManageSettings: false,
+    canViewOrderHistory: false,
+    canViewDrawerHistory: false,
     canDeleteOrders: false,
     canEditOrders: false,
   },
@@ -90,6 +107,10 @@ export const ROLE_PERMISSIONS: Record<UserRole, {
     canAccessKds: false,
     canManageMenu: true,
     canManageSettings: false,
+    // Stock work, not money: reads reports and the menu/recipes, and does not
+    // read the transaction trail or the drawer.
+    canViewOrderHistory: false,
+    canViewDrawerHistory: false,
     canDeleteOrders: false,
     canEditOrders: false,
   },
@@ -104,6 +125,10 @@ export const ROLE_PERMISSIONS: Record<UserRole, {
     canAccessKds: false,
     canManageMenu: false,
     canManageSettings: false,
+    // Finance reads the money trail — order history and the drawer ledger —
+    // but never operates the till or the drawer (canAccessPos stays false).
+    canViewOrderHistory: true,
+    canViewDrawerHistory: true,
     canDeleteOrders: false,
     canEditOrders: false,
   },

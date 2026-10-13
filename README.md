@@ -32,6 +32,23 @@ the shift's running sales/cash/MoMo totals are rolled back so the drawer still
 reconciles to the sales that remain. There is no undo, and no other role —
 including managers — can reach it.
 
+### Roles: who can reach what
+
+The till roles handle money; the finance role reads it. **Accountant / Finance**
+gets **Order History** (receipts, items, payments, refunds) and the **Cash
+Drawer** ledger — read-only: no refund, no re-price, no deletion, no opening or
+closing a shift, no till. Reports, the activity log and the CSV reconciliation
+export work as before, and the dashboard says *"Not available to your role"* on
+the floor, kitchen and stock panels rather than printing zeros as fact.
+
+`canViewOrderHistory` and `canViewDrawerHistory` in `src/lib/permissions.ts` are
+the one question asked by the menu, the screen and the API gate. They used to
+disagree — the menu offered both tabs to anyone who could see reports, while the
+APIs behind them demanded till access — which opened Order History onto a `403`
+for finance, with dashboard panels showing `GH₵0` where their requests had been
+refused. `npm run audit:workflows` fails (rule 7) if a menu tab and the API gate
+behind it ever disagree again.
+
 ### Devices — phone, tablet, laptop, desktop
 
 One layout serves every screen; nothing is feature-limited on a smaller device.
@@ -109,7 +126,7 @@ what is still open, and what cannot be checked without hardware or the server.
 Re-run it with:
 
 ```sh
-npm run test:security      # 180 security + 78 pilot + 30 accounting checks
+npm run test:security      # 195 security + 78 pilot + 30 accounting checks
 npm run audit:responsive   # phone/tablet/laptop layout rules
 npm run audit:workflows    # failure-feedback, money-guard and schema-guard rules
 ```
@@ -120,7 +137,8 @@ and any operation that needs a missing column answers `503` naming it and the
 command that fixes it (`npm run db:migrate`). Everything else keeps working, so a
 half-applied deploy degrades the till rather than stopping the venue.
 `scripts/audit-workflows.py` fails when a migration adds a column that
-`src/lib/schema-guard.ts` does not list.
+`src/lib/schema-guard.ts` does not list, and when a menu offers a tab to a role
+the API behind it refuses (rule 7).
 
 A database the app cannot *reach* at all is named too, so it never reads as a
 wrong password: `/api/health` answers `{"ok":false,"reason":"database-unreachable"}`

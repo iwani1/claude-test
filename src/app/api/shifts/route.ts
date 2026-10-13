@@ -188,6 +188,6 @@ async function handlePOST(req: Request) {
   }
 }
 
-export const GET = secureRoute(handleGET, "canAccessPos");
+export const GET = secureRoute(handleGET, "canViewDrawerHistory");
 
 export const POST = secureRoute(handlePOST, "canAccessPos");

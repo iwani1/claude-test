@@ -54,6 +54,6 @@ async function handleGET(req: Request) {
 }
 
 
-export const GET = secureRoute(handleGET, "canAccessPos");
+export const GET = secureRoute(handleGET, "canViewOrderHistory");
 
 export const POST = secureRoute(createOrder, "canAccessPos");

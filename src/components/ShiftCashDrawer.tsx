@@ -18,7 +18,14 @@ import {
   Banknote,
 } from "lucide-react";
 
-export const ShiftCashDrawer: React.FC<{ currentUser: any }> = ({ currentUser }) => {
+/**
+ * Shift operations and the reconciliation ledger.
+ *
+ * `readOnly` is for roles that may audit the money but not handle it — finance
+ * reads the drawer history while every control that moves cash, opens a shift
+ * or pops the till stays with the till roles.
+ */
+export const ShiftCashDrawer: React.FC<{ currentUser: any; readOnly?: boolean }> = ({ currentUser, readOnly = false }) => {
   const [activeShift, setActiveShift] = useState<any | null>(null);
   const [shiftHistory, setShiftHistory] = useState<any[]>([]);
 
@@ -181,7 +188,12 @@ export const ShiftCashDrawer: React.FC<{ currentUser: any }> = ({ currentUser })
           </p>
         </div>
 
-        {activeShift ? (
+        {readOnly ? (
+          <span className="flex items-center gap-2 px-3 py-2 rounded-xl bg-neutral-800 border border-neutral-700 text-neutral-300 text-xs">
+            <Lock className="w-4 h-4 text-amber-400" />
+            <span>Read-only: the register is opened, closed and adjusted at the till.</span>
+          </span>
+        ) : activeShift ? (
           <div className="flex flex-wrap gap-2">
             <button
               onClick={handleOpenDrawer}

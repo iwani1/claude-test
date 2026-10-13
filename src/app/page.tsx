@@ -345,14 +345,14 @@ export default function App() {
     pos: perms.canAccessPos,
     tables: perms.canAccessPos,
     kds: perms.canAccessKds,
-    orders: perms.canAccessPos || perms.canViewReports,
+    orders: perms.canViewOrderHistory,
     menu: perms.canManageMenu,
     recipes: perms.canManageMenu,
     inventory: perms.canModifyInventory,
     purchasing: perms.canModifyInventory,
     dashboard: perms.canViewReports,
     reports: perms.canViewReports,
-    shifts: perms.canAccessPos || perms.canViewReports,
+    shifts: perms.canViewDrawerHistory,
     staff: perms.canManageStaff,
     audit: perms.canViewReports,
     integrations: perms.canManageSettings,
@@ -378,7 +378,7 @@ export default function App() {
 
     switch (activeTab) {
       case "dashboard":
-        return <OwnerDashboard onNavigate={setActiveTab} openShift={openShift} />;
+        return <OwnerDashboard onNavigate={setActiveTab} openShift={openShift} perms={perms} />;
       case "pos":
         return (
           <PosTerminal key={`${currentUser.id}:${posResetKey}`}
@@ -421,7 +421,7 @@ export default function App() {
       case "purchasing":
         return <PurchasingManager />;
       case "shifts":
-        return <ShiftCashDrawer currentUser={currentUser} />;
+        return <ShiftCashDrawer currentUser={currentUser} readOnly={!perms.canAccessPos} />;
       case "reports":
         return <ReportsDashboard />;
       case "staff":

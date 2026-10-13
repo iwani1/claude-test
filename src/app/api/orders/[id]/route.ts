@@ -84,7 +84,7 @@ async function handlePATCH(req: Request, { params }: { params: Promise<{ id: str
   }
 }
 
-export const GET = secureRoute(handleGET, "canAccessPos");
+export const GET = secureRoute(handleGET, "canViewOrderHistory");
 
 export const PATCH = secureRoute(handlePATCH, "canAccessPos");
 

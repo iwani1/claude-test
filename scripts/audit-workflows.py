@@ -175,6 +175,41 @@ for path in sorted((ROOT / "migrations").glob("*.sql")):
         if f'["{table}", "{column}"]' not in guard:
             failures.append(f"{path.relative_to(ROOT)} adds {table}.{column} but src/lib/schema-guard.ts does not require it")
 
+# 7. The menu must offer a tab to exactly the roles the API behind it lets read.
+#    Order History and the Cash Drawer were offered to anyone with report access
+#    while their GET routes demanded till access: finance opened screens that
+#    answered 403, and dashboard panels that swallowed the 403 printed zeros as
+#    fact. The read permission is read out of the API's own gate, and every menu
+#    that offers that tab must ask the same question.
+TAB_GATES = [
+    ("orders", SRC / "app/api/orders/route.ts", [SRC / "components/Sidebar.tsx", SRC / "components/MobileTabBar.tsx"]),
+    ("shifts", SRC / "app/api/shifts/route.ts", [SRC / "components/Sidebar.tsx", SRC / "components/MobileTabBar.tsx"]),
+]
+page_source = SRC / "app/page.tsx"
+for tab, api_path, clients in TAB_GATES:
+    gate = re.search(r'export const GET = secureRoute\(\s*\w+\s*,\s*"(\w+)"\s*\)', api_path.read_text())
+    if not gate:
+        failures.append(f"{api_path.relative_to(ROOT)} has no GET permission gate for the {tab} tab to match")
+        continue
+    permission = gate.group(1)
+    page_gate = re.search(rf"\b{tab}:\s*perms\.(\w+)", page_source.read_text())
+    if not page_gate:
+        failures.append(f"{page_source.relative_to(ROOT)} has no tabAllowed entry for {tab}")
+    elif page_gate.group(1) != permission:
+        failures.append(f"{page_source.relative_to(ROOT)} allows the {tab} tab on perms.{page_gate.group(1)} but the API requires {permission}")
+    for client in clients:
+        text = client.read_text()
+        found = re.search(rf'id:\s*"{tab}"', text)
+        if not found:
+            failures.append(f"{client.relative_to(ROOT)} does not define the {tab} tab")
+            continue
+        window = text[found.start() : found.start() + 260]
+        visible = re.search(r"visible:\s*(?:!!)?\s*perms\?*\.(\w+)", window)
+        if not visible:
+            failures.append(f"{client.relative_to(ROOT)} {tab} tab has no single perms gate to compare with {api_path.relative_to(ROOT)}")
+        elif visible.group(1) != permission:
+            failures.append(f"{client.relative_to(ROOT)} shows the {tab} tab on perms.{visible.group(1)} but the API requires {permission}")
+
 # ---------------------------------------------------------------- report ----
 print(f"Workflow audit: {len(list(SRC.rglob('*.ts')))} TS + {len(list(SRC.rglob('*.tsx')))} TSX files")
 for finding in failures:

@@ -14,7 +14,7 @@ not from the production server, not with a browser, not with hardware.
 
 | Method | What it covered |
 |---|---|
-| `npm run test:security` | 180 security (including a stale-database scenario and staff removal) + 78 pilot + 30 accounting checks against a disposable database and a production build |
+| `npm run test:security` | 195 security (including a stale-database scenario, staff removal and the read-only finance role) + 78 pilot + 30 accounting checks against a disposable database and a production build |
 | `npm run audit:responsive` | 28 components + 2 app files: tables scroll or become cards, dialogs scroll, no `h-screen`/`w-screen`, no unguarded fixed widths |
 | `npm run audit:workflows` | **new** — swallowed failures in client code, fetches parsed without a status check, money routes without an idempotency guard, routes without a permission check, tables without a phone view |
 | Route sweep | all 27 route handlers read for permission gates, error envelopes and money/stock writes |
@@ -234,7 +234,7 @@ Re-run end to end on the release the venue is getting:
 
 | Check | Result |
 |---|---|
-| `npm run test:security` | **180 security / 78 pilot / 30 accounting**, exit 0 (fresh database, production build, RLS enforced) |
+| `npm run test:security` | **195 security / 78 pilot / 30 accounting**, exit 0 (fresh database, production build, RLS enforced) |
 | `npm run audit:workflows` | 0 failures, 27 warnings, 56 advisories — unchanged baseline |
 | `npm run audit:responsive` | 0 failures, 0 warnings |
 | `tsc --noEmit`, `eslint` | clean |
@@ -258,6 +258,46 @@ closed port), not by inspection. 5 new checks.
 **Re-stated, not softened:** nothing here proves the thermal printer, the cash
 drawer hardware, MoMo settlement timing, or a real GRA filing — those need the
 venue and the people in it. See "Cannot be verified here".
+
+## The accountant's screens, 13 October: the menu promised what the API refused
+
+The owner created an **Accountant / Finance** account and asked why it could
+reach Order History. It could not actually read a single order — the menu
+offered Order History and the Cash Drawer to anyone with *report* access, while
+the APIs behind them demanded *till* access:
+
+| The accountant's screen | What the server said |
+|---|---|
+| Order History | `403 Access denied` → "Could not load orders: Request failed (403)" |
+| Cash Drawer | `403` → "Drawer and shifts could not be loaded" |
+| Dashboard — money cards | real figures (`/api/reports` answered `200`) |
+| Dashboard — tables, kitchen tickets, stock valuation, refunds | four `403`s swallowed by `.catch(console.error)` → **printed as fact**: "0 / 0 tables occupied", "GH₵0" valuation, "0 tickets", "All tables currently available" |
+
+**Fixed** — the owner chose a read-only finance pass:
+
+- `canViewOrderHistory` and `canViewDrawerHistory` joined the permission matrix:
+  one question asked by the menu, the client guard and the API gate.
+  Accountant holds both, read-only. The inventory officer holds neither — its
+  two tabs were dead ends as well and are gone. Till roles are unchanged.
+- `GET /api/orders`, `GET /api/orders/[id]` and `GET /api/shifts` gate on those
+  keys. Every write still needs `canAccessPos`: selling, paying, refunding,
+  re-pricing, editing, deleting and opening or closing a shift all refuse
+  finance with `403`.
+- The screens stop offering what the role cannot do: no Refund button without
+  till access, the Order History header reads *"Read-only: refunds, edits and
+  deletions are done at the till…"*, and the drawer hides open/close, cash-drop
+  and pop-drawer controls behind a read-only note.
+- The dashboard no longer answers a refused or failed request with a number.
+  Each panel reports *"Not available to your role"* or *"Could not load (503)"*,
+  navigation tiles only lead to screens the viewer can open, and an outage no
+  longer shows the owner "GH₵0.00 today" as if the day had no sales.
+
+**Proven live** against the running app with the imported data: 10/10 permission
+checks — finance reads order history and the drawer ledger (`200`) and is refused
+on sell, modify, re-price, pay, refund, erase and shift open/close (`403`); the
+accountant's order list is the same 2,030 orders, in the same order, as the
+owner's. New regression guard: `npm run audit:workflows` rule 7 fails when a
+menu tab's visibility and the API gate behind it disagree.
 
 ## Live environment smoke (every screen)
 
@@ -295,7 +335,7 @@ drawer. **23/23 pass** after the fixes above.
 ## Re-running this audit
 
 ```sh
-npm run test:security      # 149 + 70 + 30 checks, disposable database, production build
+npm run test:security      # 195 + 78 + 30 checks, disposable database, production build
 npm run audit:responsive   # layout rules, exits 1 on a regression
 npm run audit:workflows    # feedback/money-guard rules, exits 1 on a regression
 npx eslint src tests scripts --max-warnings=0
