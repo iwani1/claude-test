@@ -73,6 +73,14 @@ async function main() {
   check(financeDrawer.status === 200 && "activeShift" in financeDrawer.body, "accountant reads the drawer ledger");
   check((await request("/api/shifts", "POST", { action: "open_shift", openingCash: "10.00" }, accountant)).status === 403, "accountant cannot open a shift");
   check((await request("/api/orders?limit=5", "GET", undefined, inventory)).status === 403, "order history is not handed to every report role");
+  // Reports are aggregate, but the audit log and the payment export list every payment and refund.
+  check((await request("/api/reports", "GET", undefined, inventory)).status === 200, "inventory officer still reads aggregate reports");
+  check((await request("/api/audit-logs?limit=5", "GET", undefined, inventory)).status === 403, "inventory officer cannot read the audit log");
+  check((await request("/api/integrations", "POST", { action: "export_accounting", format: "quickbooks", timeframe: "all" }, inventory)).status === 403, "inventory officer cannot export payments and refunds");
+  check((await request("/api/audit-logs?limit=5", "GET", undefined, accountant)).status === 200, "accountant reads the audit log");
+  check((await request("/api/integrations", "POST", { action: "export_accounting", format: "quickbooks", timeframe: "all" }, accountant)).status === 200, "accountant exports the reconciliation");
+  check((await request("/api/audit-logs?limit=5", "GET", undefined, manager)).status === 200, "manager reads the audit log");
+  check((await request("/api/audit-logs?limit=5", "GET", undefined, cashier)).status === 403, "cashier cannot read the audit log");
   // The probe sale rang up stock, so erase it before the absolute stock checks
   // below — deletion returns exactly what the order consumed.
   check((await request(`/api/orders/${financeOrderId}`, "DELETE", {}, owner)).status === 200, "the finance probe sale erases cleanly, leaving fixture stock untouched");

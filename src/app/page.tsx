@@ -354,7 +354,7 @@ export default function App() {
     reports: perms.canViewReports,
     shifts: perms.canViewDrawerHistory,
     staff: perms.canManageStaff,
-    audit: perms.canViewReports,
+    audit: perms.canViewTransactionTrail,
     integrations: perms.canManageSettings,
     settings: perms.canManageSettings,
     deployment: perms.canManageSettings,
@@ -423,7 +423,7 @@ export default function App() {
       case "shifts":
         return <ShiftCashDrawer currentUser={currentUser} readOnly={!perms.canAccessPos} />;
       case "reports":
-        return <ReportsDashboard />;
+        return <ReportsDashboard canExportTransactions={perms.canViewTransactionTrail} />;
       case "staff":
         return <StaffManager currentUser={currentUser} />;
       case "audit":

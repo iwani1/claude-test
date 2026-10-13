@@ -7,9 +7,9 @@ import { desc } from "drizzle-orm";
 
 async function handleGET(req: Request) {
   try {
-    // The audit trail exposes staff activity and money movement, so it is
-    // limited to roles that already hold reporting rights.
-    const guard = await requirePermission("canViewReports", "GET /api/audit-logs");
+    // The audit trail exposes staff activity and every payment and refund, so it
+    // is limited to the transaction-trail roles (owner, manager, accountant).
+    const guard = await requirePermission("canViewTransactionTrail", "GET /api/audit-logs");
     if (!guard.ok) return guard.response;
 
     const { searchParams } = new URL(req.url);
@@ -23,4 +23,4 @@ async function handleGET(req: Request) {
   }
 }
 
-export const GET = secureRoute(handleGET, "canViewReports");
+export const GET = secureRoute(handleGET, "canViewTransactionTrail");

@@ -38,6 +38,9 @@ async function handlePOST(req: Request) {
     }
 
     if (action === "export_accounting") {
+      // The export lists every payment and refund: reports access alone is not enough.
+      const trail = await requirePermission("canViewTransactionTrail", "POST /api/integrations export_accounting");
+      if (!trail.ok) return trail.response;
       if (format !== "quickbooks" && format !== "xero") {
         return NextResponse.json({ error: "Format must be quickbooks or xero." }, { status: 400 });
       }
