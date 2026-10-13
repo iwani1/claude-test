@@ -99,7 +99,9 @@ if [[ -n "$TRACKED_CHANGES" ]]; then
     die "Tracked files in $POS_DIR have local changes. Commit or stash them, or re-run with ALLOW_DIRTY=1 to discard them."
   fi
 fi
-UNTRACKED="$(git -C "$POS_DIR" ls-files --others --exclude-standard | head -5)"
+# sed, not head: head closes the pipe early, git gets SIGPIPE (141), and pipefail
+# then exits the script silently. A cache folder with thousands of files hits this.
+UNTRACKED="$(git -C "$POS_DIR" ls-files --others --exclude-standard | sed -n '1,5p')"
 if [[ -n "$UNTRACKED" ]]; then
   warn "Untracked files are present and will be left alone:"
   printf '%s\n' "$UNTRACKED" | sed 's/^/      /'
