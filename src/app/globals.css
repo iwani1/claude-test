@@ -1,0 +1,110 @@
+@import "tailwindcss";
+
+@layer base {
+  html {
+    /* POS terminals are tapped, not clicked with a mouse. Removing the
+       browser's double-tap zoom delay and preventing accidental text
+       selection makes every control feel immediate. */
+    touch-action: manipulation;
+    /* iOS inflates body text on narrow screens unless told not to, which
+       would fight the per-device display size chosen in the top bar. */
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+    /* Display size, chosen per terminal with the Navbar control and applied
+       before first paint by layout.tsx. Every Tailwind size is rem-based, so
+       this one value scales text, buttons, gaps and padding together. */
+    font-size: var(--app-font-size, 16px);
+  }
+
+  html[data-display-size="large"] {
+    --app-font-size: 18px;
+  }
+
+  html[data-display-size="extra"] {
+    --app-font-size: 20px;
+  }
+
+  /* Finger-safety floor. In the two enlarged modes nothing tappable may be
+     shorter than 45px/50px — a fingertip is ~9mm, which is ~40px at typical
+     terminal pixel densities. Deliberately :where() so utilities like
+     min-h-0 keep working. Standard mode is untouched. */
+  html[data-display-size="large"] :where(button, [role="button"], select, input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"])),
+  html[data-display-size="extra"] :where(button, [role="button"], select, input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"])) {
+    min-height: 2.5rem;
+  }
+
+  body {
+    background-color: #09090b;
+    color: #f4f4f5;
+    /* The shell owns the scrollable regions; without this a phone browser
+       rubber-bands the whole page (and pull-to-refresh can interrupt a sale). */
+    overscroll-behavior: none;
+    /* Staff tap quickly between screens; highlighting accidental text
+       drags is noise on a terminal. */
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  /* Inputs still need selectable text for editing phone numbers & notes. */
+  input,
+  textarea,
+  select {
+    -webkit-user-select: text;
+    user-select: text;
+  }
+
+  /* Notched phones: the drawer, cart bar and bottom sheets keep clear of the
+     home indicator and rounded corners. Harmless (0px) everywhere else. */
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  .pt-safe {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+
+  /* Consistent, obvious focus ring for keyboard/scan-gun navigation. */
+  button:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible {
+    outline: 3px solid #f59e0b;
+    outline-offset: 2px;
+  }
+}
+
+/* Custom sleek scrollbar for touch terminals */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+  background-clip: content-box;
+}
+
+/* Thermal POS Receipt & Kitchen Docket Print Styles */
+@media print {
+  body {
+    background: white !important;
+    color: black !important;
+  }
+
+  @page {
+    margin: 0;
+    size: 80mm auto;
+  }
+}

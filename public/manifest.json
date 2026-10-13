@@ -1,0 +1,16 @@
+{
+  "name": "Lush View Hotel POS",
+  "short_name": "LushViewPOS",
+  "description": "Restaurant, bar and room-service POS with inventory control",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#09090b",
+  "theme_color": "#047857",
+  "icons": [
+    {
+      "src": "/logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

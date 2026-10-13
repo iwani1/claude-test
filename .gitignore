@@ -1,0 +1,10 @@
+node_modules/
+.next/
+.env
+.env.*
+!.env.production.example
+.test-db/
+*.tsbuildinfo
+
+# Next.js generates these declarations for the current dev/build mode.
+next-env.d.ts
