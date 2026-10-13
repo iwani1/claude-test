@@ -8,7 +8,9 @@ export const metadata: Metadata = {
   description: "Touchscreen POS for restaurant, bar and room-service operations: Cash and MoMo payments, kitchen dockets, and recipe-linked ingredient inventory control.",
   manifest: "/manifest.json",
   icons: {
-    icon: "/favicon.ico",
+    // public/ has no favicon.ico (it 404'd); the brand SVG is the icon.
+    icon: [{ url: "/logo.svg", type: "image/svg+xml" }],
+    shortcut: "/logo.svg",
   },
 };
 

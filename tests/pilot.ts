@@ -87,7 +87,14 @@ async function main() {
   check(Number((await admin.query("SELECT count(*)::int AS c FROM kitchen_tickets WHERE order_id=$1", [doomed.id])).rows[0].c), 0, "kitchen tickets erased with the order");
   check(Number((await admin.query("SELECT current_stock FROM ingredients WHERE id=1")).rows[0].current_stock), stockBeforeDelete, "stock returns to inventory after deletion");
   check((await raw(`orders/${doomed.id}`, "DELETE")).status, 404, "deleting an already-deleted order is a clean 404");
-  check(Number((await admin.query("SELECT count(*)::int AS c FROM audit_logs WHERE entity_type='order' AND entity_id=$1", [String(doomed.id)])).rows[0].c), 0, "no audit trace of the erased order");
+  check(Number((await admin.query("SELECT count(*)::int AS c FROM audit_logs WHERE entity_type='order' AND entity_id=$1", [String(doomed.id)])).rows[0].c), 0, "no audit-log trace of the erased order");
+  // F3 tombstone: the operational order is gone, but a minimal record that
+  // it existed — and who erased it — survives outside the audit log.
+  const tombstone = (await admin.query("SELECT * FROM order_deletion_tombstones WHERE branch_id=1 AND order_id=$1", [doomed.id])).rows;
+  check(tombstone.length, 1, "deletion writes exactly one tombstone");
+  check(tombstone[0].order_number, doomed.orderNumber, "tombstone keeps the order number");
+  check(tombstone[0].total_amount, "10.00", "tombstone keeps the order total");
+  check(Number(tombstone[0].deleted_by), 1, "tombstone records who deleted the order");
 
   // --- Paid order deletion rolls the shift maths back ---------------------
   const { shift: rollbackShift } = await api("shifts", { action: "open_shift", openingCash: "50.00", notes: "Delete-rollback probe" });
@@ -99,6 +106,8 @@ async function main() {
   check(rolledBack.totalSales, "0.00", "shift sales total rolled back after deletion");
   check(rolledBack.totalCashSales, "0.00", "shift cash total rolled back after deletion");
   check(Number((await admin.query("SELECT count(*)::int AS c FROM payments WHERE order_id=$1", [paidDoomed.id])).rows[0].c), 0, "payments erased with the order");
+  const paidTombstone = (await admin.query("SELECT paid_amount FROM order_deletion_tombstones WHERE branch_id=1 AND order_id=$1", [paidDoomed.id])).rows;
+  check(paidTombstone[0].paid_amount, "10.00", "tombstone for the paid order keeps the collected amount");
   const rollbackClose = await api("shifts", { action: "close_shift", shiftId: rollbackShift.id, actualClosingCash: "50.00" });
   check(rollbackClose.difference, "0.00", "drawer still reconciles after the deleted sale");
 

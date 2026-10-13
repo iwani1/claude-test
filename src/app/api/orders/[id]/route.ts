@@ -1,7 +1,7 @@
 import { secureRoute, ApiError, isDatabaseFailure } from "@/lib/api";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
-import { orders, orderItems, diningTables, auditLogs, stockMovements, ingredients, refunds, payments, kitchenTickets, shifts, drawerMovements } from "@/db/schema";
+import { orders, orderItems, diningTables, auditLogs, stockMovements, ingredients, refunds, payments, kitchenTickets, shifts, drawerMovements, orderDeletionTombstones } from "@/db/schema";
 import { and, eq, inArray, or } from "drizzle-orm";
 import { toCents, fromCents } from "@/lib/pricing-core";
 import { reverseStockForOrder } from "@/lib/inventory-deduction";
@@ -94,19 +94,26 @@ export const GET = secureRoute(handleGET, "canViewOrderHistory");
 export const PATCH = secureRoute(handlePATCH, "canAccessPos");
 
 /* ------------------------------------------------------------------
- * DELETE — owner-only hard erase.
+ * DELETE — owner-only hard erase, with a minimal tombstone (F3).
  *
- * The owner asked for orders to disappear completely: no soft-delete flag,
- * no archive row, no audit entry, any time. What this handler still
- * guarantees is internal consistency, so the rest of the system never
- * shows impossible numbers afterwards:
+ * The operational order disappears completely: no soft-delete flag, the
+ * order is gone from history/reports/collections, and audit entries
+ * pointing at it are swept. The one exception, added by the P1 audit, is
+ * order_deletion_tombstones: order number, the money it held, who erased
+ * it and when. It is written in this same transaction, is not exposed by
+ * any API, and the application never deletes from it — it exists so an
+ * operator/accountant with database access can still prove a deleted
+ * order existed. What this handler still guarantees is internal
+ * consistency, so the rest of the system never shows impossible numbers
+ * afterwards:
  *   - stock the order deducted is given back, and its ledger rows removed;
  *   - the table it was holding is released;
  *   - payments, refunds (+ their drawer movements), kitchen tickets and
  *     line items are erased with it, children before parents;
  *   - the shift's stored sales/cash/MoMo totals are rolled back so the
  *     drawer maths matches the sales that remain;
- *   - audit entries pointing at the order are swept.
+ *   - audit entries pointing at the order are swept (the tombstone above
+ *     is a separate table, not an audit-log entry).
  * ------------------------------------------------------------------ */
 async function handleDELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -115,6 +122,16 @@ async function handleDELETE(req: Request, { params }: { params: Promise<{ id: st
 
   const [order] = await db.select().from(orders).where(eq(orders.id, orderId)).limit(1).for("update");
   if (!order) throw new ApiError(404, "Order not found");
+
+  const actor = await getSessionUser();
+  if (!actor) throw new ApiError(401, "Authentication required");
+  // Optional reason (the current UI sends none). A missing/invalid body is
+  // not an error — deletion must not fail because a client sent no JSON.
+  let reason: string | null = null;
+  try {
+    const body = await req.json();
+    if (typeof body?.reason === "string" && body.reason.trim()) reason = body.reason.trim().slice(0, 500);
+  } catch { /* audit-ok: reason is optional; an absent body deletes without one */ }
 
   // 1. Stock: give back the net deduction, then erase the order's ledger rows.
   const ledgerReference = or(
@@ -176,7 +193,7 @@ async function handleDELETE(req: Request, { params }: { params: Promise<{ id: st
   // Leaving that total behind makes the drawer reconcile short by exactly the
   // refunded amount — the shift can then never be closed flat again.
   const erasedRefunds = await db
-    .select({ id: refunds.id, shiftId: refunds.shiftId, cashAmount: refunds.cashAmount })
+    .select({ id: refunds.id, shiftId: refunds.shiftId, cashAmount: refunds.cashAmount, amount: refunds.amount })
     .from(refunds)
     .where(eq(refunds.orderId, orderId));
   const payoutDelta = new Map<number, number>();
@@ -195,6 +212,28 @@ async function handleDELETE(req: Request, { params }: { params: Promise<{ id: st
       .where(eq(shifts.id, shiftId));
   }
 
+  // 3c. Tombstone (F3): minimal permanent evidence, written before the
+  // records it summarises are erased and in this same transaction — if
+  // anything below fails, the whole deletion (tombstone included) rolls
+  // back, so a tombstone can never claim an order was deleted when it was
+  // not. The unique (branch_id, order_id) constraint makes a second
+  // tombstone for the same order impossible.
+  await db.insert(orderDeletionTombstones).values({
+    orderId: order.id,
+    orderNumber: order.orderNumber,
+    orderType: order.orderType,
+    status: order.status,
+    paymentStatus: order.paymentStatus,
+    totalAmount: order.totalAmount,
+    paidAmount: order.paidAmount,
+    refundedAmount: fromCents(erasedRefunds.reduce((sum, refund) => sum + toCents(refund.amount || "0"), 0)),
+    createdByUserId: order.userId,
+    deletedBy: actor.id,
+    deletedByName: actor.name,
+    orderCreatedAt: order.createdAt,
+    reason,
+  });
+
   // 4. Erase the order's records — children before parents.
   if (erasedRefunds.length > 0) {
     await db.delete(drawerMovements).where(inArray(drawerMovements.refundId, erasedRefunds.map((refund) => refund.id)));
@@ -205,7 +244,9 @@ async function handleDELETE(req: Request, { params }: { params: Promise<{ id: st
   await db.delete(orderItems).where(eq(orderItems.orderId, orderId));
   await db.delete(orders).where(eq(orders.id, orderId));
 
-  // 5. Sweep audit entries that point at this order (owner chose no trace).
+  // 5. Sweep audit entries that point at this order. The tombstone in 3c is
+  // a separate table, deliberately not swept: it is the one record that a
+  // deletion happened at all.
   await db.delete(auditLogs).where(and(eq(auditLogs.entityType, "order"), eq(auditLogs.entityId, String(orderId))));
 
   return NextResponse.json({ success: true, deleted: order.orderNumber });

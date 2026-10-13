@@ -21,6 +21,14 @@ jobs:
       - run: npm ci
       - run: npm run lint -- --max-warnings=0
       - run: npm run typecheck
+      # The production build must succeed with no database configured: route
+      # modules are imported during page-data collection, so any import-time
+      # DATABASE_URL requirement (F1 in docs/AUDIT_2026-10-13.md) fails here
+      # first. test:security below rebuilds with its disposable database.
+      - run: npm run build
+        env:
+          DATABASE_URL: ""
+          AUTH_SECRET: ""
       # Static guards: a screen that swallows a failure, a money route without an
       # idempotency key, a migration missing from the schema guard, or a menu tab
       # offered to a role the API behind it refuses.
