@@ -93,7 +93,7 @@ async function handlePOST(req: Request) {
         sku: sku || `SKU-${Date.now().toString().slice(-6)}`,
         price: String(price),
         costPrice: String(costPrice || "0.00"),
-        imageUrl: imageUrl || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=400&auto=format&fit=crop&q=80",
+        imageUrl: imageUrl || "/menu-images/placeholder.svg",
         prepTimeMinutes: Number(prepTimeMinutes) || 15,
         station: station || "kitchen",
         isAvailable: isAvailable ?? true,

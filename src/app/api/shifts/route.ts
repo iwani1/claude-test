@@ -4,13 +4,19 @@ import { NextResponse } from "next/server";
 import { db, requestContext } from "@/db";
 import { shifts, users, auditLogs, drawerMovements } from "@/db/schema";
 import { requireSession } from "@/lib/guard";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, inArray } from "drizzle-orm";
 
 async function handleGET() {
   try {
     const allShifts = await db.select().from(shifts).orderBy(desc(shifts.openedAt)).limit(20);
-    const movements = await db.select().from(drawerMovements);
-    const allUsers = await db.select().from(users);
+    // Only the shifts on this page: their drawer movements and the people named on them.
+    const shiftIds = allShifts.map((s) => s.id);
+    const userIds = [...new Set(allShifts.flatMap((s) => [s.userId, s.reconciledBy])
+      .filter((id): id is number => typeof id === "number"))];
+    const movements = shiftIds.length
+      ? await db.select().from(drawerMovements).where(inArray(drawerMovements.shiftId, shiftIds))
+      : [];
+    const allUsers = userIds.length ? await db.select().from(users).where(inArray(users.id, userIds)) : [];
 
     const activeShift = allShifts.find((s) => s.status === "open") || null;
 
@@ -82,7 +88,7 @@ async function handlePOST(req: Request) {
         action: "shift_opened",
         entityType: "shift",
         entityId: String(newShift.id),
-        details: `Opened register shift with $${newShift.openingCash} opening cash float`,
+        details: `Opened register shift with GH₵${newShift.openingCash} opening cash float`,
       });
 
       return NextResponse.json({ success: true, shift: newShift });
@@ -113,7 +119,7 @@ async function handlePOST(req: Request) {
         action: "cash_payout",
         entityType: "shift",
         entityId: String(shift.id),
-        details: `Cash drop/payout of $${Number(amount).toFixed(2)}. Reason: ${reason || "N/A"}`,
+        details: `Cash drop/payout of GH₵${Number(amount).toFixed(2)}. Reason: ${reason || "N/A"}`,
       });
 
       return NextResponse.json({ success: true, shift: updated });
@@ -155,7 +161,7 @@ async function handlePOST(req: Request) {
         action: "shift_closed",
         entityType: "shift",
         entityId: String(shift.id),
-        details: `Closed shift. Counted: $${(counted / 100).toFixed(2)}, Expected: $${(expectedCash / 100).toFixed(2)}, Diff: ${diff >= 0 ? "+" : ""}$${(diff / 100).toFixed(2)}`,
+        details: `Closed shift. Counted: GH₵${(counted / 100).toFixed(2)}, Expected: GH₵${(expectedCash / 100).toFixed(2)}, Diff: ${diff >= 0 ? "+" : ""}GH₵${(diff / 100).toFixed(2)}`,
       });
 
       return NextResponse.json({ success: true, shift: closedShift, difference: (diff / 100).toFixed(2) });

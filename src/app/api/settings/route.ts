@@ -10,10 +10,26 @@ import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { restaurants, applicationSettings, branches, auditLogs } from "@/db/schema";
 import { requirePermission } from "@/lib/guard";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 
 async function handleGET() {
   try {
+    // Registration, contact and banking details are for the owner and manager. Other staff get
+    // the name and currency the till displays, plus the tax rate.
+    const canManage = (await requirePermission("canManageSettings", "GET /api/settings")).ok;
+    if (!canManage) {
+      const [publicRestaurant] = await db
+        .select({ name: restaurants.name, currency: restaurants.currency, currencySymbol: restaurants.currencySymbol })
+        .from(restaurants).limit(1);
+      const visible = await db.select().from(applicationSettings)
+        .where(inArray(applicationSettings.key, ["currency_symbol", "currency_code", "tax_rate"]));
+      return NextResponse.json({
+        restaurant: publicRestaurant,
+        branches: [],
+        settings: Object.fromEntries(visible.map((s) => [s.key, s.value])),
+      });
+    }
+
     const [restaurant] = await db.select().from(restaurants).limit(1);
     const branchList = await db.select().from(branches);
     const settingsList = await db.select().from(applicationSettings);

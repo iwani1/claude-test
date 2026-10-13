@@ -201,7 +201,7 @@ export const MenuManager: React.FC<MenuManagerProps> = ({
                       unoptimized
                       width={56}
                       height={56}
-                      src={item.imageUrl || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=100"}
+                      src={item.imageUrl || "/menu-images/placeholder.svg"}
                       alt={item.name}
                       className="w-14 h-14 rounded-xl object-cover bg-neutral-800 shrink-0"
                     />
@@ -278,7 +278,7 @@ export const MenuManager: React.FC<MenuManagerProps> = ({
                 <tr key={item.id} className="hover:bg-neutral-850/50">
                   <td className="px-4 py-2.5 flex items-center gap-3">
                     <Image unoptimized width={40} height={40}
-                      src={item.imageUrl || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=100"}
+                      src={item.imageUrl || "/menu-images/placeholder.svg"}
                       alt={item.name}
                       className="w-10 h-10 rounded-lg object-cover bg-neutral-800 shrink-0"
                     />
@@ -451,7 +451,7 @@ export const MenuManager: React.FC<MenuManagerProps> = ({
                 <label className="text-neutral-300 block mb-1">Photo Image URL</label>
                 <input
                   type="text"
-                  placeholder="https://images.unsplash.com/..."
+                  placeholder="Image address (optional)"
                   value={imageUrl}
                   onChange={(e) => setImageUrl(e.target.value)}
                   className="w-full bg-neutral-800 border border-neutral-700 rounded-xl px-3 py-2 text-white"

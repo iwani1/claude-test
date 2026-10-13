@@ -104,6 +104,16 @@ async function main() {
   check((await admin.query("SELECT count(*)::int AS n FROM application_settings WHERE key='not_a_setting'")).rows[0].n === 0, "the refused setting is not written");
   check((await request("/api/settings", "POST", { settingsData: { tax_rate_confirmed: "false" } }, owner)).status === 400, "the VAT confirmation cannot be switched off by hand");
   check((await request("/api/settings", "POST", { settingsData: { currency_symbol: "GH₵" } }, owner)).status === 200, "a known setting key is still saved");
+  // Staff read only the till settings; the owner keeps the full record.
+  const staffView = (await request("/api/settings", "GET", undefined, cashier)).body;
+  check(staffView.restaurant && !("taxNumber" in staffView.restaurant) && !("email" in staffView.restaurant) && !("phone" in staffView.restaurant) && !("address" in staffView.restaurant) && !("momo_merchant_number" in staffView.settings) && staffView.branches.length === 0, "cashiers do not read contact, registration or payment-number settings");
+  const ownerView = (await request("/api/settings", "GET", undefined, owner)).body;
+  check("taxNumber" in ownerView.restaurant && Array.isArray(ownerView.branches), "the owner still reads the full settings record");
+  // One table, one open dine-in order: a second order is refused rather than overwriting the first.
+  const firstDine = await request("/api/orders", "POST", { idempotencyKey: "dine-first-0001", orderType: "dine_in", tableId: 1, items: [{ menuItemId: 1, quantity: 1 }] }, cashier);
+  const secondDine = await request("/api/orders", "POST", { idempotencyKey: "dine-second-0002", orderType: "dine_in", tableId: 1, items: [{ menuItemId: 1, quantity: 1 }] }, cashier);
+  check(firstDine.body.success === true && secondDine.status === 409, "a second dine-in order on an occupied table is refused");
+  if (firstDine.body.order?.id) await request(`/api/orders/${firstDine.body.order.id}`, "DELETE", {}, owner);
   // The probe sale rang up stock, so erase it before the absolute stock checks
   // below — deletion returns exactly what the order consumed.
   check((await request(`/api/orders/${financeOrderId}`, "DELETE", {}, owner)).status === 200, "the finance probe sale erases cleanly, leaving fixture stock untouched");

@@ -14,7 +14,7 @@ not from the production server, not with a browser, not with hardware.
 
 | Method | What it covered |
 |---|---|
-| `npm run test:security` | 235 security (including a stale-database scenario, staff removal, the read-only finance role, sign-in and refund throttling, and the VAT gate) + 80 pilot + 30 accounting checks against a disposable database and a production build |
+| `npm run test:security` | 238 security (including a stale-database scenario, staff removal, the read-only finance role, sign-in and refund throttling, and the VAT gate) + 80 pilot + 30 accounting checks against a disposable database and a production build |
 | `npm run audit:responsive` | 28 components + 2 app files: tables scroll or become cards, dialogs scroll, no `h-screen`/`w-screen`, no unguarded fixed widths |
 | `npm run audit:workflows` | **new** — swallowed failures in client code, fetches parsed without a status check, money routes without an idempotency guard, routes without a permission check, tables without a phone view |
 | Route sweep | all 27 route handlers read for permission gates, error envelopes and money/stock writes |
@@ -102,6 +102,15 @@ not from the production server, not with a browser, not with hardware.
 | **Low** | **The public health endpoint disclosed internals.** It named the database, the schema, the missing columns and the build commit to anyone. | It returns only `ok` and a reason code. The details go to the server log. |
 | **Low** | **The deploy script defaulted to another session's branch.** `POS_BRANCH` defaulted to `arena/181e4004-claude-test`. | The default is `main`, and the deployment guide clones `main`. Set `POS_BRANCH` only on purpose. |
 | **Process** | **The release archive was committed by hand.** It had to be rebuilt after every source change, and a stale copy failed CI. | CI builds the archive from the commit, checks it, and keeps it as an artifact. It is git-ignored and no longer committed. |
+| **Medium** | **Any signed-in staff member could read the business's registration, contact and payment settings.** `GET /api/settings` returned the tax number, address, email, phone and MoMo number to every role. | Owner and manager get the full record. Other staff get the name, currency and tax rate the till uses. |
+| **Medium** | **A second dine-in order overwrote the table's link to the first.** Opening a second order on an occupied table repointed the table, leaving the first order unlinked from it. | Refused with 409 while the table's order is open. Staff add the items to that order instead. |
+| **Low** | **The health check passed when `shifts.reconciled_by` was missing.** The column was not on the required list. | Added to the required list, so the health check returns 503 until the migration is applied. |
+| **Low** | **The shifts page loaded every drawer movement and every user.** | Loads only the shifts it shows, their drawer movements, and the people named on them. No screen used the rest. |
+| **Low** | **Shift audit text used "$" for money.** The app uses GH₵. | Corrected to GH₵. |
+| **Low** | **Unused variables in `create-order.ts`.** | Removed. |
+| **Low** | **The dev-origin list named `localhost` twice.** Next already allows it by default. | Removed the redundant entry. Development-only: production builds ignore this list. |
+| **Low** | **Menu and login screens loaded images from Unsplash.** | Menu items use a local placeholder image, and the login screen uses a local photo. |
+| **Low** | **The owner dashboard and sidebar showed "GreenGeeks".** | Renamed to "Hosting Package" and "Hosting Deploy". The guide file keeps its name. |
 
 ## Missed on the first pass: order deletion on a stale database
 
@@ -246,7 +255,7 @@ Re-run end to end on the release the venue is getting:
 
 | Check | Result |
 |---|---|
-| `npm run test:security` | **235 security / 80 pilot / 30 accounting**, exit 0 (fresh database, production build, RLS enforced) |
+| `npm run test:security` | **238 security / 80 pilot / 30 accounting**, exit 0 (fresh database, production build, RLS enforced) |
 | `npm run audit:workflows` | 0 failures, 27 warnings, 56 advisories — unchanged baseline |
 | `npm run audit:responsive` | 0 failures, 0 warnings |
 | `tsc --noEmit`, `eslint` | clean |
@@ -326,8 +335,8 @@ drawer. **23/23 pass** after the fixes above.
 | Severity | Item | Why it is still open |
 |---|---|---|
 | Low | **Attribution when a queue syncs under a different user.** A queued offline order is filed under whoever syncs it (the server correctly ignores the client's `userId`), so a shift change can put another person's sale under your name. | Behaviour is correct for security; the fix is a disclosure in the sync notice ("3 of these were rung up by Ama"). Recommend doing it with the next offline change. |
-| Low | **56 blocking `alert()` calls remain** in the manager screens (the till path uses in-app notices). | Blocking modals are finger-hostile on a phone and unreadable while moving. Worth migrating screen by screen; deliberately not swept in one pass to keep this change reviewable. |
-| Low | **27 fetch sites inspect the JSON body** (`data.success`/`data.error`) instead of `res.ok`. | Equivalent for this API, since every error carries a JSON body; a non-JSON error page (proxy 502) surfaces as a thrown parse error, which those call sites catch. |
+| Low | **57 blocking `alert()` calls remain** in the manager screens (the till path uses in-app notices). | Blocking modals are finger-hostile on a phone and unreadable while moving. Worth migrating screen by screen; deliberately not swept in one pass to keep this change reviewable. |
+| Low | **Most fetch sites inspect the JSON body** (`data.success`/`data.error`) instead of `res.ok`. The payment, refund, drawer and order-delete paths were checked and already show the server's message. The list loaders (orders, reports, inventory, staff, shifts) do not check `res.ok`, so a failed load can show an empty list. | Equivalent for this API, since every error carries a JSON body; a non-JSON error page (proxy 502) surfaces as a thrown parse error, which those call sites catch. |
 | Info | **Over-receiving is allowed** (received > ordered). | Suppliers deliver extra; the quantity is recorded, not capped. Decide with the accountant whether a tolerance should exist. |
 | Info | **The payment retry key lives in a ref**, so a browser reload between attempt and retry starts a new payment attempt. | A reload is an explicit new action; the verify-before-retry check still prevents a double charge in the common case. |
 | Medium (owner's decision) | **Order deletion and re-pricing leave no record.** Deleting an order erases it, its payments and refunds, and every audit entry pointing at it. Re-pricing an order writes no before/after entry. | Deliberate: the owner asked for erasure with no archive row and no audit entry (decided 13 Oct; the owner reviewed an option for a permanent deletion record and chose to keep erasure). Consequence: after deletion the system cannot prove the order existed, and an edit's old amounts are not kept. Revisit if the accountant needs an audit trail. |
@@ -350,7 +359,7 @@ drawer. **23/23 pass** after the fixes above.
 ```sh
 # all of the commands below also run in CI on every push:
 #   .github/workflows/security.yml
-npm run test:security      # 235 + 80 + 30 checks, disposable database, production build
+npm run test:security      # 238 + 80 + 30 checks, disposable database, production build
 npm run audit:responsive   # layout rules, exits 1 on a regression
 npm run audit:workflows    # feedback/money-guard rules, exits 1 on a regression
 npx eslint src tests scripts --max-warnings=0

@@ -79,6 +79,13 @@ export async function createOrder(req: Request) {
     if (tableId) {
       const [table] = await db.select().from(diningTables).where(eq(diningTables.id, Number(tableId))).for("update");
       if (!table) throw new ApiError(404, "Table not found");
+      if (normalizedOrderType === "dine_in" && table.currentOrderId) {
+        const [open] = await db.select({ status: orders.status, paymentStatus: orders.paymentStatus })
+          .from(orders).where(eq(orders.id, table.currentOrderId)).limit(1);
+        if (open && !(["cancelled", "refunded"].includes(open.status)) && !(["paid", "refunded"].includes(open.paymentStatus))) {
+          throw new ApiError(409, "This table already has an open order. Add the items to that order instead.");
+        }
+      }
     }
     for (const value of [discountAmount, discountPercent, tipAmount]) {
       if (value !== undefined && (!Number.isFinite(Number(value)) || Number(value) < 0)) throw new ApiError(400, "Invalid discount or tip");
@@ -226,8 +233,6 @@ export async function createOrder(req: Request) {
     const totalAmount = fromCents(pricing.totalCents);
 
     // Generate unique order number
-    const timestampStr = Date.now().toString().slice(-4);
-    const randStr = Math.floor(100 + Math.random() * 900);
     const orderNumber = `ORD-${randomUUID()}`;
 
     // A complimentary order has nothing to collect, so it is settled at once.

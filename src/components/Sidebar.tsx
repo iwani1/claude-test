@@ -127,7 +127,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       items: [
         { id: "integrations", label: "Hardware & Tenders", short: "Hardware", icon: Cable, visible: perms.canManageSettings },
         { id: "settings", label: "Settings & Branch", short: "Settings", icon: Sliders, visible: perms.canManageSettings },
-        { id: "deployment", label: "GreenGeeks Deploy", short: "Deploy", icon: Server, badge: "Ready", visible: perms.canManageSettings },
+        { id: "deployment", label: "Hosting Deploy", short: "Deploy", icon: Server, badge: "Ready", visible: perms.canManageSettings },
       ],
     },
   ];
