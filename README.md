@@ -32,9 +32,14 @@ the shift's running sales/cash/MoMo totals are rolled back so the drawer still
 reconciles to the sales that remain. There is no undo, and no other role —
 including managers — can reach it.
 
-This erasure is the owner's decision: no archive row and no audit entry are
-kept, so after deletion the system holds no record that the order existed. Keep
-your own till or accounting records if you need that evidence.
+The order's operational records are erased completely (no copy in Order
+History, reports or the audit log). One minimal record *is* kept, in the
+`order_deletion_tombstones` table: order number, total/paid/refunded amounts,
+who deleted it and when, written in the same transaction as the deletion.
+It is not shown in any screen and the app can never delete it — it exists so
+an operator or accountant with database access can still prove a deleted
+order existed. Keep your own till or accounting records as well if you need
+line-item evidence: the tombstone holds totals only, not items or payments.
 
 ### Roles: who can reach what
 

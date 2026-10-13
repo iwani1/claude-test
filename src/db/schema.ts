@@ -8,6 +8,7 @@ import {
   timestamp,
   boolean,
   jsonb,
+  index,
 } from "drizzle-orm/pg-core";
 
 // ==========================================
@@ -223,7 +224,11 @@ export const stockMovements = pgTable("stock_movements", {
   reason: text("reason"),
   createdById: integer("created_by_id"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+}, (table) => [
+  index("stock_movements_branch_created_idx").on(table.branchId, table.createdAt.desc(), table.id.desc()),
+  // Order stock reversal looks movements up by order-number reference.
+  index("stock_movements_branch_reference_idx").on(table.branchId, table.referenceId),
+]);
 
 export const stockCounts = pgTable("stock_counts", {
   id: serial("id").primaryKey(),
@@ -335,7 +340,10 @@ export const orders = pgTable("orders", {
   stockDeducted: boolean("stock_deducted").default(false).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
+}, (table) => [
+  // Hot path: branch-scoped (RLS) history/report lists sorted newest-first.
+  index("orders_branch_created_idx").on(table.branchId, table.createdAt.desc(), table.id.desc()),
+]);
 
 export const orderItems = pgTable("order_items", {
   id: serial("id").primaryKey(),
@@ -352,7 +360,9 @@ export const orderItems = pgTable("order_items", {
   itemStatus: text("item_status").default("pending").notNull(), // 'pending' | 'preparing' | 'ready' | 'served' | 'cancelled'
   station: text("station").default("kitchen").notNull(), // 'kitchen' | 'bar' | 'grill'
   createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+}, (table) => [
+  index("order_items_branch_order_idx").on(table.branchId, table.orderId),
+]);
 
 export const kitchenTickets = pgTable("kitchen_tickets", {
   id: serial("id").primaryKey(),
@@ -365,7 +375,9 @@ export const kitchenTickets = pgTable("kitchen_tickets", {
   startedAt: timestamp("started_at"),
   readyAt: timestamp("ready_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+}, (table) => [
+  index("kitchen_tickets_branch_order_idx").on(table.branchId, table.orderId),
+]);
 
 // ==========================================
 // 9. Payments & Refunds
@@ -388,7 +400,11 @@ export const payments = pgTable("payments", {
   processedBy: integer("processed_by").notNull(),
   gatewayResponse: jsonb("gateway_response"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+}, (table) => [
+  index("payments_branch_created_idx").on(table.branchId, table.createdAt.desc(), table.id.desc()),
+  index("payments_branch_order_idx").on(table.branchId, table.orderId),
+  index("payments_branch_shift_idx").on(table.branchId, table.shiftId),
+]);
 
 export const refunds = pgTable("refunds", {
   id: serial("id").primaryKey(),
@@ -405,7 +421,10 @@ export const refunds = pgTable("refunds", {
   authorizedBy: integer("authorized_by").notNull(),
   stockReturned: boolean("stock_returned").default(false).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+}, (table) => [
+  index("refunds_branch_created_idx").on(table.branchId, table.createdAt.desc(), table.id.desc()),
+  index("refunds_branch_order_idx").on(table.branchId, table.orderId),
+]);
 
 // ==========================================
 // 10. Audit Logs & System Settings
@@ -421,7 +440,9 @@ export const auditLogs = pgTable("audit_logs", {
   details: text("details"),
   ipAddress: text("ip_address"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+}, (table) => [
+  index("audit_logs_branch_created_idx").on(table.branchId, table.createdAt.desc(), table.id.desc()),
+]);
 
 export const applicationSettings = pgTable("application_settings", {
   id: serial("id").primaryKey(),
@@ -443,4 +464,35 @@ export const drawerMovements = pgTable("drawer_movements", {
   reason: text("reason").notNull(),
   createdBy: integer("created_by").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+}, (table) => [
+  index("drawer_movements_branch_shift_idx").on(table.branchId, table.shiftId),
+]);
+
+// ==========================================
+// 11. Order deletion tombstones (F3)
+// ==========================================
+// Minimal, permanent evidence that an order was erased: order number, the
+// money it held, who erased it and when. Written in the same transaction as
+// the deletion (src/app/api/orders/[id]/route.ts), never exposed by any API,
+// and never deleted by the application. Deliberately NO foreign key to
+// orders — one would either block erasure or cascade the evidence away.
+export const orderDeletionTombstones = pgTable("order_deletion_tombstones", {
+  id: serial("id").primaryKey(),
+  branchId: integer("branch_id").notNull().default(sql`nullif(current_setting('app.branch_id', true), '')::integer`),
+  orderId: integer("order_id").notNull(),
+  orderNumber: text("order_number").notNull(),
+  orderType: text("order_type"),
+  status: text("status"),
+  paymentStatus: text("payment_status"),
+  totalAmount: numeric("total_amount", { precision: 10, scale: 2 }).notNull(),
+  paidAmount: numeric("paid_amount", { precision: 10, scale: 2 }).notNull(),
+  refundedAmount: numeric("refunded_amount", { precision: 10, scale: 2 }).default("0.00").notNull(),
+  createdByUserId: integer("created_by_user_id"),
+  deletedBy: integer("deleted_by").notNull(),
+  deletedByName: text("deleted_by_name"),
+  orderCreatedAt: timestamp("order_created_at").notNull(),
+  deletedAt: timestamp("deleted_at").defaultNow().notNull(),
+  reason: text("reason"),
+}, (table) => [
+  index("order_deletion_tombstones_branch_deleted_idx").on(table.branchId, table.deletedAt.desc()),
+]);

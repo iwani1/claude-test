@@ -50,6 +50,8 @@ export const REQUIRED_TABLES: readonly string[] = [
   "auth_attempts",
   // 0003_refund_accounting.sql
   "drawer_movements",
+  // 0007_p1_hardening.sql
+  "order_deletion_tombstones",
 ];
 
 export const MIGRATE_HINT =

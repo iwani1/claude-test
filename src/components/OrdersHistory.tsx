@@ -720,7 +720,7 @@ export const OrdersHistory: React.FC<{ currentUser: any }> = ({ currentUser }) =
         title={deleteTarget ? `Delete order ${deleteTarget.orderNumber}?` : "Delete order?"}
         message={
           deleteTarget
-            ? `Permanent: GH₵${Number(deleteTarget.totalAmount || 0).toFixed(2)} disappears from history, reports and collections, and any stock it used goes back to inventory. This cannot be undone.`
+            ? `Permanent: GH₵${Number(deleteTarget.totalAmount || 0).toFixed(2)} disappears from history, reports and collections, and any stock it used goes back to inventory. A minimal deletion record (order number, amount, who deleted it) is kept for accounting. This cannot be undone.`
             : ""
         }
         confirmLabel="Delete forever"
