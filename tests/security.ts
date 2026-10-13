@@ -349,7 +349,7 @@ async function main() {
   check(/idempotency_key/.test(String(driftedPay.body.error)) && /db:migrate/.test(String(driftedPay.body.error)), "the payment refusal names the missing column and the command that fixes it");
   check(Number((await admin.query("SELECT paid_amount FROM orders WHERE id=$1", [driftSale.body.order.id])).rows[0].paid_amount) === 0, "the refused payment took no money");
   const driftedHealth = await request("/api/health");
-  check(driftedHealth.status === 503 && driftedHealth.body.reason === "schema-behind" && (driftedHealth.body.missing || []).includes("payments.idempotency_key"), "health reports the schema gap for the deploy gate and the operator");
+  check(driftedHealth.status === 503 && driftedHealth.body.reason === "schema-behind" && !JSON.stringify(driftedHealth.body).includes("idempotency_key") && !("missing" in driftedHealth.body) && !("database" in driftedHealth.body), "public health reports the schema gap without naming tables, columns or the database");
   await admin.query(await readFile("migrations/0004_payment_idempotency.sql", "utf8"));
   check((await request("/api/health")).status === 200, "running the migration returns the app to healthy");
   check((await request(`/api/orders/${driftId}`, "DELETE", {}, owner)).status === 200, "and the work that was refused now succeeds");

@@ -6,7 +6,7 @@ import { findMissingSchema, MIGRATE_HINT } from "@/lib/schema-guard";
 
 export const dynamic = "force-dynamic";
 
-/** Baked in at build time by next.config.ts (see APP_BUILD_COMMIT). */
+/** Baked in at build time by next.config.ts (see APP_BUILD_COMMIT). Server log only. */
 const COMMIT = process.env.APP_BUILD_COMMIT || "unknown";
 
 type Where = { database?: string; schema?: string };
@@ -16,6 +16,11 @@ async function where(): Promise<Where> {
   return (result.rows[0] as Where) || {};
 }
 
+/**
+ * This endpoint is public, so it answers only with a status and a reason code.
+ * Which database, which schema and which missing columns are written to the
+ * server log, where the operator reads them.
+ */
 export async function GET() {
   try {
     const place = await where();
@@ -27,17 +32,17 @@ export async function GET() {
     if (missing.length) {
       console.error(`Schema behind on ${place.database}.${place.schema} @ ${COMMIT}: missing ${missing.join(", ")}`);
       return Response.json(
-        { ok: false, reason: "schema-behind", missing, commit: COMMIT, ...place, hint: MIGRATE_HINT },
+        { ok: false, reason: "schema-behind", hint: MIGRATE_HINT },
         { status: 503, headers: NO_STORE }
       );
     }
-    return Response.json({ ok: true, commit: COMMIT, ...place }, { headers: NO_STORE });
+    return Response.json({ ok: true }, { headers: NO_STORE });
   } catch (err) {
-    // Name it: a missing database is not the same failure as an app that never
+    // Name it in the log: a missing database is not the same failure as an app that never
     // started, and the deploy script and the operator both read this.
     const code = (() => { for (let node: any = err, depth = 0; node && depth < 5; node = node.cause, depth++) { if (node.code) return String(node.code); } return ""; })();
     console.error(`Health check failed on ${COMMIT}: ${code || (err as any)?.message}`);
-    return Response.json({ ok: false, reason: "database-unreachable", commit: COMMIT },
+    return Response.json({ ok: false, reason: "database-unreachable" },
       { status: 503, headers: NO_STORE });
   }
 }

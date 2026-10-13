@@ -99,6 +99,8 @@ not from the production server, not with a browser, not with hardware.
 | **Low** | **The audit log had no page limit.** `limit` was taken as sent, so one request could return the whole history. | Capped at 500 rows; a malformed value falls back to 100. |
 | **Low** | **Settings accepted any key.** The owner's settings endpoint wrote whatever keys it was sent. | Only the keys the Settings screen and pricing use are accepted; anything else is refused with 400 before anything is written. The VAT confirmation marker is server-only. |
 | **Medium** | **Legacy credentials were in the repository.** `11claude.zip` (the original code) contains a default owner password and a fallback signing key, and `tests/e2e.mjs` carried a demo password. | Both are out of the tree: the ZIP is git-ignored and kept on the owner's machine, and `tests/e2e.mjs` is removed. History is not rewritten, so the old files remain in past commits and in `main`'s history. Confirmed by the owner that the live server never used these values. |
+| **Low** | **The public health endpoint disclosed internals.** It named the database, the schema, the missing columns and the build commit to anyone. | It returns only `ok` and a reason code. The details go to the server log. |
+| **Low** | **The deploy script defaulted to another session's branch.** `POS_BRANCH` defaulted to `arena/181e4004-claude-test`. | The default is `main`, and the deployment guide clones `main`. Set `POS_BRANCH` only on purpose. |
 
 ## Missed on the first pass: order deletion on a stale database
 
@@ -128,8 +130,9 @@ is now impossible to be silent about.
   Run `npm run db:migrate` on the server with MIGRATION_DATABASE_URL set, then
   restart the app."* Everything that does not depend on the missing piece keeps
   working — a stale database degrades the till, it does not stop the venue.
-- `/api/health` reports `{ok:false, reason:"schema-behind", missing:[…]}`, so
-  the deploy script's health gate and the operator see it at once.
+- `/api/health` reports `{ok:false, reason:"schema-behind"}`, so the deploy
+  script's health gate sees it at once. The missing tables and columns go to the
+  server log, not to the public response.
 - Any other mismatch — missing table, missing grant — is translated the same
   way instead of becoming a bare 500.
 - `scripts/audit-workflows.py` now fails when a migration adds a column that is

@@ -29,7 +29,7 @@ POS_USER="${POS_USER:-pos}"
 POS_SERVICE="${POS_SERVICE:-pos}"
 POS_URL="${POS_URL:-http://127.0.0.1:3000}"
 POS_DB="${POS_DB:-pos}"
-POS_BRANCH="${POS_BRANCH:-arena/181e4004-claude-test}"
+POS_BRANCH="${POS_BRANCH:-main}"
 BACKUP_DIR="${BACKUP_DIR:-/var/backups/pos}"
 DRY_RUN="${DRY_RUN:-0}"
 FORCE="${FORCE:-0}"
@@ -242,7 +242,7 @@ else
     Apply the migrations, then restart:
       cd $POS_DIR && sudo -E -u $POS_USER env MIGRATION_DATABASE_URL='postgresql://pos_owner:PASSWORD@127.0.0.1:5432/$POS_DB' npm run db:migrate
       sudo systemctl restart $POS_SERVICE
-    /api/health names the missing piece. Backup from this run: $DUMP"
+    the service log names the missing piece. Backup from this run: $DUMP"
   fi
   [[ "$HEALTHY" == "1" ]] || {
     printf '\n'

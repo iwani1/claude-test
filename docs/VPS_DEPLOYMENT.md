@@ -108,15 +108,14 @@ characters when putting them in connection strings.
 
 ## Phase 4 — Get the code and install dependencies
 
-The code is on branch `arena/181e4004-claude-test` of
-`https://github.com/iwani1/claude-test` (or merged to `main` once PR #1 is
-merged). Either method works:
+The deployed code is branch `main` of `https://github.com/iwani1/claude-test`.
+The deploy script defaults to `main` too; set `POS_BRANCH` only on purpose. Either method works:
 
 ```sh
 install -d -o admin -g admin /opt/pos && cd /opt/pos
 
 # Option A — clone from GitHub (repo must be accessible from the server)
-git clone -b arena/181e4004-claude-test https://github.com/iwani1/claude-test.git .
+git clone -b main https://github.com/iwani1/claude-test.git .
 
 # Option B — upload the reviewed archive instead
 #   Download 11claude-fixed.zip from the repository page, then:
