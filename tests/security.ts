@@ -239,6 +239,13 @@ async function main() {
   check((await request("/api/auth/login", "POST", { email: "removeme@test.invalid", password: "Removal-test-password-123!" })).status === 401, "the removed account can never sign in again");
   check(Number((await admin.query("SELECT count(*)::int AS c FROM audit_logs WHERE action = 'delete_user' AND entity_id = $1", [String(removableId)])).rows[0].c) >= 1, "the removal is recorded in the activity log");
   check((await request("/api/staff", "POST", { action: "delete_user", userId: removableId }, owner)).status === 409, "removing the same account twice is refused");
+  // A removed account stays closed: no other staff action may bring it back.
+  // (A manager once could reset the password and switch the account on again,
+  // and the roster hid it while the login worked.)
+  check((await request("/api/staff", "POST", { action: "reset_password", userId: removableId, password: "Revived-password-123!" }, manager)).status === 409, "manager cannot reset a removed account's password");
+  check((await request("/api/staff", "POST", { action: "toggle_active", userId: removableId, isActive: true }, manager)).status === 409, "manager cannot reactivate a removed account");
+  check((await request("/api/staff", "POST", { action: "update_pin", userId: removableId, pin: "2468" }, owner)).status === 409, "owner cannot set a PIN on a removed account");
+  check((await request("/api/auth/login", "POST", { email: removedRow.email, password: "Revived-password-123!" })).status === 401, "removed account still cannot sign in after the refused attempts");
   check((await request("/api/staff", "POST", { action: "create_employee", name: "Rehired Test", email: "removeme@test.invalid", role: "cashier", password: "Rehire-password-123!", pin: "8383" }, owner)).status === 200, "the freed email and PIN can be used by a new account");
   check((await request("/api/health")).status === 200, "public health endpoint works without scoped data access");
   check((await request("/api/orders", "POST", order("bad-origin"), cashier, { Origin: "https://attacker.invalid" })).status === 403, "cross-origin mutation rejected");

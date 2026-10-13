@@ -14,6 +14,15 @@ const fields = { id: users.id, restaurantId: users.restaurantId, branchId: users
 // fails closed on it.
 const REMOVED_EMAIL_SUFFIX = "@deleted.invalid";
 const REMOVED_PASSWORD_HASH = "!removed";
+/** Whether the account has been removed. Asks the catalogue first: on a database
+ *  that has not run 0005 nothing can have been removed, so the answer is no
+ *  rather than a failed query. The `deleted_at` column is the authority — the
+ *  email tombstone is not, because any address can be typed in. */
+async function isRemoved(userId: number): Promise<boolean> {
+  if (!(await columnExists(db, "users", "deleted_at"))) return false;
+  const result = await db.execute(sql`select deleted_at from users where id = ${userId}`);
+  return result.rows[0]?.deleted_at != null;
+}
 export const GET = secureRoute(async () => {
   // 0005 not applied on this database yet: nothing has been removed there, so
   // the full roster is the honest answer and the staff screen keeps working
@@ -46,12 +55,13 @@ export const POST = secureRoute(async req => {
   } else if (["toggle_active", "update_pin", "reset_password", "delete_user"].includes(action)) {
     const [target] = await db.select().from(users).where(eq(users.id, Number(body.userId))).for("update");
     if (!target) throw new ApiError(404, "Employee not found");
+    const removed = await isRemoved(target.id);
     if (action === "delete_user") {
       // Owner only: this takes away a person's ability to sign in. The activity
       // log keeps who did it; their sales history stays behind untouched.
       if (actor.role !== "super_admin") throw new ApiError(403, "Only the owner may remove a staff account");
       if (target.id === actor.id) throw new ApiError(400, "You cannot remove your own account");
-      if (target.email.endsWith(REMOVED_EMAIL_SUFFIX)) throw new ApiError(409, "That account was already removed");
+      if (removed) throw new ApiError(409, "That account was already removed");
       const [openShift] = await db.select({ id: shifts.id }).from(shifts)
         .where(and(eq(shifts.userId, target.id), isNull(shifts.closedAt))).limit(1);
       await db.execute(sql`
@@ -63,6 +73,10 @@ export const POST = secureRoute(async req => {
       [employee] = await db.select(fields).from(users).where(eq(users.id, target.id));
       if (openShift) note = `Shift #${openShift.id} is still open. Close it on the Drawer screen so its cash is reconciled.`;
     } else {
+      // A removed account is closed for good. Reviving it through another action
+      // (password reset, reactivation, PIN) would bring back a login the owner
+      // removed, and the roster would not show it.
+      if (removed) throw new ApiError(409, "This staff account was removed and can no longer be changed. Its sales history is kept.");
       if (actor.role !== "super_admin" && ["super_admin", "manager"].includes(target.role)) throw new ApiError(403, "Only owners may modify privileged staff");
       if (action === "toggle_active") {
         if (typeof body.isActive !== "boolean") throw new ApiError(400, "isActive must be a boolean");
