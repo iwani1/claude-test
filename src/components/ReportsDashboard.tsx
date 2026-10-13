@@ -19,7 +19,7 @@ import {
   Smartphone,
 } from "lucide-react";
 
-export const ReportsDashboard: React.FC = () => {
+export const ReportsDashboard: React.FC<{ canExportTransactions?: boolean }> = ({ canExportTransactions = false }) => {
   const [timeframe, setTimeframe] = useState<"today" | "7days" | "30days" | "all">("all");
   const [data, setData] = useState<any | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -116,6 +116,7 @@ export const ReportsDashboard: React.FC = () => {
             ))}
           </div>
 
+          {canExportTransactions && <>
           <button
             onClick={() => handleExportCSV("quickbooks")}
             className="px-3 py-2 bg-neutral-800 hover:bg-neutral-750 text-neutral-200 font-semibold rounded-xl border border-neutral-700 flex items-center gap-1.5 transition"
@@ -133,6 +134,7 @@ export const ReportsDashboard: React.FC = () => {
             <Download className="w-4 h-4 text-sky-400" />
             <span className="hidden md:inline">Xero CSV</span>
           </button>
+          </>}
         </div>
       </div>
 

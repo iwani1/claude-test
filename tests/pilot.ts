@@ -183,6 +183,9 @@ async function main() {
     supplierId,
     items: [{ ingredientId: 1, orderedQuantity: 5, unitPrice: "2.00" }],
   });
+  // A PO number once came from the millisecond clock and repeated about every
+  // 16 minutes, so a busy business would start getting 409s on PO creation.
+  check(/^PO-\d{8}-[0-9A-F]{8}$/.test(po.poNumber), true, "purchase orders get a dated, random PO number");
   const poItemId = Number((await admin.query("select id from purchase_order_items where purchase_order_id=$1 order by id limit 1", [po.id])).rows[0].id);
   const receiveBody = {
     purchaseOrderId: po.id,
@@ -192,6 +195,7 @@ async function main() {
   check(await stock(), editStockStart, "the purchase probe starts from known stock");
   check((await patch("purchasing/orders", receiveBody)).success, true, "goods are received once");
   check(await stock(), editStockStart + 5, "and land in stock once");
+  check(/^GRN-\d{8}-[0-9A-F]{8}$/.test(String((await admin.query("select grn_number from goods_receipts where purchase_order_id=$1", [po.id])).rows[0]?.grn_number)), true, "the goods receipt gets a dated, random GRN number");
   const receiveAgain = await raw("purchasing/orders", "PATCH", receiveBody);
   check(receiveAgain.status, 409, "receiving the same purchase order again is refused");
   check(await stock(), editStockStart + 5, "and the shelf does not double-count the delivery");

@@ -8,3 +8,10 @@ node_modules/
 
 # Next.js generates these declarations for the current dev/build mode.
 next-env.d.ts
+
+# Original legacy archive: kept on the owner's machine only, never committed.
+# It contains legacy credentials and insecure code; see docs/SYSTEM_AUDIT.md.
+11claude.zip
+
+# Release archive: built by scripts/package-release.py and by CI, never committed.
+11claude-fixed.zip

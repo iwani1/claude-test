@@ -13,8 +13,10 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      # Runs against the branch merged with main, which is also how the release
-      # is built: source files only, never secrets, ZIPs or database dumps.
+      # The release archive is built here from the source of this exact commit
+      # and never committed. --check then verifies it file by file. Source files
+      # only: never secrets, ZIPs or database dumps.
+      - run: python3 scripts/package-release.py
       - run: python3 scripts/package-release.py --check
       - run: npm ci
       - run: npm run lint -- --max-warnings=0
@@ -27,3 +29,9 @@ jobs:
       - run: npm run test:legacy-import
       - run: npm run test:security
       - run: npm audit --omit=dev
+      - uses: actions/upload-artifact@v7
+        with:
+          name: pos-release-archive
+          path: 11claude-fixed.zip
+          if-no-files-found: error
+          retention-days: 90

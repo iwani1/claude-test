@@ -1,4 +1,4 @@
-import { secureRoute } from "@/lib/api";
+import { secureRoute, isDatabaseFailure } from "@/lib/api";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { kitchenTickets, orders, diningTables } from "@/db/schema";
@@ -57,6 +57,7 @@ async function handleGET(req: Request) {
 
     return NextResponse.json({ tickets: enrichedTickets });
   } catch (err: any) {
+    if (isDatabaseFailure(err)) throw err;
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
@@ -91,6 +92,7 @@ async function handlePATCH(req: Request) {
 
     return NextResponse.json({ success: true, ticket: updated });
   } catch (err: any) {
+    if (isDatabaseFailure(err)) throw err;
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }

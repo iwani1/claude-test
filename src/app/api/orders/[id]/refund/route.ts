@@ -6,7 +6,7 @@ import { db, requestContext } from "@/db";
 import { orders, refunds, auditLogs, users, diningTables, shifts, drawerMovements } from "@/db/schema";
 import { pinDigest, verifyPassword } from "@/lib/auth";
 import { reverseStockForOrder } from "@/lib/inventory-deduction";
-import { ApiError, rateLimit, secureRoute } from "@/lib/api";
+import { ApiError, assertNotThrottled, recordFailedAttempt, secureRoute } from "@/lib/api";
 import { moneyCents } from "@/lib/money";
 export const POST = secureRoute(async (req, { params }) => {
   const actor = requestContext.getStore()!.user!;
@@ -27,11 +27,19 @@ export const POST = secureRoute(async (req, { params }) => {
     if (replay.requestFingerprint !== fingerprint) throw new ApiError(409, "Refund key already used for different details");
     return NextResponse.json({ success: true, refund: replay, duplicate: true });
   }
-  await rateLimit(`refund:branch:${actor.branchId}`);
-  if (typeof managerPin !== "string" || !/^\d{4,8}$/.test(managerPin)) throw new ApiError(403, "Manager PIN required");
+  // Only wrong manager PINs are counted; a refund that is approved is never throttled.
+  const refundKey = `refund:branch:${actor.branchId}`;
+  await assertNotThrottled(refundKey);
+  if (typeof managerPin !== "string" || !/^\d{4,8}$/.test(managerPin)) {
+    await recordFailedAttempt(refundKey);
+    throw new ApiError(403, "Manager PIN required");
+  }
   // RLS restricts approval to managers in the caller's branch.
   const [manager] = await db.select().from(users).where(eq(users.pinLookup, pinDigest(managerPin)));
-  if (!manager?.isActive || !["super_admin", "manager"].includes(manager.role) || !manager.pin || !verifyPassword(managerPin, manager.pin)) throw new ApiError(403, "Invalid manager approval");
+  if (!manager?.isActive || !["super_admin", "manager"].includes(manager.role) || !manager.pin || !verifyPassword(managerPin, manager.pin)) {
+    await recordFailedAttempt(refundKey);
+    throw new ApiError(403, "Invalid manager approval");
+  }
   const [order] = await db.select().from(orders).where(eq(orders.id, orderId)).for("update");
   if (!order) throw new ApiError(404, "Order not found");
   const balance = await refundBalance(orderId);

@@ -1,7 +1,7 @@
 # Restaurant POS — hardened source
 
 Next.js / React / TypeScript with PostgreSQL and Drizzle ORM.
-The original `11claude.zip` is retained unchanged; use the unpacked source here.
+The original `11claude.zip` is kept on the owner's machine only and is not in Git; use the source here.
 
 - [Deployment and database setup](GREENGEEKS_DEPLOYMENT_GUIDE.md)
 - [Security model, tests, and remaining release work](SECURITY.md)
@@ -31,6 +31,10 @@ entries pointing at it. Stock the order had deducted returns to inventory, and
 the shift's running sales/cash/MoMo totals are rolled back so the drawer still
 reconciles to the sales that remain. There is no undo, and no other role —
 including managers — can reach it.
+
+This erasure is the owner's decision: no archive row and no audit entry are
+kept, so after deletion the system holds no record that the order existed. Keep
+your own till or accounting records if you need that evidence.
 
 ### Roles: who can reach what
 
@@ -126,7 +130,7 @@ what is still open, and what cannot be checked without hardware or the server.
 Re-run it with:
 
 ```sh
-npm run test:security      # 195 security + 78 pilot + 30 accounting checks
+npm run test:security      # 239 security + 80 pilot + 30 accounting checks
 npm run audit:responsive   # phone/tablet/laptop layout rules
 npm run audit:workflows    # failure-feedback, money-guard and schema-guard rules
 ```
@@ -176,6 +180,10 @@ Money is never adjusted silently:
   tip are locked (guest details and notes still save). Re-pricing would rewrite
   what the drawer already recorded.
 
+Edits are the owner's decision and are not written to the activity log: the
+order shows the new amounts, but the system keeps no before/after record of the
+change.
+
 
 - **Display size** — the control in the top bar cycles **Standard (16px)** →
   **Large (18px, default)** → **Extra large (20px)**. The whole UI is rem-based,
@@ -193,5 +201,7 @@ need a reviewed ownership conversion before cutover. Cash/MoMo are manual tender
 records, not payment gateway integrations.
 
 Release archive: `python3 scripts/package-release.py` builds `11claude-fixed.zip`;
-`python3 scripts/package-release.py --check` verifies it matches the source.
-The original ZIP is retained in Git but excluded from the new source archive.
+`python3 scripts/package-release.py --check` verifies it matches the source. CI builds
+it on every run and keeps it as the `pos-release-archive` artifact (90 days). The
+archive is git-ignored, never committed. The original ZIP is kept on the owner's
+machine, not in Git, and is excluded from the release archive.

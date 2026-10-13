@@ -59,8 +59,8 @@ order creation causes rollback rather than a clamped/inaccurate ledger.
 migrations, creates a restricted runtime login, seeds multiple branches across
 two restaurants, runs the Next HTTP API, and removes the cluster afterward.
 It ignores an existing DATABASE_URL. Ports 15432 and 3100 must be free.
-Fixtures and credentials are test-only. The original `tests/e2e.mjs` is a legacy
-manual suite with obsolete demo-login assumptions, not the security gate.
+Fixtures and credentials are test-only. The legacy manual suite `tests/e2e.mjs` has
+been removed; it carried obsolete demo-login credentials.
 
 Checks cover every protected method anonymously, role denial, privilege
 escalation, credential redaction, tenant/branch read and write isolation,
@@ -74,7 +74,6 @@ rotation with session revocation, and throttling.
   quietly when a read request fails; every **user-initiated action** now reports
   success/failure visibly, but a silent stale list during an API outage remains
   possible on read-only screens.
-- `tests/e2e.mjs` is a legacy manual suite, not part of the CI gate.
 - Development-tool dependency advisories remain documented in
   `docs/DEPENDENCY_REVIEW.md` pending owner acceptance.
 

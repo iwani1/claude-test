@@ -1,5 +1,5 @@
 import { createOrder } from "@/lib/create-order";
-import { secureRoute } from "@/lib/api";
+import { secureRoute, isDatabaseFailure } from "@/lib/api";
 import { NextResponse } from "next/server";
 import { db, requestContext } from "@/db";
 import {
@@ -13,7 +13,8 @@ import {
 } from "@/db/schema";
 import { eq, desc, inArray, and, gte, lte, count } from "drizzle-orm";
 import { deductStockForOrder } from "@/lib/inventory-deduction";
-import { requireSession } from "@/lib/guard";
+import { getSessionUser, requireSession } from "@/lib/guard";
+import { hideCost, maySeeCost } from "@/lib/cost-visibility";
 import { loadBillingConfig, priceOrder, fromCents } from "@/lib/pricing";
 
 async function handleGET(req: Request) {
@@ -40,15 +41,17 @@ async function handleGET(req: Request) {
 
     // Fetch order items for each order
     const allOrderIds = orderList.map((o) => o.id);
+    const showCost = maySeeCost(await getSessionUser());
     const items = allOrderIds.length > 0 ? await db.select().from(orderItems) : [];
 
     const populatedOrders = orderList.map((ord) => ({
       ...ord,
-      items: items.filter((it) => it.orderId === ord.id),
+      items: items.filter((it) => it.orderId === ord.id).map((it) => hideCost(it, showCost)),
     }));
 
     return NextResponse.json({ orders: populatedOrders, total: Number(total) });
   } catch (err: any) {
+    if (isDatabaseFailure(err)) throw err;
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }

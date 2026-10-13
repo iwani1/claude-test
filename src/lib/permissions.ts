@@ -22,6 +22,10 @@ export const ROLE_PERMISSIONS: Record<UserRole, {
   /** Read shift/drawer history. Operating the drawer — opening and closing a
    *  shift, cash drops, popping the till — stays behind canAccessPos. */
   canViewDrawerHistory: boolean;
+  /** Read individual payments and refunds across the branch: the activity log
+   *  and the accounting export. Reports access alone does not grant it, so an
+   *  inventory officer who reads aggregate reports cannot see who paid what. */
+  canViewTransactionTrail: boolean;
   /** Hard-delete orders. Owner only: this erases the order and its whole
    *  financial trail, so it is deliberately not delegable to managers. */
   canDeleteOrders: boolean;
@@ -43,6 +47,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, {
     canManageSettings: true,
     canViewOrderHistory: true,
     canViewDrawerHistory: true,
+    canViewTransactionTrail: true,
     canDeleteOrders: true,
     canEditOrders: true,
   },
@@ -59,6 +64,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, {
     canManageSettings: false,
     canViewOrderHistory: true,
     canViewDrawerHistory: true,
+    canViewTransactionTrail: true,
     canDeleteOrders: false,
     canEditOrders: false,
   },
@@ -76,6 +82,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, {
     canManageSettings: false,
     canViewOrderHistory: true,
     canViewDrawerHistory: true,
+    canViewTransactionTrail: false,
     canDeleteOrders: false,
     canEditOrders: false,
   },
@@ -93,6 +100,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, {
     canManageSettings: false,
     canViewOrderHistory: false,
     canViewDrawerHistory: false,
+    canViewTransactionTrail: false,
     canDeleteOrders: false,
     canEditOrders: false,
   },
@@ -111,6 +119,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, {
     // read the transaction trail or the drawer.
     canViewOrderHistory: false,
     canViewDrawerHistory: false,
+    canViewTransactionTrail: false,
     canDeleteOrders: false,
     canEditOrders: false,
   },
@@ -129,6 +138,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, {
     // but never operates the till or the drawer (canAccessPos stays false).
     canViewOrderHistory: true,
     canViewDrawerHistory: true,
+    canViewTransactionTrail: true,
     canDeleteOrders: false,
     canEditOrders: false,
   },

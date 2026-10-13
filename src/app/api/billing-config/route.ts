@@ -1,4 +1,4 @@
-import { secureRoute } from "@/lib/api";
+import { secureRoute, isDatabaseFailure } from "@/lib/api";
 import { NextResponse } from "next/server";
 import { loadBillingConfig } from "@/lib/pricing";
 import { fromCents } from "@/lib/pricing-core";
@@ -26,6 +26,7 @@ async function handleGET() {
       compBreakfastEnabled: config.compBreakfastEnabled,
     });
   } catch (err) {
+    if (isDatabaseFailure(err)) throw err;
     console.error("Failed to load billing config:", err);
     return NextResponse.json({ error: "Could not load billing configuration." }, { status: 500 });
   }

@@ -1,4 +1,4 @@
-import { secureRoute } from "@/lib/api";
+import { secureRoute, isDatabaseFailure } from "@/lib/api";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import {
@@ -10,9 +10,12 @@ import {
   auditLogs,
 } from "@/db/schema";
 import { eq, asc } from "drizzle-orm";
+import { getSessionUser } from "@/lib/guard";
+import { hideCost, maySeeCost } from "@/lib/cost-visibility";
 
 async function handleGET() {
   try {
+    const showCost = maySeeCost(await getSessionUser());
     const categories = await db
       .select()
       .from(menuCategories)
@@ -41,10 +44,10 @@ async function handleGET() {
         .map((l) => l.modifierId);
       const itemMods = modifiersWithOpts.filter((m) => linkedModIds.includes(m.id));
 
-      return {
+      return hideCost({
         ...item,
         modifiers: itemMods,
-      };
+      }, showCost);
     });
 
     return NextResponse.json({
@@ -53,6 +56,7 @@ async function handleGET() {
       allModifiers: modifiersWithOpts,
     });
   } catch (err: any) {
+    if (isDatabaseFailure(err)) throw err;
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
@@ -89,7 +93,7 @@ async function handlePOST(req: Request) {
         sku: sku || `SKU-${Date.now().toString().slice(-6)}`,
         price: String(price),
         costPrice: String(costPrice || "0.00"),
-        imageUrl: imageUrl || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=400&auto=format&fit=crop&q=80",
+        imageUrl: imageUrl || "/menu-images/placeholder.svg",
         prepTimeMinutes: Number(prepTimeMinutes) || 15,
         station: station || "kitchen",
         isAvailable: isAvailable ?? true,
@@ -116,6 +120,7 @@ async function handlePOST(req: Request) {
 
     return NextResponse.json({ success: true, item: newItem });
   } catch (err: any) {
+    if (isDatabaseFailure(err)) throw err;
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }

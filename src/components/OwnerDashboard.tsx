@@ -383,7 +383,7 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ onNavigate, open
             className="p-4 bg-neutral-900 border border-neutral-800 hover:border-neutral-700 rounded-2xl text-left text-white shadow-lg hover:scale-[1.02] transition"
           >
             <Users className="w-6 h-6 text-amber-400 mb-2" />
-            <div className="text-sm font-bold">GreenGeeks Package</div>
+            <div className="text-sm font-bold">Hosting Package</div>
             <div className="text-xs text-neutral-400">Hosting files & staff guides</div>
           </button>
           )}

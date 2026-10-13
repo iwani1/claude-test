@@ -119,7 +119,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         { id: "dashboard", label: "Owner Dashboard", short: "Dashboard", icon: LayoutDashboard, visible: perms.canViewReports },
         { id: "reports", label: "Reports & Analytics", short: "Reports", icon: BarChart3, visible: perms.canViewReports },
         { id: "staff", label: "Staff & Permissions", short: "Staff", icon: Users2, visible: perms.canManageStaff },
-        { id: "audit", label: "Audit Logs", short: "Audit", icon: FileText, visible: perms.canViewReports },
+        { id: "audit", label: "Audit Logs", short: "Audit", icon: FileText, visible: perms.canViewTransactionTrail },
       ],
     },
     {
@@ -127,7 +127,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       items: [
         { id: "integrations", label: "Hardware & Tenders", short: "Hardware", icon: Cable, visible: perms.canManageSettings },
         { id: "settings", label: "Settings & Branch", short: "Settings", icon: Sliders, visible: perms.canManageSettings },
-        { id: "deployment", label: "GreenGeeks Deploy", short: "Deploy", icon: Server, badge: "Ready", visible: perms.canManageSettings },
+        { id: "deployment", label: "Hosting Deploy", short: "Deploy", icon: Server, badge: "Ready", visible: perms.canManageSettings },
       ],
     },
   ];

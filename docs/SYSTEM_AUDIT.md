@@ -14,7 +14,7 @@ not from the production server, not with a browser, not with hardware.
 
 | Method | What it covered |
 |---|---|
-| `npm run test:security` | 195 security (including a stale-database scenario, staff removal and the read-only finance role) + 78 pilot + 30 accounting checks against a disposable database and a production build |
+| `npm run test:security` | 239 security (including a stale-database scenario, staff removal, the read-only finance role, sign-in and refund throttling, and the VAT gate) + 80 pilot + 30 accounting checks against a disposable database and a production build |
 | `npm run audit:responsive` | 28 components + 2 app files: tables scroll or become cards, dialogs scroll, no `h-screen`/`w-screen`, no unguarded fixed widths |
 | `npm run audit:workflows` | **new** — swallowed failures in client code, fetches parsed without a status check, money routes without an idempotency guard, routes without a permission check, tables without a phone view |
 | Route sweep | all 27 route handlers read for permission gates, error envelopes and money/stock writes |
@@ -91,6 +91,27 @@ not from the production server, not with a browser, not with hardware.
 | **Low** | The stock-adjustment submit button was a 28px target (below the touch floor) and could be double-tapped. | 44px minimum, in-flight guard, "Committing…" state. |
 | **Medium** *(13 Oct)* | **A staff account could not be removed at all.** The owner asked for it; the capability had never been built, and a raw row delete is refused by Postgres while orders point at the person. | Owner-only removal from the roster: `migrations/0005_staff_removal.sql`, `delete_user` action, Delete in Staff behind a confirm dialog. Credentials wiped, sessions revoked, sales and their names kept, activity-log entry written. 14 security checks + 25 live checks. See the section below. |
 | **Low** | An offline payment notice promised "it will not be charged twice" before the server could guarantee it. | The promise is now backed by payment idempotency, and the notice points at the safe action (retry, or check Order History). |
+| **Medium** | **Purchase-order and goods-receipt numbers could collide.** They were built from the last six digits of the millisecond clock, which repeat about every 16 minutes; around 1,000 documents would likely produce a duplicate, and the duplicate answered 409 on PO creation or receipt. | `src/lib/document-numbers.ts`: a UTC date plus 32 random bits (`PO-20261013-3F9A2C1B`). The unique constraints are kept; pilot checks confirm the format. |
+| **Medium** | **Ordinary use could lock staff out.** Every sign-in, PIN switch and refund approval counted against its limit, including successes. The branch-wide PIN key was shared by sign-in and quick switches, so about ten switches in 15 minutes locked the whole till out of PIN access; a site-wide cap of 200 sign-ins could lock out every employee. | Only wrong credentials count now: per account (10 per 15 min), per branch PIN and manager-PIN approval (10), and a site-wide backstop of 300 wrong sign-ins. A correct sign-in or approval is never throttled. The limit is checked before the credential, and each failure is written on its own connection so it survives the rejected request. |
+| **Medium** | **A new install charged 0% VAT silently.** The seed set the rate to 0, and the till accepted that. | The seed sets 15%, the code's own VAT default. It also marks the branch unconfirmed, and the till refuses sales until the owner saves the rate in Settings. Installs that already exist have no such marker, so they are unaffected. |
+| **Medium** | **The inventory officer could read every payment and refund.** The audit log and the accounting export were gated on the general reports permission, which that role holds, so it listed who paid what and what was refunded. The matrix said the role does not read the transaction trail. | A new permission, `canViewTransactionTrail`, granted to owner, manager and accountant. The audit log and the payment export require it, on the API and on the screens; aggregate reports stay open to the reports roles. |
+| **Low** | **Cashiers could see food cost and margin.** Cost price was returned by the menu, the order list, a single order, and the sale a cashier rings up. | `src/lib/cost-visibility.ts`: cost is included only for roles with reports or menu access (owner, manager, inventory officer, accountant). Cashiers get sale prices only. |
+| **Low** | **The audit log had no page limit.** `limit` was taken as sent, so one request could return the whole history. | Capped at 500 rows; a malformed value falls back to 100. |
+| **Low** | **Settings accepted any key.** The owner's settings endpoint wrote whatever keys it was sent. | Only the keys the Settings screen and pricing use are accepted; anything else is refused with 400 before anything is written. The VAT confirmation marker is server-only. |
+| **Medium** | **Legacy credentials were in the repository.** `11claude.zip` (the original code) contains a default owner password and a fallback signing key, and `tests/e2e.mjs` carried a demo password. | Both are out of the tree: the ZIP is git-ignored and kept on the owner's machine, and `tests/e2e.mjs` is removed. History is not rewritten, so the old files remain in past commits and in `main`'s history. Confirmed by the owner that the live server never used these values. |
+| **Low** | **The public health endpoint disclosed internals.** It named the database, the schema, the missing columns and the build commit to anyone. | It returns only `ok` and a reason code. The details go to the server log. |
+| **Low** | **The deploy script defaulted to another session's branch.** `POS_BRANCH` defaulted to `arena/181e4004-claude-test`. | The default is `main`, and the deployment guide clones `main`. Set `POS_BRANCH` only on purpose. |
+| **Process** | **The release archive was committed by hand.** It had to be rebuilt after every source change, and a stale copy failed CI. | CI builds the archive from the commit, checks it, and keeps it as an artifact. It is git-ignored and no longer committed. |
+| **Medium** | **Any signed-in staff member could read the business's registration, contact and payment settings.** `GET /api/settings` returned the tax number, address, email, phone and MoMo number to every role. | Owner and manager get the full record. Other staff get the name, currency and tax rate the till uses. |
+| **Medium** | **A second dine-in order overwrote the table's link to the first.** Opening a second order on an occupied table repointed the table, leaving the first order unlinked from it. | Refused with 409 while the table's order is open. Staff add the items to that order instead. |
+| **Low** | **The health check passed when `shifts.reconciled_by` was missing.** The column was not on the required list. | Added to the required list, so the health check returns 503 until the migration is applied. |
+| **Low** | **The shifts page loaded every drawer movement and every user.** | Loads only the shifts it shows, their drawer movements, and the people named on them. No screen used the rest. |
+| **Low** | **Shift audit text used "$" for money.** The app uses GH₵. | Corrected to GH₵. |
+| **Low** | **Unused variables in `create-order.ts`.** | Removed. |
+| **Low** | **The dev-origin list named `localhost` twice.** Next already allows it by default. | Removed the redundant entry. Development-only: production builds ignore this list. |
+| **Low** | **Menu and login screens loaded images from Unsplash.** | Menu items use a local placeholder image, and the login screen uses a local photo. |
+| **Low** | **The owner dashboard and sidebar showed "GreenGeeks".** | Renamed to "Hosting Package" and "Hosting Deploy". The guide file keeps its name. |
+| **Low** | **New restaurants defaulted to US dollars.** The database defaults were `USD` and `$`, while the seed and the app use GHS and GH₵. | Migration `0006_ghana_currency_default.sql` changes the defaults to GHS and GH₵. Existing rows are not changed by the migration (row-level security hides them from it); change the currency in Settings if the live record still shows `$`. |
 
 ## Missed on the first pass: order deletion on a stale database
 
@@ -120,8 +141,9 @@ is now impossible to be silent about.
   Run `npm run db:migrate` on the server with MIGRATION_DATABASE_URL set, then
   restart the app."* Everything that does not depend on the missing piece keeps
   working — a stale database degrades the till, it does not stop the venue.
-- `/api/health` reports `{ok:false, reason:"schema-behind", missing:[…]}`, so
-  the deploy script's health gate and the operator see it at once.
+- `/api/health` reports `{ok:false, reason:"schema-behind"}`, so the deploy
+  script's health gate sees it at once. The missing tables and columns go to the
+  server log, not to the public response.
 - Any other mismatch — missing table, missing grant — is translated the same
   way instead of becoming a bare 500.
 - `scripts/audit-workflows.py` now fails when a migration adds a column that is
@@ -234,7 +256,7 @@ Re-run end to end on the release the venue is getting:
 
 | Check | Result |
 |---|---|
-| `npm run test:security` | **195 security / 78 pilot / 30 accounting**, exit 0 (fresh database, production build, RLS enforced) |
+| `npm run test:security` | **239 security / 80 pilot / 30 accounting**, exit 0 (fresh database, production build, RLS enforced) |
 | `npm run audit:workflows` | 0 failures, 27 warnings, 56 advisories — unchanged baseline |
 | `npm run audit:responsive` | 0 failures, 0 warnings |
 | `tsc --noEmit`, `eslint` | clean |
@@ -314,10 +336,11 @@ drawer. **23/23 pass** after the fixes above.
 | Severity | Item | Why it is still open |
 |---|---|---|
 | Low | **Attribution when a queue syncs under a different user.** A queued offline order is filed under whoever syncs it (the server correctly ignores the client's `userId`), so a shift change can put another person's sale under your name. | Behaviour is correct for security; the fix is a disclosure in the sync notice ("3 of these were rung up by Ama"). Recommend doing it with the next offline change. |
-| Low | **56 blocking `alert()` calls remain** in the manager screens (the till path uses in-app notices). | Blocking modals are finger-hostile on a phone and unreadable while moving. Worth migrating screen by screen; deliberately not swept in one pass to keep this change reviewable. |
-| Low | **27 fetch sites inspect the JSON body** (`data.success`/`data.error`) instead of `res.ok`. | Equivalent for this API, since every error carries a JSON body; a non-JSON error page (proxy 502) surfaces as a thrown parse error, which those call sites catch. |
+| Low | **57 blocking `alert()` calls remain** in the manager screens (the till path uses in-app notices). | Blocking modals are finger-hostile on a phone and unreadable while moving. Worth migrating screen by screen; deliberately not swept in one pass to keep this change reviewable. |
+| Low | **Most fetch sites inspect the JSON body** (`data.success`/`data.error`) instead of `res.ok`. The payment, refund, drawer and order-delete paths were checked and already show the server's message. The list loaders (orders, reports, inventory, staff, shifts) do not check `res.ok`, so a failed load can show an empty list. | Equivalent for this API, since every error carries a JSON body; a non-JSON error page (proxy 502) surfaces as a thrown parse error, which those call sites catch. |
 | Info | **Over-receiving is allowed** (received > ordered). | Suppliers deliver extra; the quantity is recorded, not capped. Decide with the accountant whether a tolerance should exist. |
 | Info | **The payment retry key lives in a ref**, so a browser reload between attempt and retry starts a new payment attempt. | A reload is an explicit new action; the verify-before-retry check still prevents a double charge in the common case. |
+| Medium (owner's decision) | **Order deletion and re-pricing leave no record.** Deleting an order erases it, its payments and refunds, and every audit entry pointing at it. Re-pricing an order writes no before/after entry. | Deliberate: the owner asked for erasure with no archive row and no audit entry (decided 13 Oct; the owner reviewed an option for a permanent deletion record and chose to keep erasure). Consequence: after deletion the system cannot prove the order existed, and an edit's old amounts are not kept. Revisit if the accountant needs an audit trail. |
 | Info | **Day boundaries follow the server clock** (Ghana is UTC+0, matching the reports' stated basis). | Fine for this deployment; revisit if the app is ever hosted outside UTC+0. |
 
 ## Cannot be verified here
@@ -337,7 +360,7 @@ drawer. **23/23 pass** after the fixes above.
 ```sh
 # all of the commands below also run in CI on every push:
 #   .github/workflows/security.yml
-npm run test:security      # 195 + 78 + 30 checks, disposable database, production build
+npm run test:security      # 239 + 80 + 30 checks, disposable database, production build
 npm run audit:responsive   # layout rules, exits 1 on a regression
 npm run audit:workflows    # feedback/money-guard rules, exits 1 on a regression
 npx eslint src tests scripts --max-warnings=0

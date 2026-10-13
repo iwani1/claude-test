@@ -1,4 +1,4 @@
-import { secureRoute } from "@/lib/api";
+import { secureRoute, isDatabaseFailure } from "@/lib/api";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { orders, payments, shifts, diningTables, auditLogs } from "@/db/schema";
@@ -286,6 +286,7 @@ async function handlePOST(req: Request, { params }: { params: Promise<{ id: stri
     }
     return NextResponse.json({ success: true, ...result });
   } catch (err) {
+    if (isDatabaseFailure(err)) throw err;
     console.error("Recording payment failed:", err);
     return NextResponse.json({ error: "Could not record the payment. Please try again." }, { status: 500 });
   }

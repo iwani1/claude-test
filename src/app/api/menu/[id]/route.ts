@@ -1,4 +1,4 @@
-import { secureRoute } from "@/lib/api";
+import { secureRoute, isDatabaseFailure } from "@/lib/api";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { menuItems, auditLogs } from "@/db/schema";
@@ -29,6 +29,7 @@ async function handlePUT(req: Request, { params }: { params: Promise<{ id: strin
 
     return NextResponse.json({ success: true, item: updated });
   } catch (err: any) {
+    if (isDatabaseFailure(err)) throw err;
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
@@ -52,6 +53,7 @@ async function handleDELETE(req: Request, { params }: { params: Promise<{ id: st
 
     return NextResponse.json({ success: true });
   } catch (err: any) {
+    if (isDatabaseFailure(err)) throw err;
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }

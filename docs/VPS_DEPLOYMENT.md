@@ -108,18 +108,19 @@ characters when putting them in connection strings.
 
 ## Phase 4 — Get the code and install dependencies
 
-The code is on branch `arena/181e4004-claude-test` of
-`https://github.com/iwani1/claude-test` (or merged to `main` once PR #1 is
-merged). Either method works:
+The deployed code is branch `main` of `https://github.com/iwani1/claude-test`.
+The deploy script defaults to `main` too; set `POS_BRANCH` only on purpose. Either method works:
 
 ```sh
 install -d -o admin -g admin /opt/pos && cd /opt/pos
 
 # Option A — clone from GitHub (repo must be accessible from the server)
-git clone -b arena/181e4004-claude-test https://github.com/iwani1/claude-test.git .
+git clone -b main https://github.com/iwani1/claude-test.git .
 
 # Option B — upload the reviewed archive instead
-#   Download 11claude-fixed.zip from the repository page, then:
+#   Download the `pos-release-archive` artifact from the latest successful
+#   "Security regression" run on GitHub Actions (or build it with
+#   python3 scripts/package-release.py on a trusted machine), then:
 #   unzip 11claude-fixed.zip -d /opt/pos
 ```
 
@@ -171,7 +172,7 @@ cd /opt/pos
 # Migrations use the maintenance URL only — never the web app's DATABASE_URL.
 export MIGRATION_DATABASE_URL='postgresql://pos_owner:OWNER_PASSWORD_HERE@127.0.0.1:5432/pos'
 npm run db:migrate
-# Expected: Applied 0000_initial.sql ... 0005_staff_removal.sql
+# Expected: Applied 0000_initial.sql ... 0006_ghana_currency_default.sql
 # Safe to re-run; it refuses silently-changed migrations.
 ```
 
@@ -312,7 +313,7 @@ over HTTPS; don't test logins over plain HTTP.
 ## Phase 9 — First-run business setup (with your accountant)
 
 1. Sign in with the bootstrap owner email/password.
-2. Configure **tax rates** with your accountant (initial rate is deliberately 0%).
+2. Configure **tax rates** with your accountant. A new install starts at 15% and refuses sales until the rate is saved in Settings, so save it deliberately after checking it.
 3. Create branches/staff, menu categories/items, recipes and opening stock.
 4. Set each user's branch and role; enroll manager PINs for refund approvals.
 5. Work through `docs/PILOT_RUNBOOK.md` before trading real money.
@@ -407,7 +408,7 @@ sudo ls -lh /root/backups | tail -2          # a non-zero file, or stop here
 
 # 2. Code. /opt/pos belongs to the service account, so pull as that account —
 #    a plain `git pull` answers "cannot open '.git/FETCH_HEAD': Permission denied".
-sudo -u pos git -C /opt/pos pull             # or upload the new 11claude-fixed.zip
+sudo -u pos git -C /opt/pos pull             # or upload the new release archive from CI
 
 # 3. Dependencies, only when package-lock.json moved
 sudo -u pos npm --prefix /opt/pos ci
@@ -463,7 +464,7 @@ Notes
 | `EADDRINUSE` | Another process on port 3000: `ss -lntp \| grep 3000` |
 | nginx `502 Bad Gateway` | `systemctl status pos`, `journalctl -u pos -n 50` |
 | Login works on server but not from browsers | `APP_ORIGIN` mismatch or not HTTPS |
-| `429 Too many attempts` | Login/refund throttles are working; wait 15 minutes |
+| `429 Too many attempts` | Too many wrong passwords, PINs, or manager PINs; correct sign-ins are never throttled. Wait 15 minutes |
 | A deploy stopped half-way | Re-run `sudo ./scripts/deploy-vps.sh`; it sees `/var/backups/pos/deploy-incomplete` and finishes the job |
 | Some operations answer 503 *"The database is missing an update this version needs (…)"* (the rest of the till keeps working) | The code is newer than the database. Run `sudo -E -u pos env MIGRATION_DATABASE_URL='postgresql://pos_owner:…@127.0.0.1:5432/pos' npm run db:migrate` in `/opt/pos`, then `systemctl restart pos`. `/api/health` reports the same thing as `{"ok":false,"reason":"schema-behind"}` |
 | `scripts/deploy-vps.sh` stops with *"The app is up but the database is behind this release — do not roll the code back"* | The fetched release needs its migrations and they were not applied (for example the checkout already held the new migration file, so the run saw no *new* file to gate on). Run the `db:migrate` command it prints, then `sudo systemctl restart pos` |

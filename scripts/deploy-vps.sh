@@ -29,7 +29,7 @@ POS_USER="${POS_USER:-pos}"
 POS_SERVICE="${POS_SERVICE:-pos}"
 POS_URL="${POS_URL:-http://127.0.0.1:3000}"
 POS_DB="${POS_DB:-pos}"
-POS_BRANCH="${POS_BRANCH:-arena/181e4004-claude-test}"
+POS_BRANCH="${POS_BRANCH:-main}"
 BACKUP_DIR="${BACKUP_DIR:-/var/backups/pos}"
 DRY_RUN="${DRY_RUN:-0}"
 FORCE="${FORCE:-0}"
@@ -99,7 +99,9 @@ if [[ -n "$TRACKED_CHANGES" ]]; then
     die "Tracked files in $POS_DIR have local changes. Commit or stash them, or re-run with ALLOW_DIRTY=1 to discard them."
   fi
 fi
-UNTRACKED="$(git -C "$POS_DIR" ls-files --others --exclude-standard | head -5)"
+# sed, not head: head closes the pipe early, git gets SIGPIPE (141), and pipefail
+# then exits the script silently. A cache folder with thousands of files hits this.
+UNTRACKED="$(git -C "$POS_DIR" ls-files --others --exclude-standard | sed -n '1,5p')"
 if [[ -n "$UNTRACKED" ]]; then
   warn "Untracked files are present and will be left alone:"
   printf '%s\n' "$UNTRACKED" | sed 's/^/      /'
@@ -242,7 +244,7 @@ else
     Apply the migrations, then restart:
       cd $POS_DIR && sudo -E -u $POS_USER env MIGRATION_DATABASE_URL='postgresql://pos_owner:PASSWORD@127.0.0.1:5432/$POS_DB' npm run db:migrate
       sudo systemctl restart $POS_SERVICE
-    /api/health names the missing piece. Backup from this run: $DUMP"
+    the service log names the missing piece. Backup from this run: $DUMP"
   fi
   [[ "$HEALTHY" == "1" ]] || {
     printf '\n'

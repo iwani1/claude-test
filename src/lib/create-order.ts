@@ -1,4 +1,4 @@
-import { ApiError } from "@/lib/api";
+import { ApiError, isDatabaseFailure } from "@/lib/api";
 import { createHash, randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { db, requestContext } from "@/db";
@@ -10,16 +10,27 @@ import {
   auditLogs,
   menuItems,
   modifierOptions,
+  applicationSettings,
 } from "@/db/schema";
-import { eq, desc, inArray, sql } from "drizzle-orm";
+import { and, eq, desc, inArray, sql } from "drizzle-orm";
 import { deductStockForOrder } from "@/lib/inventory-deduction";
 import { requireSession } from "@/lib/guard";
+import { hideCost, maySeeCost } from "@/lib/cost-visibility";
 import { loadBillingConfig, priceOrder, fromCents } from "@/lib/pricing";
+
+/** Settings key: "false" from the seed until the owner saves a VAT rate. */
+export const TAX_RATE_CONFIRMED = "tax_rate_confirmed";
 
 export async function createOrder(req: Request) {
   try {
     const guard = await requireSession();
     if (!guard.ok) return guard.response;
+
+    // A new installation is seeded with its VAT rate unconfirmed. No sale may be
+    // rung up until the owner has saved the rate in Settings.
+    const [unconfirmedTax] = await db.select({ id: applicationSettings.id }).from(applicationSettings)
+      .where(and(eq(applicationSettings.key, TAX_RATE_CONFIRMED), eq(applicationSettings.value, "false"))).limit(1);
+    if (unconfirmedTax) return NextResponse.json({ error: "Save the VAT rate in Settings before selling." }, { status: 409 });
 
     const body = await req.json();
     const {
@@ -68,6 +79,13 @@ export async function createOrder(req: Request) {
     if (tableId) {
       const [table] = await db.select().from(diningTables).where(eq(diningTables.id, Number(tableId))).for("update");
       if (!table) throw new ApiError(404, "Table not found");
+      if (normalizedOrderType === "dine_in" && table.currentOrderId) {
+        const [open] = await db.select({ status: orders.status, paymentStatus: orders.paymentStatus })
+          .from(orders).where(eq(orders.id, table.currentOrderId)).limit(1);
+        if (open && !(["cancelled", "refunded"].includes(open.status)) && !(["paid", "refunded"].includes(open.paymentStatus))) {
+          throw new ApiError(409, "This table already has an open order. Add the items to that order instead.");
+        }
+      }
     }
     for (const value of [discountAmount, discountPercent, tipAmount]) {
       if (value !== undefined && (!Number.isFinite(Number(value)) || Number(value) < 0)) throw new ApiError(400, "Invalid discount or tip");
@@ -215,8 +233,6 @@ export async function createOrder(req: Request) {
     const totalAmount = fromCents(pricing.totalCents);
 
     // Generate unique order number
-    const timestampStr = Date.now().toString().slice(-4);
-    const randStr = Math.floor(100 + Math.random() * 900);
     const orderNumber = `ORD-${randomUUID()}`;
 
     // A complimentary order has nothing to collect, so it is settled at once.
@@ -347,10 +363,11 @@ export async function createOrder(req: Request) {
       success: true,
       order: {
         ...newOrder,
-        items: createdItems,
+        items: createdItems.map((line) => hideCost(line, maySeeCost(guard.user))),
       },
     });
   } catch (err: any) {
+    if (isDatabaseFailure(err)) throw err;
     // Validation failures thrown while resolving menu prices are client errors.
     if (err instanceof ApiError) throw err;
     if (err?.statusCode === 400) {

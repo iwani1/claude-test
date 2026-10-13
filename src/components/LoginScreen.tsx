@@ -71,7 +71,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onAuthenticated }) => 
           className="absolute inset-0 bg-cover bg-center"
           style={{
             backgroundImage:
-              "url('https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=1400&auto=format&fit=crop&q=80')",
+              "url('/menu-images/grilled-chicken.jpg')",
           }}
         />
         <div className="absolute inset-0 bg-gradient-to-br from-neutral-950 via-neutral-950/90 to-amber-950/60" />

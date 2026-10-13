@@ -14,7 +14,7 @@ try {
 
 const nextConfig: NextConfig = {
   // Dev-only origin allowlist (HMR). Production cookies/CSRF use APP_ORIGIN.
-  allowedDevOrigins: ["*.e2b.app", "127.0.0.1", "localhost"],
+  allowedDevOrigins: ["*.e2b.app", "127.0.0.1"],
   env: { APP_BUILD_COMMIT: commit },
 };
 

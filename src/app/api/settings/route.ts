@@ -1,12 +1,35 @@
-import { secureRoute } from "@/lib/api";
+import { secureRoute, isDatabaseFailure } from "@/lib/api";
+
+// Keys the Settings screen and the pricing engine use. Anything else is refused.
+// tax_rate_confirmed is deliberately absent: the server sets it when the VAT rate is saved.
+const SETTING_KEYS = new Set([
+  "momo_merchant_number", "currency_symbol", "currency_code", "tax_rate",
+  "room_service_charge", "dine_in_room_charge", "complimentary_breakfast_enabled",
+]);
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { restaurants, applicationSettings, branches, auditLogs } from "@/db/schema";
 import { requirePermission } from "@/lib/guard";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 
 async function handleGET() {
   try {
+    // Registration, contact and banking details are for the owner and manager. Other staff get
+    // the name and currency the till displays, plus the tax rate.
+    const canManage = (await requirePermission("canManageSettings", "GET /api/settings")).ok;
+    if (!canManage) {
+      const [publicRestaurant] = await db
+        .select({ name: restaurants.name, currency: restaurants.currency, currencySymbol: restaurants.currencySymbol })
+        .from(restaurants).limit(1);
+      const visible = await db.select().from(applicationSettings)
+        .where(inArray(applicationSettings.key, ["currency_symbol", "currency_code", "tax_rate"]));
+      return NextResponse.json({
+        restaurant: publicRestaurant,
+        branches: [],
+        settings: Object.fromEntries(visible.map((s) => [s.key, s.value])),
+      });
+    }
+
     const [restaurant] = await db.select().from(restaurants).limit(1);
     const branchList = await db.select().from(branches);
     const settingsList = await db.select().from(applicationSettings);
@@ -22,6 +45,7 @@ async function handleGET() {
       settings: settingsMap,
     });
   } catch (err: any) {
+    if (isDatabaseFailure(err)) throw err;
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
@@ -34,6 +58,9 @@ async function handlePOST(req: Request) {
     const body = await req.json();
     const { restaurantData, settingsData } = body;
 
+    const unknownKeys = settingsData && typeof settingsData === "object" ? Object.keys(settingsData).filter(key => !SETTING_KEYS.has(key)) : [];
+    if (unknownKeys.length > 0) return NextResponse.json({ error: `Unknown setting: ${unknownKeys.join(", ")}` }, { status: 400 });
+
     if (restaurantData) {
       const [first] = await db.select().from(restaurants).limit(1);
       if (first) {
@@ -45,6 +72,12 @@ async function handlePOST(req: Request) {
           })
           .where(eq(restaurants.id, first.id));
       }
+    }
+
+    // Saving a valid VAT rate is the owner's confirmation; until then the till refuses sales.
+    const savedRate = restaurantData?.defaultTaxRate;
+    if (savedRate !== undefined && savedRate !== "" && Number.isFinite(Number(savedRate)) && Number(savedRate) >= 0 && Number(savedRate) <= 100) {
+      await db.update(applicationSettings).set({ value: "true", updatedAt: new Date() }).where(eq(applicationSettings.key, "tax_rate_confirmed"));
     }
 
     if (settingsData && typeof settingsData === "object") {
@@ -75,6 +108,7 @@ async function handlePOST(req: Request) {
 
     return NextResponse.json({ success: true, message: "Settings updated successfully" });
   } catch (err: any) {
+    if (isDatabaseFailure(err)) throw err;
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }

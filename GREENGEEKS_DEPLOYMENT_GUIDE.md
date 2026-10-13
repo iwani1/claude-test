@@ -10,7 +10,7 @@ Node/PostgreSQL hosting. Provider-specific Passenger setup must be verified with
 the host; this project uses `next start`, not a nonexistent `server.js`.
 
 The repository root is the hardened source. `11claude.zip` is the **unchanged,
-insecure original archive**, retained only for reference. Do not deploy it.
+insecure original archive**, kept only on the owner's machine (not in Git). Do not deploy it.
 
 ## 1. Install and configure
 

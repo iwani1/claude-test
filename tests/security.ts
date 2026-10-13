@@ -33,6 +33,7 @@ async function routes(dir: string): Promise<string[]> {
   }
   return files;
 }
+const counter = async (key: string) => Number((await admin.query("SELECT count FROM auth_attempts WHERE key=$1 AND reset_at > now()", [key])).rows[0]?.count ?? 0);
 const order = (key: string, extra = {}) => ({ idempotencyKey: key, orderType: "takeaway", items: [{ menuItemId: 1, quantity: 1 }], ...extra });
 async function main() {
   await (await import("./offline-storage")).testOfflineStorage();
@@ -72,6 +73,50 @@ async function main() {
   check(financeDrawer.status === 200 && "activeShift" in financeDrawer.body, "accountant reads the drawer ledger");
   check((await request("/api/shifts", "POST", { action: "open_shift", openingCash: "10.00" }, accountant)).status === 403, "accountant cannot open a shift");
   check((await request("/api/orders?limit=5", "GET", undefined, inventory)).status === 403, "order history is not handed to every report role");
+  // Reports are aggregate, but the audit log and the payment export list every payment and refund.
+  check((await request("/api/reports", "GET", undefined, inventory)).status === 200, "inventory officer still reads aggregate reports");
+  check((await request("/api/audit-logs?limit=5", "GET", undefined, inventory)).status === 403, "inventory officer cannot read the audit log");
+  check((await request("/api/integrations", "POST", { action: "export_accounting", format: "quickbooks", timeframe: "all" }, inventory)).status === 403, "inventory officer cannot export payments and refunds");
+  check((await request("/api/audit-logs?limit=5", "GET", undefined, accountant)).status === 200, "accountant reads the audit log");
+  check((await request("/api/integrations", "POST", { action: "export_accounting", format: "quickbooks", timeframe: "all" }, accountant)).status === 200, "accountant exports the reconciliation");
+  check((await request("/api/audit-logs?limit=5", "GET", undefined, manager)).status === 200, "manager reads the audit log");
+  check((await request("/api/audit-logs?limit=5", "GET", undefined, cashier)).status === 403, "cashier cannot read the audit log");
+  // Cost price belongs to whoever runs the menu or the books. Cashiers see sale prices only.
+  const hasCost = (rows: any[]) => rows.some(r => "costPrice" in r);
+  const cashierMenu = await request("/api/menu", "GET", undefined, cashier);
+  check(cashierMenu.status === 200 && cashierMenu.body.items.length > 0 && !hasCost(cashierMenu.body.items), "cashier's menu carries no cost price");
+  check(hasCost((await request("/api/menu", "GET", undefined, owner)).body.items), "owner's menu carries cost price");
+  check(hasCost((await request("/api/menu", "GET", undefined, inventory)).body.items), "inventory officer's menu carries cost price");
+  const cashierOrder = await request(`/api/orders/${financeOrderId}`, "GET", undefined, cashier);
+  check(cashierOrder.status === 200 && cashierOrder.body.order.items.length > 0 && !hasCost(cashierOrder.body.order.items), "cashier's order history carries no cost price");
+  check(hasCost((await request(`/api/orders/${financeOrderId}`, "GET", undefined, owner)).body.order.items), "owner's order carries cost price");
+  check(!hasCost((await request("/api/orders?limit=5", "GET", undefined, cashier)).body.orders.flatMap((o: any) => o.items)), "cashier's order list carries no cost price");
+  const costProbe = await request("/api/orders", "POST", order("cost-probe"), cashier);
+  check(costProbe.status === 200 && costProbe.body.order.items.length > 0 && !hasCost(costProbe.body.order.items), "the sale a cashier rings up returns no cost price");
+  check((await request(`/api/orders/${costProbe.body.order.id}`, "DELETE", {}, owner)).status === 200, "the cost probe sale erases cleanly");
+  // The audit page size is capped; a malformed value falls back to the default.
+  const hugePage = await request("/api/audit-logs?limit=100000", "GET", undefined, owner);
+  check(hugePage.status === 200 && hugePage.body.logs.length <= 500, "the audit log page is capped at 500 rows");
+  check((await request("/api/audit-logs?limit=abc", "GET", undefined, owner)).status === 200, "a malformed audit page size falls back to the default");
+  // Settings: only known keys can be written, and a refused request writes nothing.
+  const strangeSetting = await request("/api/settings", "POST", { settingsData: { not_a_setting: "x" } }, owner);
+  check(strangeSetting.status === 400 && /not_a_setting/.test(String(strangeSetting.body.error)), "an unknown setting key is refused");
+  check((await admin.query("SELECT count(*)::int AS n FROM application_settings WHERE key='not_a_setting'")).rows[0].n === 0, "the refused setting is not written");
+  check((await request("/api/settings", "POST", { settingsData: { tax_rate_confirmed: "false" } }, owner)).status === 400, "the VAT confirmation cannot be switched off by hand");
+  check((await request("/api/settings", "POST", { settingsData: { currency_symbol: "GH₵" } }, owner)).status === 200, "a known setting key is still saved");
+  // A new restaurant defaults to Ghana cedis, not US dollars.
+  const currencyDefaults = (await admin.query("SELECT column_name, column_default FROM information_schema.columns WHERE table_name='restaurants' AND column_name IN ('currency','currency_symbol')")).rows;
+  check(currencyDefaults.length === 2 && currencyDefaults.every((c: any) => /GHS|GH₵/.test(String(c.column_default))), "new restaurants default to GHS and GH₵");
+  // Staff read only the till settings; the owner keeps the full record.
+  const staffView = (await request("/api/settings", "GET", undefined, cashier)).body;
+  check(staffView.restaurant && !("taxNumber" in staffView.restaurant) && !("email" in staffView.restaurant) && !("phone" in staffView.restaurant) && !("address" in staffView.restaurant) && !("momo_merchant_number" in staffView.settings) && staffView.branches.length === 0, "cashiers do not read contact, registration or payment-number settings");
+  const ownerView = (await request("/api/settings", "GET", undefined, owner)).body;
+  check("taxNumber" in ownerView.restaurant && Array.isArray(ownerView.branches), "the owner still reads the full settings record");
+  // One table, one open dine-in order: a second order is refused rather than overwriting the first.
+  const firstDine = await request("/api/orders", "POST", { idempotencyKey: "dine-first-0001", orderType: "dine_in", tableId: 1, items: [{ menuItemId: 1, quantity: 1 }] }, cashier);
+  const secondDine = await request("/api/orders", "POST", { idempotencyKey: "dine-second-0002", orderType: "dine_in", tableId: 1, items: [{ menuItemId: 1, quantity: 1 }] }, cashier);
+  check(firstDine.body.success === true && secondDine.status === 409, "a second dine-in order on an occupied table is refused");
+  if (firstDine.body.order?.id) await request(`/api/orders/${firstDine.body.order.id}`, "DELETE", {}, owner);
   // The probe sale rang up stock, so erase it before the absolute stock checks
   // below — deletion returns exactly what the order consumed.
   check((await request(`/api/orders/${financeOrderId}`, "DELETE", {}, owner)).status === 200, "the finance probe sale erases cleanly, leaving fixture stock untouched");
@@ -146,10 +191,16 @@ async function main() {
   check(pay.filter(r => r.status === 200).length === 1 && pay.filter(r => r.status === 409).length === 1, "concurrent payments cannot overpay");
   check(Number((await admin.query("SELECT sum(amount) AS amount FROM payments WHERE order_id=$1", [id])).rows[0].amount) === 10, "split payment ledger equals sale total");
   for (const amount of ["-1", "0", "NaN", "0.001", "1e2"]) check((await request(`/api/orders/${id}/refund`, "POST", { amount, reason: "Test", managerPin: "2222" }, cashier)).status === 400, `refund rejects ${amount}`);
+  await admin.query("DELETE FROM auth_attempts WHERE key='refund:branch:1'");
   check((await request(`/api/orders/${id}/refund`, "POST", { amount: "1", reason: "Test", managerPin: "8888" }, cashier)).status === 403, "other-branch manager cannot authorize refund");
+  check((await counter("refund:branch:1")) === 1, "a wrong manager PIN counts once against the refund key");
   check((await request(`/api/orders/${id}/refund`, "POST", { amount: "4", reason: "Partial", managerPin: "2222", returnStock: true }, cashier)).status === 400, "partial refund cannot restore all stock");
   const partial = await request(`/api/orders/${id}/refund`, "POST", { amount: "4", reason: "Partial", managerPin: "2222" }, cashier);
   check(partial.status === 200, "partial refund succeeds");
+  check((await counter("refund:branch:1")) === 1, "an approved refund is not counted against the refund key");
+  await admin.query("UPDATE auth_attempts SET count=10, reset_at=now()+interval '15 minutes' WHERE key='refund:branch:1'");
+  check((await request(`/api/orders/${id}/refund`, "POST", { amount: "1", reason: "Test", managerPin: "2222" }, cashier)).status === 429, "a locked refund key refuses even a valid manager approval");
+  await admin.query("DELETE FROM auth_attempts WHERE key='refund:branch:1'");
   check((await admin.query("SELECT payment_status FROM orders WHERE id=$1", [id])).rows[0].payment_status === "partially_refunded", "partial refund preserves distinct state");
   // Change recipe after sale: restoration must use original ledger.
   await admin.query("UPDATE recipe_ingredients SET quantity=9 WHERE recipe_id=1");
@@ -239,6 +290,13 @@ async function main() {
   check((await request("/api/auth/login", "POST", { email: "removeme@test.invalid", password: "Removal-test-password-123!" })).status === 401, "the removed account can never sign in again");
   check(Number((await admin.query("SELECT count(*)::int AS c FROM audit_logs WHERE action = 'delete_user' AND entity_id = $1", [String(removableId)])).rows[0].c) >= 1, "the removal is recorded in the activity log");
   check((await request("/api/staff", "POST", { action: "delete_user", userId: removableId }, owner)).status === 409, "removing the same account twice is refused");
+  // A removed account stays closed: no other staff action may bring it back.
+  // (A manager once could reset the password and switch the account on again,
+  // and the roster hid it while the login worked.)
+  check((await request("/api/staff", "POST", { action: "reset_password", userId: removableId, password: "Revived-password-123!" }, manager)).status === 409, "manager cannot reset a removed account's password");
+  check((await request("/api/staff", "POST", { action: "toggle_active", userId: removableId, isActive: true }, manager)).status === 409, "manager cannot reactivate a removed account");
+  check((await request("/api/staff", "POST", { action: "update_pin", userId: removableId, pin: "2468" }, owner)).status === 409, "owner cannot set a PIN on a removed account");
+  check((await request("/api/auth/login", "POST", { email: removedRow.email, password: "Revived-password-123!" })).status === 401, "removed account still cannot sign in after the refused attempts");
   check((await request("/api/staff", "POST", { action: "create_employee", name: "Rehired Test", email: "removeme@test.invalid", role: "cashier", password: "Rehire-password-123!", pin: "8383" }, owner)).status === 200, "the freed email and PIN can be used by a new account");
   check((await request("/api/health")).status === 200, "public health endpoint works without scoped data access");
   check((await request("/api/orders", "POST", order("bad-origin"), cashier, { Origin: "https://attacker.invalid" })).status === 403, "cross-origin mutation rejected");
@@ -257,6 +315,18 @@ async function main() {
   let limited = 0;
   for (let i=0; i<11; i++) limited = (await request("/api/auth/login", "POST", { email: "unknown@test.invalid", password: "wrong" })).status;
   check(limited === 429, "login throttling persists across failed request rollbacks");
+  // Only wrong credentials count. Successful sign-ins never lock a busy venue out,
+  // and a locked account refuses even the right password until the window passes.
+  const ownerLogin = { email: "user1@test.invalid", password: "Test-password-only-123!" };
+  await admin.query("DELETE FROM auth_attempts WHERE key='email:user1@test.invalid'");
+  let successes = 0;
+  for (let i = 0; i < 12; i++) if ((await request("/api/auth/login", "POST", ownerLogin)).status === 200) successes++;
+  check(successes === 12 && (await counter("email:user1@test.invalid")) === 0, "twelve successful sign-ins are never throttled or counted");
+  check((await request("/api/auth/login", "POST", { ...ownerLogin, password: "wrong-password-123" })).status === 401 && (await counter("email:user1@test.invalid")) === 1, "a wrong password counts once");
+  await admin.query("UPDATE auth_attempts SET count=10, reset_at=now()+interval '15 minutes' WHERE key='email:user1@test.invalid'");
+  check((await request("/api/auth/login", "POST", ownerLogin)).status === 429, "a locked account refuses the right password");
+  await admin.query("DELETE FROM auth_attempts WHERE key='email:user1@test.invalid'");
+  check((await request("/api/auth/login", "POST", ownerLogin)).status === 200, "the account opens again once the lock is cleared");
   const runtime = new Pool({ connectionString: process.env.DATABASE_URL });
   try { check((await runtime.query("SELECT * FROM orders")).rowCount === 0, "runtime DB connection without request scope sees no orders"); } finally { await runtime.end(); }
   // --- A database that has not been migrated must say so, not fail randomly --
@@ -264,6 +334,15 @@ async function main() {
   // code expected a column the database did not have yet. The app now names the
   // missing update, and /api/health reports it, so a stale environment is
   // diagnosable from the first request instead of from a log hunt.
+  // A seeded installation refuses sales until the owner saves the VAT rate.
+  await admin.query("INSERT INTO application_settings(branch_id,key,value) VALUES(1,'tax_rate_confirmed','false')");
+  const unconfirmed = await request("/api/orders", "POST", order("tax-unconfirmed"), owner);
+  check(unconfirmed.status === 409 && /VAT rate/.test(String(unconfirmed.body.error)), "a sale is refused until the VAT rate has been saved");
+  check((await admin.query("SELECT count(*)::int AS n FROM orders WHERE idempotency_key='tax-unconfirmed'")).rows[0].n === 0, "the refused sale leaves no order behind");
+  const restaurant = (await request("/api/settings", "GET", undefined, owner)).body.restaurant;
+  check((await request("/api/settings", "POST", { restaurantData: restaurant }, owner)).status === 200, "the owner saves the VAT rate in Settings");
+  check((await admin.query("SELECT value FROM application_settings WHERE branch_id=1 AND key='tax_rate_confirmed'")).rows[0].value === "true", "saving the rate confirms it");
+  check((await request("/api/orders", "POST", order("tax-confirmed"), owner)).status === 200, "a sale rings up once the rate is saved");
   const beforeDrift = await request("/api/orders", "POST", order("drift-probe"), owner);
   check(beforeDrift.status === 200, "order created before the drift");
   const driftId = beforeDrift.body.order.id;
@@ -275,8 +354,15 @@ async function main() {
   check(driftedDelete.status === 503, `the work that needs the missing column answers 503, not a mystery 500 (${driftedDelete.status})`);
   check(/idempotency_key/.test(String(driftedDelete.body.error)) && /db:migrate/.test(String(driftedDelete.body.error)), "the refusal names the missing column and the command that fixes it");
   check(driftedDelete.headers.get("cache-control") === "no-store", "and the 503 itself is never cached");
+  // The pay route catches its own errors, so it used to hide this explanation
+  // behind "Could not record the payment". A refused payment must name the
+  // missing column and take no money.
+  const driftedPay = await request(`/api/orders/${driftSale.body.order.id}/pay`, "POST", { amount: "1.00", paymentMethod: "cash", cashTendered: "1.00", idempotencyKey: "drift-pay-probe-1" }, owner);
+  check(driftedPay.status === 503, `a payment during the drift answers 503, not a generic 500 (${driftedPay.status})`);
+  check(/idempotency_key/.test(String(driftedPay.body.error)) && /db:migrate/.test(String(driftedPay.body.error)), "the payment refusal names the missing column and the command that fixes it");
+  check(Number((await admin.query("SELECT paid_amount FROM orders WHERE id=$1", [driftSale.body.order.id])).rows[0].paid_amount) === 0, "the refused payment took no money");
   const driftedHealth = await request("/api/health");
-  check(driftedHealth.status === 503 && driftedHealth.body.reason === "schema-behind" && (driftedHealth.body.missing || []).includes("payments.idempotency_key"), "health reports the schema gap for the deploy gate and the operator");
+  check(driftedHealth.status === 503 && driftedHealth.body.reason === "schema-behind" && !JSON.stringify(driftedHealth.body).includes("idempotency_key") && !("missing" in driftedHealth.body) && !("database" in driftedHealth.body), "public health reports the schema gap without naming tables, columns or the database");
   await admin.query(await readFile("migrations/0004_payment_idempotency.sql", "utf8"));
   check((await request("/api/health")).status === 200, "running the migration returns the app to healthy");
   check((await request(`/api/orders/${driftId}`, "DELETE", {}, owner)).status === 200, "and the work that was refused now succeeds");

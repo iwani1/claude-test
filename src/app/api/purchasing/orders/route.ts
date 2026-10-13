@@ -1,5 +1,6 @@
-import { secureRoute } from "@/lib/api";
+import { secureRoute, isDatabaseFailure } from "@/lib/api";
 import { NextResponse } from "next/server";
+import { documentNumber } from "@/lib/document-numbers";
 import { db, requestContext } from "@/db";
 import {
   purchaseOrders,
@@ -41,6 +42,7 @@ async function handleGET() {
 
     return NextResponse.json({ purchaseOrders: enrichedPOs });
   } catch (err: any) {
+    if (isDatabaseFailure(err)) throw err;
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
@@ -58,7 +60,7 @@ async function handlePOST(req: Request) {
       return NextResponse.json({ error: "Supplier and line items are required" }, { status: 400 });
     }
 
-    const poNumber = `PO-${Date.now().toString().slice(-6)}`;
+    const poNumber = documentNumber("PO");
     let subtotal = 0;
     for (const it of items) {
       subtotal += Number(it.orderedQuantity) * Number(it.unitPrice);
@@ -100,6 +102,7 @@ async function handlePOST(req: Request) {
 
     return NextResponse.json({ success: true, purchaseOrder: newPO });
   } catch (err: any) {
+    if (isDatabaseFailure(err)) throw err;
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
@@ -212,7 +215,7 @@ async function handlePATCH(req: Request) {
             .where(eq(purchaseOrderItems.id, Number(item.poItemId)));
         }
 
-        const grnNumber = `GRN-${Date.now().toString().slice(-6)}`;
+        const grnNumber = documentNumber("GRN");
         await tx.insert(goodsReceipts).values({
           grnNumber,
           purchaseOrderId: po.id,
@@ -245,6 +248,7 @@ async function handlePATCH(req: Request) {
 
     return NextResponse.json({ error: "Invalid action" }, { status: 400 });
   } catch (err: any) {
+    if (isDatabaseFailure(err)) throw err;
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }

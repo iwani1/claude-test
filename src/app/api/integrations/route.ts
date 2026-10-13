@@ -1,5 +1,5 @@
 import { collectionEvents, reportWindow } from "@/lib/collection-report";
-import { secureRoute, ApiError } from "@/lib/api";
+import { secureRoute, ApiError, isDatabaseFailure } from "@/lib/api";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { orders } from "@/db/schema";
@@ -38,6 +38,9 @@ async function handlePOST(req: Request) {
     }
 
     if (action === "export_accounting") {
+      // The export lists every payment and refund: reports access alone is not enough.
+      const trail = await requirePermission("canViewTransactionTrail", "POST /api/integrations export_accounting");
+      if (!trail.ok) return trail.response;
       if (format !== "quickbooks" && format !== "xero") {
         return NextResponse.json({ error: "Format must be quickbooks or xero." }, { status: 400 });
       }
@@ -57,6 +60,7 @@ async function handlePOST(req: Request) {
 
     return NextResponse.json({ error: "Unsupported action." }, { status: 400 });
   } catch (err) {
+    if (isDatabaseFailure(err)) throw err;
     if (err instanceof ApiError) throw err;
     console.error("Integration request failed:", err);
     return NextResponse.json({ error: "Request failed." }, { status: 500 });

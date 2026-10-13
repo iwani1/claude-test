@@ -21,6 +21,8 @@ import { sql } from "drizzle-orm";
  * silently.
  */
 export const REQUIRED_COLUMNS: ReadonlyArray<readonly [string, string]> = [
+  // 0000_initial.sql — the shift reconciliation screen reads it
+  ["shifts", "reconciled_by"],
   // 0002_order_fingerprint.sql
   ["orders", "request_fingerprint"],
   // 0003_refund_accounting.sql

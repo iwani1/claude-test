@@ -1,13 +1,16 @@
-import { secureRoute, ApiError } from "@/lib/api";
+import { secureRoute, ApiError, isDatabaseFailure } from "@/lib/api";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { orders, orderItems, diningTables, auditLogs, stockMovements, ingredients, refunds, payments, kitchenTickets, shifts, drawerMovements } from "@/db/schema";
 import { and, eq, inArray, or } from "drizzle-orm";
 import { toCents, fromCents } from "@/lib/pricing-core";
 import { reverseStockForOrder } from "@/lib/inventory-deduction";
+import { getSessionUser } from "@/lib/guard";
+import { hideCost, maySeeCost } from "@/lib/cost-visibility";
 
 async function handleGET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const user = await getSessionUser();
     const { id } = await params;
     const orderId = Number(id);
 
@@ -16,7 +19,7 @@ async function handleGET(req: Request, { params }: { params: Promise<{ id: strin
       return NextResponse.json({ error: "Order not found" }, { status: 404 });
     }
 
-    const items = await db.select().from(orderItems).where(eq(orderItems.orderId, orderId));
+    const items = (await db.select().from(orderItems).where(eq(orderItems.orderId, orderId))).map((line) => hideCost(line, maySeeCost(user)));
 
     // Refunds live in their own ledger and paid_amount stays gross, so anyone
     // showing money still in hand needs this figure alongside paid_amount.
@@ -25,6 +28,7 @@ async function handleGET(req: Request, { params }: { params: Promise<{ id: strin
 
     return NextResponse.json({ order: { ...order, items, refundedAmount: fromCents(refundedCents) } });
   } catch (err: any) {
+    if (isDatabaseFailure(err)) throw err;
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
@@ -80,6 +84,7 @@ async function handlePATCH(req: Request, { params }: { params: Promise<{ id: str
 
     return NextResponse.json({ success: true, order: updatedOrder });
   } catch (err: any) {
+    if (isDatabaseFailure(err)) throw err;
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
