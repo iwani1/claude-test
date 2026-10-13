@@ -1,4 +1,11 @@
 import { secureRoute, isDatabaseFailure } from "@/lib/api";
+
+// Keys the Settings screen and the pricing engine use. Anything else is refused.
+// tax_rate_confirmed is deliberately absent: the server sets it when the VAT rate is saved.
+const SETTING_KEYS = new Set([
+  "momo_merchant_number", "currency_symbol", "currency_code", "tax_rate",
+  "room_service_charge", "dine_in_room_charge", "complimentary_breakfast_enabled",
+]);
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { restaurants, applicationSettings, branches, auditLogs } from "@/db/schema";
@@ -34,6 +41,9 @@ async function handlePOST(req: Request) {
 
     const body = await req.json();
     const { restaurantData, settingsData } = body;
+
+    const unknownKeys = settingsData && typeof settingsData === "object" ? Object.keys(settingsData).filter(key => !SETTING_KEYS.has(key)) : [];
+    if (unknownKeys.length > 0) return NextResponse.json({ error: `Unknown setting: ${unknownKeys.join(", ")}` }, { status: 400 });
 
     if (restaurantData) {
       const [first] = await db.select().from(restaurants).limit(1);

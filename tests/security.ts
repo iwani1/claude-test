@@ -94,6 +94,16 @@ async function main() {
   const costProbe = await request("/api/orders", "POST", order("cost-probe"), cashier);
   check(costProbe.status === 200 && costProbe.body.order.items.length > 0 && !hasCost(costProbe.body.order.items), "the sale a cashier rings up returns no cost price");
   check((await request(`/api/orders/${costProbe.body.order.id}`, "DELETE", {}, owner)).status === 200, "the cost probe sale erases cleanly");
+  // The audit page size is capped; a malformed value falls back to the default.
+  const hugePage = await request("/api/audit-logs?limit=100000", "GET", undefined, owner);
+  check(hugePage.status === 200 && hugePage.body.logs.length <= 500, "the audit log page is capped at 500 rows");
+  check((await request("/api/audit-logs?limit=abc", "GET", undefined, owner)).status === 200, "a malformed audit page size falls back to the default");
+  // Settings: only known keys can be written, and a refused request writes nothing.
+  const strangeSetting = await request("/api/settings", "POST", { settingsData: { not_a_setting: "x" } }, owner);
+  check(strangeSetting.status === 400 && /not_a_setting/.test(String(strangeSetting.body.error)), "an unknown setting key is refused");
+  check((await admin.query("SELECT count(*)::int AS n FROM application_settings WHERE key='not_a_setting'")).rows[0].n === 0, "the refused setting is not written");
+  check((await request("/api/settings", "POST", { settingsData: { tax_rate_confirmed: "false" } }, owner)).status === 400, "the VAT confirmation cannot be switched off by hand");
+  check((await request("/api/settings", "POST", { settingsData: { currency_symbol: "GH₵" } }, owner)).status === 200, "a known setting key is still saved");
   // The probe sale rang up stock, so erase it before the absolute stock checks
   // below — deletion returns exactly what the order consumed.
   check((await request(`/api/orders/${financeOrderId}`, "DELETE", {}, owner)).status === 200, "the finance probe sale erases cleanly, leaving fixture stock untouched");

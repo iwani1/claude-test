@@ -13,7 +13,9 @@ async function handleGET(req: Request) {
     if (!guard.ok) return guard.response;
 
     const { searchParams } = new URL(req.url);
-    const limit = Number(searchParams.get("limit") || 100);
+    // A page is at most 500 rows; a malformed or missing value falls back to 100.
+    const requested = Number(searchParams.get("limit") || 100);
+    const limit = Number.isInteger(requested) && requested > 0 ? Math.min(requested, 500) : 100;
 
     const logs = await db.select().from(auditLogs).orderBy(desc(auditLogs.createdAt)).limit(limit);
     return NextResponse.json({ logs });

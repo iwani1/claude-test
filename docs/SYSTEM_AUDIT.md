@@ -14,7 +14,7 @@ not from the production server, not with a browser, not with hardware.
 
 | Method | What it covered |
 |---|---|
-| `npm run test:security` | 229 security (including a stale-database scenario, staff removal, the read-only finance role, sign-in and refund throttling, and the VAT gate) + 80 pilot + 30 accounting checks against a disposable database and a production build |
+| `npm run test:security` | 235 security (including a stale-database scenario, staff removal, the read-only finance role, sign-in and refund throttling, and the VAT gate) + 80 pilot + 30 accounting checks against a disposable database and a production build |
 | `npm run audit:responsive` | 28 components + 2 app files: tables scroll or become cards, dialogs scroll, no `h-screen`/`w-screen`, no unguarded fixed widths |
 | `npm run audit:workflows` | **new** — swallowed failures in client code, fetches parsed without a status check, money routes without an idempotency guard, routes without a permission check, tables without a phone view |
 | Route sweep | all 27 route handlers read for permission gates, error envelopes and money/stock writes |
@@ -96,6 +96,8 @@ not from the production server, not with a browser, not with hardware.
 | **Medium** | **A new install charged 0% VAT silently.** The seed set the rate to 0, and the till accepted that. | The seed sets 15%, the code's own VAT default. It also marks the branch unconfirmed, and the till refuses sales until the owner saves the rate in Settings. Installs that already exist have no such marker, so they are unaffected. |
 | **Medium** | **The inventory officer could read every payment and refund.** The audit log and the accounting export were gated on the general reports permission, which that role holds, so it listed who paid what and what was refunded. The matrix said the role does not read the transaction trail. | A new permission, `canViewTransactionTrail`, granted to owner, manager and accountant. The audit log and the payment export require it, on the API and on the screens; aggregate reports stay open to the reports roles. |
 | **Low** | **Cashiers could see food cost and margin.** Cost price was returned by the menu, the order list, a single order, and the sale a cashier rings up. | `src/lib/cost-visibility.ts`: cost is included only for roles with reports or menu access (owner, manager, inventory officer, accountant). Cashiers get sale prices only. |
+| **Low** | **The audit log had no page limit.** `limit` was taken as sent, so one request could return the whole history. | Capped at 500 rows; a malformed value falls back to 100. |
+| **Low** | **Settings accepted any key.** The owner's settings endpoint wrote whatever keys it was sent. | Only the keys the Settings screen and pricing use are accepted; anything else is refused with 400 before anything is written. The VAT confirmation marker is server-only. |
 
 ## Missed on the first pass: order deletion on a stale database
 
@@ -239,7 +241,7 @@ Re-run end to end on the release the venue is getting:
 
 | Check | Result |
 |---|---|
-| `npm run test:security` | **229 security / 80 pilot / 30 accounting**, exit 0 (fresh database, production build, RLS enforced) |
+| `npm run test:security` | **235 security / 80 pilot / 30 accounting**, exit 0 (fresh database, production build, RLS enforced) |
 | `npm run audit:workflows` | 0 failures, 27 warnings, 56 advisories — unchanged baseline |
 | `npm run audit:responsive` | 0 failures, 0 warnings |
 | `tsc --noEmit`, `eslint` | clean |
@@ -343,7 +345,7 @@ drawer. **23/23 pass** after the fixes above.
 ```sh
 # all of the commands below also run in CI on every push:
 #   .github/workflows/security.yml
-npm run test:security      # 229 + 80 + 30 checks, disposable database, production build
+npm run test:security      # 235 + 80 + 30 checks, disposable database, production build
 npm run audit:responsive   # layout rules, exits 1 on a regression
 npm run audit:workflows    # feedback/money-guard rules, exits 1 on a regression
 npx eslint src tests scripts --max-warnings=0
