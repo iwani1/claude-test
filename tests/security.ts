@@ -81,6 +81,19 @@ async function main() {
   check((await request("/api/integrations", "POST", { action: "export_accounting", format: "quickbooks", timeframe: "all" }, accountant)).status === 200, "accountant exports the reconciliation");
   check((await request("/api/audit-logs?limit=5", "GET", undefined, manager)).status === 200, "manager reads the audit log");
   check((await request("/api/audit-logs?limit=5", "GET", undefined, cashier)).status === 403, "cashier cannot read the audit log");
+  // Cost price belongs to whoever runs the menu or the books. Cashiers see sale prices only.
+  const hasCost = (rows: any[]) => rows.some(r => "costPrice" in r);
+  const cashierMenu = await request("/api/menu", "GET", undefined, cashier);
+  check(cashierMenu.status === 200 && cashierMenu.body.items.length > 0 && !hasCost(cashierMenu.body.items), "cashier's menu carries no cost price");
+  check(hasCost((await request("/api/menu", "GET", undefined, owner)).body.items), "owner's menu carries cost price");
+  check(hasCost((await request("/api/menu", "GET", undefined, inventory)).body.items), "inventory officer's menu carries cost price");
+  const cashierOrder = await request(`/api/orders/${financeOrderId}`, "GET", undefined, cashier);
+  check(cashierOrder.status === 200 && cashierOrder.body.order.items.length > 0 && !hasCost(cashierOrder.body.order.items), "cashier's order history carries no cost price");
+  check(hasCost((await request(`/api/orders/${financeOrderId}`, "GET", undefined, owner)).body.order.items), "owner's order carries cost price");
+  check(!hasCost((await request("/api/orders?limit=5", "GET", undefined, cashier)).body.orders.flatMap((o: any) => o.items)), "cashier's order list carries no cost price");
+  const costProbe = await request("/api/orders", "POST", order("cost-probe"), cashier);
+  check(costProbe.status === 200 && costProbe.body.order.items.length > 0 && !hasCost(costProbe.body.order.items), "the sale a cashier rings up returns no cost price");
+  check((await request(`/api/orders/${costProbe.body.order.id}`, "DELETE", {}, owner)).status === 200, "the cost probe sale erases cleanly");
   // The probe sale rang up stock, so erase it before the absolute stock checks
   // below — deletion returns exactly what the order consumed.
   check((await request(`/api/orders/${financeOrderId}`, "DELETE", {}, owner)).status === 200, "the finance probe sale erases cleanly, leaving fixture stock untouched");

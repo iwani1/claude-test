@@ -10,9 +10,12 @@ import {
   auditLogs,
 } from "@/db/schema";
 import { eq, asc } from "drizzle-orm";
+import { getSessionUser } from "@/lib/guard";
+import { hideCost, maySeeCost } from "@/lib/cost-visibility";
 
 async function handleGET() {
   try {
+    const showCost = maySeeCost(await getSessionUser());
     const categories = await db
       .select()
       .from(menuCategories)
@@ -41,10 +44,10 @@ async function handleGET() {
         .map((l) => l.modifierId);
       const itemMods = modifiersWithOpts.filter((m) => linkedModIds.includes(m.id));
 
-      return {
+      return hideCost({
         ...item,
         modifiers: itemMods,
-      };
+      }, showCost);
     });
 
     return NextResponse.json({

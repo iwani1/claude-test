@@ -5,9 +5,12 @@ import { orders, orderItems, diningTables, auditLogs, stockMovements, ingredient
 import { and, eq, inArray, or } from "drizzle-orm";
 import { toCents, fromCents } from "@/lib/pricing-core";
 import { reverseStockForOrder } from "@/lib/inventory-deduction";
+import { getSessionUser } from "@/lib/guard";
+import { hideCost, maySeeCost } from "@/lib/cost-visibility";
 
 async function handleGET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const user = await getSessionUser();
     const { id } = await params;
     const orderId = Number(id);
 
@@ -16,7 +19,7 @@ async function handleGET(req: Request, { params }: { params: Promise<{ id: strin
       return NextResponse.json({ error: "Order not found" }, { status: 404 });
     }
 
-    const items = await db.select().from(orderItems).where(eq(orderItems.orderId, orderId));
+    const items = (await db.select().from(orderItems).where(eq(orderItems.orderId, orderId))).map((line) => hideCost(line, maySeeCost(user)));
 
     // Refunds live in their own ledger and paid_amount stays gross, so anyone
     // showing money still in hand needs this figure alongside paid_amount.

@@ -15,6 +15,7 @@ import {
 import { and, eq, desc, inArray, sql } from "drizzle-orm";
 import { deductStockForOrder } from "@/lib/inventory-deduction";
 import { requireSession } from "@/lib/guard";
+import { hideCost, maySeeCost } from "@/lib/cost-visibility";
 import { loadBillingConfig, priceOrder, fromCents } from "@/lib/pricing";
 
 /** Settings key: "false" from the seed until the owner saves a VAT rate. */
@@ -357,7 +358,7 @@ export async function createOrder(req: Request) {
       success: true,
       order: {
         ...newOrder,
-        items: createdItems,
+        items: createdItems.map((line) => hideCost(line, maySeeCost(guard.user))),
       },
     });
   } catch (err: any) {
