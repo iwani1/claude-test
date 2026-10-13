@@ -318,6 +318,7 @@ drawer. **23/23 pass** after the fixes above.
 | Low | **27 fetch sites inspect the JSON body** (`data.success`/`data.error`) instead of `res.ok`. | Equivalent for this API, since every error carries a JSON body; a non-JSON error page (proxy 502) surfaces as a thrown parse error, which those call sites catch. |
 | Info | **Over-receiving is allowed** (received > ordered). | Suppliers deliver extra; the quantity is recorded, not capped. Decide with the accountant whether a tolerance should exist. |
 | Info | **The payment retry key lives in a ref**, so a browser reload between attempt and retry starts a new payment attempt. | A reload is an explicit new action; the verify-before-retry check still prevents a double charge in the common case. |
+| Medium (owner's decision) | **Order deletion and re-pricing leave no record.** Deleting an order erases it, its payments and refunds, and every audit entry pointing at it. Re-pricing an order writes no before/after entry. | Deliberate: the owner asked for erasure with no archive row and no audit entry (decided 13 Oct; the owner reviewed an option for a permanent deletion record and chose to keep erasure). Consequence: after deletion the system cannot prove the order existed, and an edit's old amounts are not kept. Revisit if the accountant needs an audit trail. |
 | Info | **Day boundaries follow the server clock** (Ghana is UTC+0, matching the reports' stated basis). | Fine for this deployment; revisit if the app is ever hosted outside UTC+0. |
 
 ## Cannot be verified here

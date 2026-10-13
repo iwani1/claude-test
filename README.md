@@ -32,6 +32,10 @@ the shift's running sales/cash/MoMo totals are rolled back so the drawer still
 reconciles to the sales that remain. There is no undo, and no other role —
 including managers — can reach it.
 
+This erasure is the owner's decision: no archive row and no audit entry are
+kept, so after deletion the system holds no record that the order existed. Keep
+your own till or accounting records if you need that evidence.
+
 ### Roles: who can reach what
 
 The till roles handle money; the finance role reads it. **Accountant / Finance**
@@ -175,6 +179,10 @@ Money is never adjusted silently:
 - **Once anything has been refunded** against an order, its items, discount and
   tip are locked (guest details and notes still save). Re-pricing would rewrite
   what the drawer already recorded.
+
+Edits are the owner's decision and are not written to the activity log: the
+order shows the new amounts, but the system keeps no before/after record of the
+change.
 
 
 - **Display size** — the control in the top bar cycles **Standard (16px)** →
