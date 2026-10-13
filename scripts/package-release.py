@@ -1,4 +1,14 @@
-"""Build/check a deterministic source-only ZIP; never include secrets or other ZIPs."""
+"""Build/check a deterministic source-only ZIP.
+
+The archive is the source of the application and nothing else: never secrets
+(`.env`), never other ZIPs, and never a database dump. The owner's repository
+also carries the legacy business backup (`2026-10-12_restpos.db`, uploaded to
+`main` by hand) and releases are always built from a branch merged with `main`,
+so a dump that was merely sitting in the repository used to land in the release
+archive — and, once it did, the file-list check below failed on every CI run
+before a single test could start. Data files are skipped here, and the check
+compares against exactly the same list.
+"""
 from pathlib import Path
 import subprocess
 import sys
@@ -8,7 +18,11 @@ root = Path(__file__).resolve().parent.parent
 paths = subprocess.check_output(
     ["git", "ls-files", "--cached", "--others", "--exclude-standard", "-z"], cwd=root
 ).decode().split("\0")
-files = sorted({p for p in paths if p and not p.endswith(".zip") and (root / p).is_file()})
+# Data files are never part of the source release: ZIPs are build outputs, and
+# database dumps are the owner's data, not the application.
+SKIP_SUFFIXES = (".zip", ".db", ".sqlite", ".sqlite3", ".dump")
+files = sorted({p for p in paths if p and not p.endswith(SKIP_SUFFIXES) and (root / p).is_file()})
+skipped = sorted({p for p in paths if p and p.endswith(SKIP_SUFFIXES) and p not in files})
 for name in files:
     path = Path(name)
     if (root / name).is_symlink() or any(part in {".git", "node_modules", ".next", ".test-db", "__pycache__"} for part in path.parts):
@@ -32,3 +46,5 @@ with zipfile.ZipFile(archive) as bundle:
     for name in files:
         assert bundle.read(name) == (root / name).read_bytes(), f"ZIP source mismatch: {name}"
 print(f"Verified {archive.name}: {len(files)} files, {archive.stat().st_size:,} bytes")
+if skipped:
+    print(f"Skipped {len(skipped)} non-source file(s): {', '.join(skipped)}")

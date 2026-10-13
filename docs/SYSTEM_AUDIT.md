@@ -335,6 +335,8 @@ drawer. **23/23 pass** after the fixes above.
 ## Re-running this audit
 
 ```sh
+# all of the commands below also run in CI on every push:
+#   .github/workflows/security.yml
 npm run test:security      # 195 + 78 + 30 checks, disposable database, production build
 npm run audit:responsive   # layout rules, exits 1 on a regression
 npm run audit:workflows    # feedback/money-guard rules, exits 1 on a regression

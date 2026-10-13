@@ -8,15 +8,22 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
+      # Runs against the branch merged with main, which is also how the release
+      # is built: source files only, never secrets, ZIPs or database dumps.
       - run: python3 scripts/package-release.py --check
       - run: npm ci
       - run: npm run lint -- --max-warnings=0
       - run: npm run typecheck
+      # Static guards: a screen that swallows a failure, a money route without an
+      # idempotency key, a migration missing from the schema guard, or a menu tab
+      # offered to a role the API behind it refuses.
+      - run: npm run audit:workflows
+      - run: npm run audit:responsive
       - run: npm run test:legacy-import
       - run: npm run test:security
       - run: npm audit --omit=dev
