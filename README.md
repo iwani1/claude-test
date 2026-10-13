@@ -1,7 +1,7 @@
 # Restaurant POS — hardened source
 
 Next.js / React / TypeScript with PostgreSQL and Drizzle ORM.
-The original `11claude.zip` is retained unchanged; use the unpacked source here.
+The original `11claude.zip` is kept on the owner's machine only and is not in Git; use the source here.
 
 - [Deployment and database setup](GREENGEEKS_DEPLOYMENT_GUIDE.md)
 - [Security model, tests, and remaining release work](SECURITY.md)

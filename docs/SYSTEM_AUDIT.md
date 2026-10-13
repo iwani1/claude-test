@@ -98,6 +98,7 @@ not from the production server, not with a browser, not with hardware.
 | **Low** | **Cashiers could see food cost and margin.** Cost price was returned by the menu, the order list, a single order, and the sale a cashier rings up. | `src/lib/cost-visibility.ts`: cost is included only for roles with reports or menu access (owner, manager, inventory officer, accountant). Cashiers get sale prices only. |
 | **Low** | **The audit log had no page limit.** `limit` was taken as sent, so one request could return the whole history. | Capped at 500 rows; a malformed value falls back to 100. |
 | **Low** | **Settings accepted any key.** The owner's settings endpoint wrote whatever keys it was sent. | Only the keys the Settings screen and pricing use are accepted; anything else is refused with 400 before anything is written. The VAT confirmation marker is server-only. |
+| **Medium** | **Legacy credentials were in the repository.** `11claude.zip` (the original code) contains a default owner password and a fallback signing key, and `tests/e2e.mjs` carried a demo password. | Both are out of the tree: the ZIP is git-ignored and kept on the owner's machine, and `tests/e2e.mjs` is removed. History is not rewritten, so the old files remain in past commits and in `main`'s history. Confirmed by the owner that the live server never used these values. |
 
 ## Missed on the first pass: order deletion on a stale database
 
