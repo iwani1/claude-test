@@ -9,6 +9,8 @@ cd marketing
 npm install
 npm run dev        # http://0.0.0.0:3100  — gallery at /, pages at /aurora /grid /orbs /brutalist, live demo at /demo
 npm run build      # static export to ./out (plain HTML/CSS/JS, host anywhere)
+npm start          # serve ./out on :3100 with the zero-dependency server in scripts/
+npm run demo       # serve ./out on :3200 with / redirecting straight to the live demo
 npm run typecheck
 ```
 

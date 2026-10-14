@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "next dev -H 0.0.0.0 -p 3100",
     "build": "next build",
-    "start": "npx serve out -l 3100",
+    "start": "node scripts/serve-static.mjs",
+    "demo": "PORT=3200 ROOT_REDIRECT=/demo/ node scripts/serve-static.mjs",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
