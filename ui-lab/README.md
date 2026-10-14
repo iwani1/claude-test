@@ -53,3 +53,22 @@ ui-lab/
 
 The four heroes were ported to a real **Next.js + React + Tailwind + Motion** site with full pages
 (features, how it works, pricing, FAQ) in [`../marketing/`](../marketing/README.md).
+
+## Till concepts — round 2 (`till-v2/`)
+
+Three fresh directions for the Till screen, nothing shared with the earlier
+A/B/C set except the data. One shared behaviour file (`till.js`: menu, tables,
+running bill, VAT, pay sheet with Cash / MoMo / Split) and three completely
+separate pages that style it:
+
+| # | Concept | Language |
+|---|---------|----------|
+| 1 | **Ember** | dark, touch-first iPad POS — coral→orange gradient, category colour dots, icon rail, keypad pay sheet |
+| 2 | **Atlas** | light modern SaaS — sidebar with every module, white cards on grey, one blue, stats strip, keyboard hints |
+| 3 | **Sunbird** | warm, brand-forward — cream/ink with sunflower, forest, terracotta, cobalt colour blocks; Sora headings; ink ticket panel |
+
+```sh
+ROOT_REDIRECT=/till-v2/ node ui-lab/serve.mjs   # opens straight on the chooser
+```
+
+The chooser (`till-v2/index.html`) shows all three as live, scaled previews.
