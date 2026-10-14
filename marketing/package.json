@@ -1,0 +1,27 @@
+{
+  "name": "lushview-marketing",
+  "private": true,
+  "description": "Marketing site for Lush View POS — four UI directions, one content model. Separate from the POS app.",
+  "scripts": {
+    "dev": "next dev -H 0.0.0.0 -p 3100",
+    "build": "next build",
+    "start": "npx serve out -l 3100",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "lucide-react": "^1.56.0",
+    "motion": "^12.0.0",
+    "next": "16.4.0",
+    "react": "19.2.6",
+    "react-dom": "19.2.6"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "4.1.17",
+    "@types/node": "22.19.15",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "postcss": "^8.5.29",
+    "tailwindcss": "4.1.17",
+    "typescript": "5.9.3"
+  }
+}

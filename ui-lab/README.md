@@ -48,3 +48,8 @@ ui-lab/
 - No external fonts, scripts or images: everything renders offline, which is the same
   constraint the POS itself works under.
 - All motion honours `prefers-reduced-motion`; decorative layers are `aria-hidden`.
+
+## Next step
+
+The four heroes were ported to a real **Next.js + React + Tailwind + Motion** site with full pages
+(features, how it works, pricing, FAQ) in [`../marketing/`](../marketing/README.md).
