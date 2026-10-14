@@ -20,47 +20,88 @@ npm run typecheck
 | `/grid/` | **02 Grid & Shimmer** — light · bento | Magic UI | animated grid cells, shiny text, blur-in headline, shimmer CTA, double marquee, number ticker, border beam |
 | `/orbs/` | **03 Orbs** — dark · canvas · on-brand | React Bits | particle constellation with pointer repulsion, drifting orbs, film grain, split-text headline, 3D tilt KDS ticket |
 | `/brutalist/` | **04 Brutalist** — paper · ink | Promter | ticker band, 3px borders, hard shadows that press in, monospace receipt with torn edge, wobbling sticker |
-| `/demo/` | **Live product demo** — Stage × Gallery look, Day / Evening | the POS itself | a simulated shift in the browser: Till · Kitchen · Drawer, guided by a six-step checklist |
+| `/demo/` | **Live product demo** — Stage × Gallery look, Day / Evening | the POS itself | the whole system simulated in the browser: sign-in & roles, till, floor, kitchen, orders & refunds, drawer, menu, recipes, stock, purchasing, reports, audit, staff, settings, hardware — guided by a 13-step tour |
 
 **Demo controls (any page):** keys `1`–`4` jump between directions, `←` `→` cycle, `Esc` returns to the gallery; the floating pill at the bottom does the same with a mouse.
 
 ## The live demo (`/demo/`)
 
-An interactive, client-side simulation of the product — no backend, no login, nothing is real. It is
+An interactive, client-side simulation of the **whole product** — no backend, nothing is real. It is
 linked from the Orbs page ("Open the till", "Try the live demo", "See how a shift runs") and from the
-gallery.
+gallery. `npm run demo` serves it on :3200 with `/` redirecting straight to it.
 
 **Look.** A premium-minimal mix of the two till concepts in `../ui-lab/till-concepts/` (B *Stage* +
 C *Gallery*): no panels or cards, hairlines instead of boxes, system serif numerals, photography, one
-accent colour, one pill button per screen and text links for everything secondary. It ships in two
-themes expressed purely as CSS tokens — **Evening** (near-black, mint) and **Day** (white, burnt
-amber) — toggled with the sun/moon in the header or the `T` key; the layout never changes.
+accent colour, one pill button per screen and text links for everything secondary. Two themes expressed
+purely as CSS tokens — **Evening** (near-black, mint) and **Day** (white, burnt amber) — toggled with
+the sun/moon in the header or the `T` key; the layout never changes.
 
-- **Till** — a strip of table numerals (01–08, Bar, R12, T/A) with the active one underlined; a
-  horizontal film-strip of 4:5 dish portraits per category; the bill as a quiet hairline column with
-  quantities, kitchen notes, the total as a giant italic numeral, **Charge** and a "Send … to the
-  kitchen" link (fires a ticket for kitchen items only).
-- **Pay** — Mobile Money (MTN / Telecel / AT, a simulated prompt that approves after ~2 s) or cash
-  with quick amounts and change due; a monospace VAT receipt follows.
-- **Kitchen** — New → Cooking → Ready columns divided by hairlines, live timers that turn amber after
-  8 min and red after 15 (the real KDS thresholds), Start prep → / Mark ready → / Clear.
-- **Drawer** — opening float, sales, cash vs MoMo, VAT collected, a ledger of every movement, cash
-  payouts with a reason, and "End shift & audit drawer" (expected vs counted → over / short).
+**Sign in.** The demo opens on a PIN screen. Pick a person; the role decides which areas the header
+shows (the same matrix as `src/lib/permissions.ts`):
+
+| Person | Role | PIN | Sees |
+| --- | --- | --- | --- |
+| Kofi Mensah | Owner | `1111` | everything |
+| Efua Boateng | Manager | `2222` | everything except Settings / Hardware |
+| Ama Owusu · Yaw Darko | Cashiers | `3333` · `3434` | Till · Floor · Kitchen · Orders · Drawer |
+| Adwoa Nkrumah | Inventory | `4444` | Today · Menu · Recipes · Ingredients · Purchasing · Reports |
+| Kojo Appiah | Accountant | `5555` | Today · Orders · Drawer · Reports · Audit |
+| Kwame Asante | Cook | — | no terminal login (greyed out) |
+
+"Skip the PIN" is there for impatient visitors; a physical keyboard types the PIN too.
+
+**Areas** (header → second row):
+
+- **Today** — the owner's morning page: gross sales, cash in drawer, food cost of what sold, stock
+  value, kitchen pass time; a "Needs a look" list that deep-links to the problem (late tickets,
+  unsent items, low stock, overdue deliveries, 86'd dishes, offline queue); takings by hour, tenders,
+  categories, open tables, best sellers, recent audit events.
+- **Service** — **Till** (table strip, dish film-strip, hairline bill, Extras: discount / tip /
+  complimentary with manager PIN / guest name; Charge → cash, MoMo prompt, split, GhQR; VAT receipt),
+  **Floor** (tables by zone with running totals and minutes, seat / reserve / clear / move a party /
+  add a table), **Kitchen** (New → Cooking → Ready, 8 / 15-minute thresholds), **Orders** (history,
+  search, reprint, **refund** with reason — a cashier needs a manager's PIN).
+- **Stock** — **Menu** (availability switches that grey the dish on every till, prices, recipe cost
+  and food-cost %, add / edit dishes), **Recipes & costing** (per-portion ingredients, unit cost,
+  food cost % vs the 28–35 % band, gross margin; sales auto-deduct stock), **Ingredients** (stock on
+  hand valued, low-stock list, waste / correction / direct-delivery adjustments with a reason, cycle
+  count with variance valuation, the movement ledger), **Purchasing** (purchase orders, "fill from low
+  stock", goods receipt against a supplier invoice with short-delivery handling, suppliers).
+- **Money** — **Drawer** (float, sales, payouts, refunds, expected vs counted, close shift / start a
+  new one — history is kept, the shift window moves), **Reports** (gross / net / VAT / value forgone /
+  tips, takings by hour, tender and category splits, best sellers, by cashier, kitchen pass time;
+  **real CSV downloads** — sales export and a QuickBooks / Xero journal), **Audit trail**
+  (append-only: Timestamp · User · Action · Entity · Details, filter, search, export).
+- **Setup** — **Staff & roles** (team list, activate / deactivate, add people with a unique PIN, the
+  permission matrix), **Settings** (name, GRA TIN, VAT %, service charge, room-service charge,
+  complimentary breakfast, MoMo merchant, receipt header / footer — with a live receipt preview),
+  **Hardware & tenders** (ESC/POS printer IP:9100 or browser print, kitchen printer, which tenders the
+  pay sheet offers, accounting export target, the Online / Offline switch).
 - **Online / Offline** in the header: cash sales queue as "taken offline" and sync when you flip back;
   MoMo prompts are refused without a network.
-- **Guide** ("Run the shift", a right-hand aside on wide screens) ticks itself from real state and can
-  navigate you to each step.
-- Keys: `1` `2` `3` switch screens, `G` toggles the guide, `O` toggles offline, `T` flips Day / Evening.
-  The shift (and theme) is kept in `sessionStorage`; **Reset** starts a fresh one.
+- **Guide** ("Run the whole system", a right-hand aside on wide screens) is a 13-step tour in three
+  chapters — *Front of house* (sign in, order, send, pass, MoMo, offline sale), *Back office* (receive
+  PO-0417, 86 a dish, refund, change settings, export CSV) and *End of day* (close the shift, hand over
+  to a cashier). Steps tick themselves from real state and "Take me there" navigates — or signs you out
+  with a hint when the step needs a different role.
+- Keys: `1` `2` `3` jump to Till / Kitchen / Drawer, `G` toggles the guide, `O` toggles offline, `T`
+  flips Day / Evening. Everything is kept in `sessionStorage`; **Reset** starts a fresh day.
 
-The maths mirrors `src/lib/pricing-core.ts` in the POS: integer pesewas, VAT 15 % on goods plus the
-GH₵ 30 room-service charge, change computed from tendered cash. Kitchen status names, the
-GH₵ 1,200 opening float and the audit wording follow the real screens. Code lives in
-`src/demo/` (`store.tsx` is the whole state machine; `screens/` are the three views; `Tour.tsx` is the
-checklist; `ui.tsx` the primitives — `Money`, `Pill`, `TextLink`, `Caps`, `Modal`). The colour tokens
-are the `.demo` / `.demo[data-theme="day"]` blocks at the end of `src/app/globals.css`. The route
-renders client-side only (`ssr: false`) because the saved shift is read from `sessionStorage` on first
-paint.
+The maths mirrors the POS: integer pesewas, VAT 15 % on goods plus the GH₵ 30 room-service charge
+(`src/lib/pricing-core.ts`), recipe deduction aggregated per ingredient on send / pay
+(`src/lib/inventory-deduction.ts`), expected cash = float + cash − payouts − cash refunds. Kitchen status
+names, the GH₵ 1,200 opening float, PO / GRN / cycle-count vocabulary and the audit wording follow the
+real screens. The seed is a branch mid-shift: 12 paid bills, a refund, a payout, two open tables, a
+received and an outstanding purchase order, a waste entry — so no screen is empty on first visit.
+
+Code lives in `src/demo/`: `data.ts` (menu, tables, staff, ingredients, recipes, suppliers, settings,
+hardware), `pricing.ts`, `store.tsx` (the whole state machine — one reducer, every action logged to the
+audit trail; `seed()` replays real actions to build the opening state), `ui.tsx` (hairline / serif
+primitives: `Money`, `Pill`, `TextLink`, `Caps`, `Modal`, `PageHead`, `Rows`, `Figure`, `Bars`, `Split`,
+`Switch`, `PinPad`), `screens/*.tsx` (one file per area), `Tour.tsx` and `DemoShell.tsx` (header, groups,
+permissions, keyboard). The colour tokens are the `.demo` / `.demo[data-theme="day"]` blocks at the end
+of `src/app/globals.css`. The route renders client-side only (`ssr: false`) because the saved day is read
+from `sessionStorage` on first paint.
 
 ## Where things live
 
@@ -68,8 +109,8 @@ paint.
 marketing/
 ├── src/content/site.ts        ← ALL copy, dishes, order/ticket/receipt mock data, pricing, FAQ, theme list
 ├── src/app/                   routes: / (gallery) · /aurora · /grid · /orbs · /brutalist · /demo
-├── src/demo/                  the live demo: data.ts (menu, tables, billing constants) · pricing.ts · store.tsx ·
-│                              ui.tsx (hairline / serif primitives) · screens/{Till,Kitchen,Drawer}.tsx · Tour.tsx · DemoShell.tsx
+├── src/demo/                  the live demo: data.ts (menu, tables, staff, stock, suppliers, settings) · pricing.ts · store.tsx ·
+│                              ui.tsx (hairline / serif primitives) · screens/ (16 areas) · Tour.tsx · DemoShell.tsx
 ├── src/themes/<id>/Hero.tsx   the hero for that direction
 ├── src/themes/<id>/Page.tsx   the full page: features · how · pricing · FAQ · CTA · footer · switcher
 ├── src/components/shared/     Reveal, SplitText, Marquee, NumberTicker, Faq, Particles, ThemeSwitcher, Icon

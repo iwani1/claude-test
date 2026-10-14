@@ -173,3 +173,153 @@ export const inputCls = `w-full border-0 border-b ${K.line} bg-transparent py-2.
 
 export const timeOf = (ms: number) => new Date(ms).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
 export const minsSince = (ms: number, now: number) => Math.max(0, Math.floor((now - ms) / 60_000));
+
+/* ------------------------------------------------------------- layout */
+
+/** Every back-office screen opens the same way: small caps, a serif italic title, one line of context, actions on the right. */
+export function PageHead({ kicker, title, lede, children }: { kicker: ReactNode; title: ReactNode; lede?: ReactNode; children?: ReactNode }) {
+  return (
+    <div className="flex flex-wrap items-end justify-between gap-x-10 gap-y-5">
+      <div className="max-w-[60ch]">
+        <Caps>{kicker}</Caps>
+        <h1 className="mt-1 font-serif text-[40px] italic leading-none tracking-[-.02em]">{title}</h1>
+        {lede && <p className={`mt-3 text-sm leading-relaxed ${K.fg2}`}>{lede}</p>}
+      </div>
+      {children && <div className="flex flex-wrap items-center gap-x-8 gap-y-3">{children}</div>}
+    </div>
+  );
+}
+
+export function Page({ children, className = "" }: { children: ReactNode; className?: string }) {
+  return <div className={`px-6 pb-20 pt-8 lg:px-14 ${className}`}>{children}</div>;
+}
+
+export function Empty({ children }: { children: ReactNode }) {
+  return <p className={`py-10 font-serif text-[22px] italic ${K.fg3}`}>{children}</p>;
+}
+
+/** A labelled figure: small caps over a serif number or Money. */
+export function Figure({ label, children, sub, warn = false, className = "" }: { label: ReactNode; children: ReactNode; sub?: ReactNode; warn?: boolean; className?: string }) {
+  return (
+    <div className={className}>
+      <Caps className="block">{label}</Caps>
+      <div className="mt-3">{children}</div>
+      {sub && <p className={`mt-2 truncate text-xs ${warn ? K.warn : K.fg3}`}>{sub}</p>}
+    </div>
+  );
+}
+
+/** Hairline table: header in small caps, rows divided by the faint line. */
+export function Rows({ head, children, cols = "", lastRight = true }: { head: ReactNode[]; children: ReactNode; cols?: string; lastRight?: boolean }) {
+  return (
+    <table className={`w-full text-sm ${cols}`}>
+      <thead className={`text-left text-[11px] font-semibold uppercase tracking-[.18em] ${K.fg3}`}>
+        <tr className={`border-b ${K.line}`}>
+          {head.map((h, i) => (
+            <th key={i} className={`py-2 pr-4 font-semibold ${i === head.length - 1 ? `pr-0 ${lastRight ? "text-right" : ""}` : ""}`}>
+              {h}
+            </th>
+          ))}
+        </tr>
+      </thead>
+      <tbody className="divide-y divide-(--line2)">{children}</tbody>
+    </table>
+  );
+}
+
+/* -------------------------------------------------------------- inputs */
+
+export function Select({ className = "", children, ...rest }: React.SelectHTMLAttributes<HTMLSelectElement>) {
+  return (
+    <select className={`${inputCls} appearance-none bg-no-repeat pr-6 ${className}`} style={{ backgroundImage: "linear-gradient(45deg, transparent 50%, var(--fg3) 50%), linear-gradient(135deg, var(--fg3) 50%, transparent 50%)", backgroundPosition: "right 8px center, right 3px center", backgroundSize: "5px 5px" }} {...rest}>
+      {children}
+    </select>
+  );
+}
+
+export function Switch({ on, onChange, label, disabled = false }: { on: boolean; onChange: (v: boolean) => void; label?: ReactNode; disabled?: boolean }) {
+  return (
+    <button type="button" role="switch" aria-checked={on} disabled={disabled} onClick={() => onChange(!on)} className={`inline-flex items-center gap-3 text-sm disabled:opacity-40 ${on ? K.fg : K.fg3}`}>
+      <span className={`relative h-5 w-9 rounded-full border transition-colors ${on ? "border-(--accent) bg-(--accent)" : `${K.line} bg-transparent`}`}>
+        <span className={`absolute top-[3px] h-3 w-3 rounded-full transition-all ${on ? "left-[19px] bg-(--accent-ink)" : "left-[3px] bg-(--fg3)"}`} />
+      </span>
+      {label}
+    </button>
+  );
+}
+
+/** Digits laid out like a till keypad; calls onComplete at `length` digits. */
+export function PinPad({ value, onChange, length = 4 }: { value: string; onChange: (v: string) => void; length?: number }) {
+  const keys = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "", "0", "⌫"];
+  return (
+    <div>
+      <div className="flex justify-center gap-4" aria-label="PIN">
+        {Array.from({ length }).map((_, i) => (
+          <span key={i} className={`h-2.5 w-2.5 rounded-full border transition-colors ${i < value.length ? "border-(--accent) bg-(--accent)" : K.line2}`} />
+        ))}
+      </div>
+      <div className="mx-auto mt-7 grid w-[240px] grid-cols-3 gap-y-2">
+        {keys.map((k, i) =>
+          k === "" ? (
+            <span key={i} />
+          ) : (
+            <button
+              key={i}
+              type="button"
+              aria-label={k === "⌫" ? "Delete" : k}
+              onClick={() => onChange(k === "⌫" ? value.slice(0, -1) : (value + k).slice(0, length))}
+              className={`mx-auto grid h-14 w-14 place-items-center rounded-full font-serif text-[24px] lining transition-colors hover:bg-(--line2) ${k === "⌫" ? `text-[16px] ${K.fg3}` : K.fg}`}
+            >
+              {k}
+            </button>
+          ),
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* --------------------------------------------------------------- charts */
+
+/** Hairline bar chart: values become thin accent bars on a baseline, labels in small caps. */
+export function Bars({ data, height = 120, format }: { data: { label: string; value: number; dim?: boolean }[]; height?: number; format?: (v: number) => string }) {
+  const max = Math.max(1, ...data.map((d) => d.value));
+  return (
+    <div className="flex items-end gap-3" style={{ height }}>
+      {data.map((d, i) => (
+        <div key={i} className="group flex h-full flex-1 flex-col justify-end" title={format ? format(d.value) : String(d.value)}>
+          <span className={`mb-2 hidden text-center font-serif text-[13px] lining group-hover:block ${K.fg2}`}>{format ? format(d.value) : d.value}</span>
+          <motion.div initial={{ height: 0 }} animate={{ height: `${(d.value / max) * 100}%` }} transition={{ duration: 0.8, delay: i * 0.03, ease: [0.2, 0.7, 0.2, 1] }} className={`w-full rounded-t-sm ${d.dim ? "bg-(--line)" : "bg-(--accent)"}`} style={{ minHeight: d.value > 0 ? 2 : 0 }} />
+          <span className={`mt-2 truncate text-center text-[10px] uppercase tracking-[.12em] ${K.fg3}`}>{d.label}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** A proportion drawn as one hairline split into segments. */
+export function Split({ parts }: { parts: { label: string; value: number; tone?: "accent" | "fg2" | "fg3" }[] }) {
+  const total = Math.max(1, parts.reduce((n, p) => n + p.value, 0));
+  const bg = { accent: "bg-(--accent)", fg2: "bg-(--fg2)", fg3: "bg-(--fg3)" };
+  return (
+    <div>
+      <div className="flex h-1 w-full gap-px overflow-hidden rounded-full bg-(--line2)">
+        {parts.map((p, i) => (
+          <motion.span key={i} initial={{ width: 0 }} animate={{ width: `${(p.value / total) * 100}%` }} transition={{ duration: 0.8, ease: [0.2, 0.7, 0.2, 1] }} className={`h-full ${bg[p.tone ?? (i === 0 ? "accent" : i === 1 ? "fg2" : "fg3")]}`} />
+        ))}
+      </div>
+      <div className={`mt-3 flex flex-wrap gap-x-6 gap-y-1 text-xs ${K.fg3}`}>
+        {parts.map((p, i) => (
+          <span key={i}>
+            <span className={`mr-1.5 inline-block h-1.5 w-1.5 rounded-full align-middle ${bg[p.tone ?? (i === 0 ? "accent" : i === 1 ? "fg2" : "fg3")]}`} />
+            {p.label} · <Num className="text-(--fg2)">{Math.round((p.value / total) * 100)}%</Num>
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export const dateOf = (ms: number) => new Date(ms).toLocaleDateString("en-GB", { day: "2-digit", month: "short" });
+export const whenOf = (ms: number, now: number) => (now - ms < 20 * 3_600_000 ? timeOf(ms) : `${dateOf(ms)} ${timeOf(ms)}`);
+export const qty3 = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(n < 1 ? 3 : 2).replace(/\.?0+$/, ""));

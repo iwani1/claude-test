@@ -3,13 +3,13 @@
 import { motion } from "motion/react";
 import { useState } from "react";
 import { ghs } from "../pricing";
-import { movements, shiftTotals, useDemo } from "../store";
+import { drawerLines, shiftTotals, useDemo } from "../store";
 import { Caps, Field, inputCls, K, Modal, Money, Num, Pill, TextLink, timeOf } from "../ui";
 
 export function Drawer() {
   const { state, dispatch, now } = useDemo();
   const t = shiftTotals(state);
-  const list = movements(state);
+  const list = drawerLines(state);
   const [payout, setPayout] = useState(false);
   const [closing, setClosing] = useState(false);
   const closed = Boolean(state.shift.closedAt);
@@ -20,11 +20,11 @@ export function Drawer() {
       {/* ------------------------------------------------ head */}
       <div className="flex flex-wrap items-end justify-between gap-x-10 gap-y-5">
         <div>
-          <Caps>Shift 2 · {state.shift.openedBy}</Caps>
+          <Caps>Shift · opened by {state.shift.openedBy}</Caps>
           <h1 className="mt-1 font-serif text-[40px] italic leading-none tracking-[-.02em]">{closed ? "Shift closed." : "Shift in progress."}</h1>
           <p className={`mt-3 text-sm ${K.fg2}`}>
             Opened {timeOf(state.shift.openedAt)} with a float of {ghs(state.shift.floatCents)}
-            {closed ? ` · closed ${timeOf(state.shift.closedAt!)}` : ` · ${t.paid.length} orders paid · ${ghs(Math.round(t.sales / hours))} an hour`}
+            {closed ? ` · closed ${timeOf(state.shift.closedAt!)} by ${state.shift.closedBy ?? state.shift.openedBy}` : ` · ${t.paid.length} orders paid · ${ghs(Math.round(t.sales / hours))} an hour`}
           </p>
         </div>
         <div className="flex items-center gap-8">
@@ -53,7 +53,7 @@ export function Drawer() {
       {/* ------------------------------------------------ four numbers */}
       <dl className={`mt-10 grid gap-8 border-y ${K.line} py-8 sm:grid-cols-2 xl:grid-cols-4 xl:gap-0 xl:divide-x xl:divide-(--line)`}>
         <Stat label="Sales incl. VAT" cents={t.sales} sub={`${t.paid.length} orders`} tone="accent" first />
-        <Stat label="Cash expected in drawer" cents={t.expectedCents} sub={`float ${ghs(state.shift.floatCents)} + cash ${ghs(t.cash)} − payouts ${ghs(t.payouts)}`} />
+        <Stat label="Cash expected in drawer" cents={t.expectedCents} sub={`float ${ghs(state.shift.floatCents)} + cash ${ghs(t.cash)} − payouts ${ghs(t.payouts)}${t.refundsCash ? ` − refunds ${ghs(t.refundsCash)}` : ""}`} />
         <Stat label="Mobile Money" cents={t.momo} sub={t.queued ? `${t.queued} sale${t.queued > 1 ? "s" : ""} waiting to sync` : "all settled with the provider"} warn={t.queued > 0} />
         <Stat label="VAT collected · 15 %" cents={t.vat} sub={t.roomCharges ? `incl. VAT on ${ghs(t.roomCharges)} room charges` : "on food, drink and room charges"} />
       </dl>
@@ -83,11 +83,11 @@ export function Drawer() {
                       <Num>{timeOf(m.at)}</Num>
                     </td>
                     <td className="py-3 pr-4">
-                      <span className={`mr-3 text-[11px] font-semibold uppercase tracking-[.16em] ${m.kind === "payout" ? K.bad : queued ? K.warn : K.fg3}`}>{m.kind === "float" ? "Float" : m.kind === "payout" ? "Out" : queued ? "Queued" : "Sale"}</span>
+                      <span className={`mr-3 text-[11px] font-semibold uppercase tracking-[.16em] ${m.kind === "payout" || m.kind === "refund" ? K.bad : queued ? K.warn : K.fg3}`}>{m.kind === "float" ? "Float" : m.kind === "payout" ? "Out" : m.kind === "refund" ? "Refund" : queued ? "Queued" : "Sale"}</span>
                       <span className={K.fg2}>{m.label.replace(" · queued", "")}</span>
                     </td>
                     <td className={`py-3 pr-4 text-right ${m.cashCents < 0 ? K.bad : m.cashCents ? K.fg : K.fg3}`}>{m.cashCents ? <Num className="text-[16px]">{ghs(m.cashCents, true)}</Num> : "—"}</td>
-                    <td className={`py-3 text-right ${m.momoCents ? K.fg : K.fg3}`}>{m.momoCents ? <Num className="text-[16px]">{ghs(m.momoCents, true)}</Num> : "—"}</td>
+                    <td className={`py-3 text-right ${m.momoCents < 0 ? K.bad : m.momoCents ? K.fg : K.fg3}`}>{m.momoCents ? <Num className="text-[16px]">{ghs(m.momoCents, true)}</Num> : "—"}</td>
                   </motion.tr>
                 );
               })}
@@ -227,6 +227,14 @@ function CloseModal({ open, onClose }: { open: boolean; onClose: () => void }) {
             <Num>{t.payouts ? ghs(-t.payouts, true) : "—"}</Num>
           </dd>
         </div>
+        {t.refundsCash > 0 && (
+          <div className="flex justify-between">
+            <dt>Cash refunds</dt>
+            <dd className={K.bad}>
+              <Num>{ghs(-t.refundsCash, true)}</Num>
+            </dd>
+          </div>
+        )}
         <div className={`flex items-baseline justify-between border-t ${K.line} pt-3 text-(--fg)`}>
           <dt>Expected in drawer</dt>
           <dd>

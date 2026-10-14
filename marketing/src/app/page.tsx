@@ -95,7 +95,7 @@ export default function Gallery() {
             href="/demo/"
             className="inline-flex items-center gap-2 rounded-full bg-emerald-400 px-5 py-2.5 text-sm font-semibold text-emerald-950 shadow-[0_10px_30px_-10px_rgba(52,211,153,.8)] transition-colors hover:bg-emerald-300"
           >
-            <Play size={14} fill="currentColor" aria-hidden="true" /> Live product demo (Till · Kitchen · Drawer)
+            <Play size={14} fill="currentColor" aria-hidden="true" /> Live product demo — the whole system
           </Link>
           <span className="text-sm text-zinc-500">Static export · no webfonts · no third-party scripts</span>
         </div>

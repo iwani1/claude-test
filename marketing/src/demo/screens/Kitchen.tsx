@@ -1,8 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "motion/react";
-import { MENU_BY_ID, TABLE_BY_ID } from "../data";
-import { useDemo, type KitchenStatus, type Ticket } from "../store";
+import { tableOf, useDemo, type KitchenStatus, type Ticket } from "../store";
 import { Caps, K, minsSince, Num, TextLink, timeOf } from "../ui";
 
 const COLUMNS: { status: KitchenStatus; title: string; hint: string; empty: string }[] = [
@@ -59,10 +58,10 @@ export function Kitchen() {
 }
 
 function TicketRow({ ticket, now }: { ticket: Ticket; now: number }) {
-  const { dispatch } = useDemo();
+  const { state, dispatch } = useDemo();
   const mins = minsSince(ticket.firedAt, now);
   const urgency = ticket.status === "ready" ? "ok" : mins > 15 ? "late" : mins > 8 ? "warn" : "ok";
-  const table = TABLE_BY_ID[ticket.tableId];
+  const table = tableOf(state, ticket.tableId);
   return (
     <motion.article
       layout
@@ -89,7 +88,7 @@ function TicketRow({ ticket, now }: { ticket: Ticket; now: number }) {
           <li key={i} className="text-[15px]">
             <span className="flex gap-3">
               <Num className={`w-5 shrink-0 text-right text-[17px] ${K.accent}`}>{l.qty}</Num>
-              <span>{MENU_BY_ID[l.itemId].name}</span>
+              <span>{l.name}</span>
             </span>
             {l.note && <span className={`ml-8 block font-serif text-[14px] italic ${K.fg2}`}>“{l.note}”</span>}
           </li>
