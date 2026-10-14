@@ -9,6 +9,7 @@
  *
  *   node ui-lab/serve.mjs            # http://0.0.0.0:4173
  *   PORT=5000 node ui-lab/serve.mjs
+ *   ROOT_REDIRECT=/till-concepts/ node ui-lab/serve.mjs   # open straight on a sub-page
  */
 import { createServer } from "node:http";
 import { readFile, stat } from "node:fs/promises";
@@ -20,6 +21,7 @@ const LAB_ROOT = resolve(here);
 const ASSET_ROOT = resolve(here, "..", "public");
 const PORT = Number(process.env.PORT) || 4173;
 const HOST = process.env.HOST || "0.0.0.0";
+const ROOT_REDIRECT = process.env.ROOT_REDIRECT || "";
 
 const MIME = {
   ".html": "text/html; charset=utf-8",
@@ -68,6 +70,10 @@ const server = createServer(async (req, res) => {
     return send(res, 405, "Method Not Allowed");
   }
   const url = new URL(req.url || "/", `http://${req.headers.host || "localhost"}`);
+  if (url.pathname === "/" && ROOT_REDIRECT) {
+    res.writeHead(302, { Location: ROOT_REDIRECT, "Cache-Control": "no-store" });
+    return res.end();
+  }
   let file = resolveFile(url.pathname);
   if (!file) return send(res, 403, "Forbidden");
 
@@ -93,5 +99,5 @@ const server = createServer(async (req, res) => {
 });
 
 server.listen(PORT, HOST, () => {
-  console.log(`UI Lab  →  http://${HOST}:${PORT}/   (assets from ${ASSET_ROOT})`);
+  console.log(`UI Lab  →  http://${HOST}:${PORT}/   (assets from ${ASSET_ROOT})${ROOT_REDIRECT ? `   / → ${ROOT_REDIRECT}` : ""}`);
 });
