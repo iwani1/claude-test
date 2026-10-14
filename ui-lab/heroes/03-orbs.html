@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>03 · Orbs — Lush View POS hero (React Bits-style)</title>
+<meta name="description" content="Immersive dark hero: canvas particle constellation with pointer repulsion, drifting orbs, split-text headline and a 3D tilt card. No dependencies." />
+<style>
+  :root {
+    --bg: #020c0a;
+    --fg: #ecfdf5;
+    --muted: #8fb3a6;
+    --mint: #34d399;
+    --mint-2: #6ee7b7;
+    --amber: #fbbf24;
+    --line: rgba(236, 253, 245, .1);
+    --font: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, "Times New Roman", serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body { font-family: var(--font); background: var(--bg); color: var(--fg); -webkit-font-smoothing: antialiased; overflow-x: hidden; }
+  a { color: inherit; text-decoration: none; }
+  button { font: inherit; }
+
+  .hero { position: relative; min-height: 100dvh; isolation: isolate; overflow: hidden; display: flex; flex-direction: column; }
+  canvas.particles { position: absolute; inset: 0; z-index: -2; width: 100%; height: 100%; }
+  .orb { position: absolute; z-index: -3; border-radius: 50%; filter: blur(90px); opacity: .55; pointer-events: none; animation: orbit var(--t) ease-in-out infinite alternate; }
+  .o1 { width: 48vw; height: 48vw; left: -12vw; top: -14vw; background: radial-gradient(circle, #065f46, transparent 65%); --t: 28s; }
+  .o2 { width: 40vw; height: 40vw; right: -10vw; bottom: -12vw; background: radial-gradient(circle, #92400e, transparent 65%); --t: 34s; opacity: .4; }
+  .o3 { width: 26vw; height: 26vw; right: 15vw; top: 8vh; background: radial-gradient(circle, #0f766e, transparent 65%); --t: 24s; }
+  @keyframes orbit { to { transform: translate3d(8vw, 6vh, 0) scale(1.15); } }
+  .noise { position: absolute; inset: 0; z-index: -1; pointer-events: none; opacity: .5; mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .18 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>"); }
+
+  .nav { width: min(1120px, 100% - 2.5rem); margin: 0 auto; display: flex; align-items: center; justify-content: space-between; padding: 1.2rem 0; }
+  .brand { display: inline-flex; align-items: center; gap: .6rem; font-weight: 650; }
+  .brand img { width: 30px; height: 30px; border-radius: 8px; }
+  .links { display: none; gap: 1.6rem; font-size: .9rem; color: var(--muted); } .links a:hover { color: var(--fg); }
+  @media (min-width: 860px) { .links { display: flex; } }
+  .nav-cta { font-size: .875rem; font-weight: 600; padding: .55rem 1rem; border-radius: 999px; border: 1px solid var(--line); background: rgba(255,255,255,.04); backdrop-filter: blur(10px); }
+  .nav-cta:hover { background: rgba(255,255,255,.1); }
+
+  .center { width: min(900px, 100% - 2.5rem); margin: 0 auto; text-align: center; padding: clamp(2rem, 7vh, 4.5rem) 0 1rem; flex: 0 0 auto; }
+  .tag { display: inline-flex; align-items: center; gap: .55rem; padding: .4rem .9rem; border-radius: 999px; font-size: .78rem; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--mint-2); border: 1px solid rgba(52,211,153,.3); background: rgba(52,211,153,.08); }
+  .tag i { width: 6px; height: 6px; border-radius: 50%; background: var(--amber); box-shadow: 0 0 12px var(--amber); }
+
+  h1 { margin: 1.5rem 0 1.2rem; font-size: clamp(2.6rem, 7vw, 5.2rem); line-height: 1; letter-spacing: -.035em; font-weight: 700; text-wrap: balance; }
+  h1 .word { display: inline-block; overflow: hidden; vertical-align: bottom; padding: .05em .02em .18em; margin: -.05em -.02em -.18em; }
+  h1 .word > span { display: inline-block; translate: 0 110%; animation: rise .9s cubic-bezier(.2,.75,.2,1) forwards; animation-delay: var(--i); }
+  h1 .accent { font-family: var(--serif); font-style: italic; font-weight: 500; letter-spacing: -.01em;
+    background: linear-gradient(90deg, var(--mint-2), var(--amber)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  @keyframes rise { to { translate: 0 0; } }
+
+  .sub { margin: 0 auto; max-width: 36rem; font-size: clamp(1.02rem, 1.4vw, 1.18rem); line-height: 1.65; color: var(--muted); }
+  .ctas { display: flex; flex-wrap: wrap; justify-content: center; gap: .8rem; margin-top: 2rem; }
+  .btn { display: inline-flex; align-items: center; gap: .5rem; padding: .9rem 1.35rem; border-radius: 999px; font-weight: 600; font-size: .95rem; cursor: pointer; border: 1px solid transparent; transition: transform .2s, box-shadow .25s, background .2s, border-color .2s; }
+  .btn:active { transform: scale(.98); }
+  .btn-mint { background: var(--mint); color: #022c22; box-shadow: 0 10px 30px -10px rgba(52,211,153,.8); }
+  .btn-mint:hover { transform: translateY(-1px); box-shadow: 0 16px 40px -10px rgba(52,211,153,.9); background: var(--mint-2); }
+  .btn-glass { color: var(--fg); border-color: var(--line); background: rgba(255,255,255,.04); backdrop-filter: blur(10px); }
+  .btn-glass:hover { background: rgba(255,255,255,.09); border-color: rgba(255,255,255,.25); }
+
+  /* stacked tilt cards (KDS tickets) */
+  .stage { position: relative; width: min(100%, 420px); margin: 3rem auto 0; padding: 0 1.25rem 4.5rem; perspective: 1200px; }
+  .ticket { border-radius: 18px; border: 1px solid var(--line); background: linear-gradient(160deg, rgba(255,255,255,.09), rgba(255,255,255,.03)); backdrop-filter: blur(16px); box-shadow: 0 30px 70px -30px rgba(0,0,0,.9), inset 0 1px 0 rgba(255,255,255,.12); }
+  .ticket.ghost { position: absolute; left: 50%; width: calc(100% - 2.5rem); height: 140px; translate: -50% 0; opacity: .5; }
+  .ticket.g1 { top: -22px; scale: .9; } .ticket.g2 { top: -11px; scale: .95; opacity: .7; }
+  .tilt { position: relative; z-index: 2; padding: 1.1rem 1.15rem 1.15rem; transform-style: preserve-3d; transition: transform .25s ease-out; will-change: transform; }
+  .tilt .glare { position: absolute; inset: 0; border-radius: inherit; pointer-events: none; background: radial-gradient(500px circle at var(--gx, 50%) var(--gy, 50%), rgba(255,255,255,.14), transparent 45%); opacity: 0; transition: opacity .3s; }
+  .stage:hover .tilt .glare { opacity: 1; }
+  .th { display: flex; align-items: center; justify-content: space-between; margin-bottom: .8rem; }
+  .th b { font-size: 1rem; font-weight: 650; } .th small { display: block; color: var(--muted); font-weight: 500; font-size: .74rem; margin-top: 2px; }
+  .status { font-size: .7rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; padding: .3rem .6rem; border-radius: 999px; background: rgba(251,191,36,.15); color: var(--amber); border: 1px solid rgba(251,191,36,.3); }
+  .item { display: flex; justify-content: space-between; gap: 1rem; padding: .45rem 0; border-top: 1px solid var(--line); font-size: .88rem; }
+  .th + .item { border-top: 0; }
+  .item small { display: block; color: var(--muted); font-size: .74rem; margin-top: 2px; }
+  .item .q { font-weight: 700; color: var(--mint-2); font-variant-numeric: tabular-nums; }
+  .timer { margin-top: .9rem; height: 6px; border-radius: 999px; background: rgba(255,255,255,.08); overflow: hidden; }
+  .timer i { display: block; height: 100%; width: 58%; border-radius: inherit; background: linear-gradient(90deg, var(--mint), var(--amber)); animation: tick 9s linear infinite alternate; }
+  @keyframes tick { to { width: 92%; } }
+  .tf { display: flex; justify-content: space-between; margin-top: .5rem; font-size: .72rem; color: var(--muted); }
+  .bump { margin-top: .9rem; width: 100%; padding: .8rem; border: 0; border-radius: 12px; font-weight: 700; color: #022c22; background: var(--mint); cursor: pointer; }
+
+  .facts { width: min(1120px, 100% - 2.5rem); margin: 0 auto 3rem; display: grid; grid-template-columns: 1fr; gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; }
+  @media (min-width: 720px) { .facts { grid-template-columns: repeat(3, 1fr); } }
+  .fact { background: rgba(2,12,10,.6); padding: 1.1rem 1.25rem; backdrop-filter: blur(8px); }
+  .fact b { display: block; font-size: 1.05rem; font-weight: 650; letter-spacing: -.01em; }
+  .fact span { font-size: .82rem; color: var(--muted); }
+
+  .reveal { opacity: 0; translate: 0 12px; animation: reveal .8s cubic-bezier(.2,.7,.2,1) forwards; animation-delay: var(--i, 0s); }
+  @keyframes reveal { to { opacity: 1; translate: 0 0; } }
+
+  @media (prefers-reduced-motion: reduce) {
+    .orb, .timer i, h1 .word > span { animation: none !important; }
+    h1 .word > span { translate: none; }
+    .reveal { animation: none; opacity: 1; translate: none; }
+    .tilt { transition: none; }
+  }
+</style>
+</head>
+<body>
+<section class="hero" id="hero">
+  <canvas class="particles" id="particles" aria-hidden="true"></canvas>
+  <div class="orb o1" aria-hidden="true"></div><div class="orb o2" aria-hidden="true"></div><div class="orb o3" aria-hidden="true"></div>
+  <div class="noise" aria-hidden="true"></div>
+
+  <nav class="nav reveal">
+    <a class="brand" href="#"><img src="/assets/logo.svg" alt="" onerror="this.style.display='none'">Lush View POS</a>
+    <div class="links"><a href="#">Till</a><a href="#">Kitchen</a><a href="#">Stock</a><a href="#">Reports</a></div>
+    <a class="nav-cta" href="#">Open the till</a>
+  </nav>
+
+  <div class="center">
+    <span class="tag reveal" style="--i:.05s"><i></i>Restaurant · Bar · Room service</span>
+    <h1 id="headline">From table to kitchen to drawer, <span class="accent">in one tap.</span></h1>
+    <p class="sub reveal" style="--i:.7s">Lush View POS runs the floor, the pass and the cash drawer as one system — so the Friday rush ends with a drawer that reconciles, not a pile of paper dockets.</p>
+    <div class="ctas reveal" style="--i:.8s">
+      <a class="btn btn-mint" href="#">Start a free pilot</a>
+      <a class="btn btn-glass" href="#">Watch a ticket go through
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+      </a>
+    </div>
+  </div>
+
+  <div class="stage reveal" id="stage" style="--i:.9s">
+    <div class="ticket ghost g1" aria-hidden="true"></div>
+    <div class="ticket ghost g2" aria-hidden="true"></div>
+    <div class="ticket tilt" id="tilt" role="img" aria-label="Mock-up of a kitchen display ticket">
+      <div class="glare"></div>
+      <div class="th"><div><b>Table 7</b><small>Ticket #0412 · fired 19:44 · Ama</small></div><span class="status">Cooking</span></div>
+      <div class="item"><div>Jollof Rice &amp; Grilled Chicken<small>extra shito</small></div><span class="q">×1</span></div>
+      <div class="item"><div>Banku &amp; Grilled Tilapia<small>medium pepper</small></div><span class="q">×1</span></div>
+      <div class="item"><div>Kelewele<small>to share</small></div><span class="q">×2</span></div>
+      <div class="timer"><i></i></div>
+      <div class="tf"><span>4 min on the pass</span><span>target 12 min</span></div>
+      <button class="bump" type="button">Mark ready · bump</button>
+    </div>
+  </div>
+
+  <div class="facts reveal" style="--i:1s">
+    <div class="fact"><b>Cash + MoMo in one drawer</b><span>Both tenders settle into the same shift and the same report.</span></div>
+    <div class="fact"><b>Works when the network doesn't</b><span>Orders queue offline and sync when the connection returns.</span></div>
+    <div class="fact"><b>Phone, tablet or desktop</b><span>One layout, from a 320px phone to the bar's touchscreen.</span></div>
+  </div>
+</section>
+
+<script>
+(function () {
+  var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  // 1) Split-text headline: each word rises out of a clipped box (React Bits "SplitText").
+  var h = document.getElementById("headline");
+  var tmp = document.createElement("div"); tmp.innerHTML = h.innerHTML; h.innerHTML = "";
+  var idx = 0;
+  function split(node, into, extraClass) {
+    Array.prototype.slice.call(node.childNodes).forEach(function (n) {
+      if (n.nodeType === 3) {
+        n.textContent.split(/(\s+)/).forEach(function (part) {
+          if (!part) return;
+          if (/^\s+$/.test(part)) { into.appendChild(document.createTextNode(" ")); return; }
+          var w = document.createElement("span"); w.className = "word" + (extraClass ? " " + extraClass : "");
+          var inner = document.createElement("span"); inner.textContent = part;
+          inner.style.setProperty("--i", (0.1 + idx++ * 0.07) + "s");
+          w.appendChild(inner); into.appendChild(w);
+        });
+      } else { split(n, into, n.className); }
+    });
+  }
+  split(tmp, h, "");
+
+  // 2) Particle constellation with pointer repulsion.
+  var cv = document.getElementById("particles"), ctx = cv.getContext("2d");
+  var W, H, dpr = Math.min(2, window.devicePixelRatio || 1), pts = [], mouse = { x: -1e4, y: -1e4 };
+  var COUNT = 0, LINK = 130, running = !document.hidden;
+  function resize() {
+    W = cv.clientWidth; H = cv.clientHeight; cv.width = W * dpr; cv.height = H * dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    COUNT = Math.max(40, Math.min(110, Math.round((W * H) / 14000)));
+    pts = [];
+    for (var i = 0; i < COUNT; i++) pts.push({ x: Math.random() * W, y: Math.random() * H, vx: (Math.random() - .5) * .35, vy: (Math.random() - .5) * .35, r: Math.random() * 1.6 + .6, hue: Math.random() < .2 ? "251,191,36" : "110,231,183" });
+  }
+  function frame() {
+    ctx.clearRect(0, 0, W, H);
+    for (var i = 0; i < pts.length; i++) {
+      var p = pts[i];
+      if (!reduce) {
+        var dx = p.x - mouse.x, dy = p.y - mouse.y, d2 = dx * dx + dy * dy;
+        if (d2 < 120 * 120) { var d = Math.sqrt(d2) || 1, f = (120 - d) / 120 * .6; p.vx += dx / d * f; p.vy += dy / d * f; }
+        p.vx *= .985; p.vy *= .985;
+        p.x += p.vx; p.y += p.vy;
+        if (p.x < -10) p.x = W + 10; if (p.x > W + 10) p.x = -10;
+        if (p.y < -10) p.y = H + 10; if (p.y > H + 10) p.y = -10;
+      }
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctx.fillStyle = "rgba(" + p.hue + ",.9)"; ctx.fill();
+    }
+    for (i = 0; i < pts.length; i++) for (var j = i + 1; j < pts.length; j++) {
+      var a = pts[i], b = pts[j], ddx = a.x - b.x, ddy = a.y - b.y, dist = ddx * ddx + ddy * ddy;
+      if (dist < LINK * LINK) {
+        var alpha = (1 - Math.sqrt(dist) / LINK) * .35;
+        ctx.strokeStyle = "rgba(110,231,183," + alpha.toFixed(3) + ")"; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+      }
+    }
+    if (!reduce && running) requestAnimationFrame(frame);
+  }
+  resize(); frame();
+  window.addEventListener("resize", function () { resize(); if (reduce) frame(); });
+  document.addEventListener("visibilitychange", function () { running = !document.hidden; if (running && !reduce) frame(); });
+  var hero = document.getElementById("hero");
+  hero.addEventListener("pointermove", function (e) { var r = cv.getBoundingClientRect(); mouse.x = e.clientX - r.left; mouse.y = e.clientY - r.top; });
+  hero.addEventListener("pointerleave", function () { mouse.x = mouse.y = -1e4; });
+
+  // 3) Tilt card with glare (React Bits "TiltedCard").
+  var stage = document.getElementById("stage"), card = document.getElementById("tilt");
+  if (!reduce) {
+    stage.addEventListener("pointermove", function (e) {
+      var r = card.getBoundingClientRect();
+      var x = (e.clientX - r.left) / r.width, y = (e.clientY - r.top) / r.height;
+      card.style.transform = "rotateY(" + ((x - .5) * 16).toFixed(2) + "deg) rotateX(" + ((.5 - y) * 14).toFixed(2) + "deg) translateZ(10px)";
+      card.style.setProperty("--gx", (x * 100) + "%"); card.style.setProperty("--gy", (y * 100) + "%");
+    });
+    stage.addEventListener("pointerleave", function () { card.style.transform = ""; });
+  }
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,83 @@
+/* UI Lab shell — dark chrome around an iframe, plus a slide-in prompt drawer. */
+:root {
+  --bg: #0a0a0b;
+  --panel: #121214;
+  --line: #26262a;
+  --fg: #f4f4f5;
+  --muted: #9b9ba3;
+  --accent: #34d399;
+  --font: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --bar-h: 58px;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body { font-family: var(--font); background: var(--bg); color: var(--fg); -webkit-font-smoothing: antialiased; display: flex; flex-direction: column; overflow: hidden; }
+a { color: inherit; text-decoration: none; }
+button { font: inherit; color: inherit; }
+
+/* ---------------------------------------------------------------- top bar */
+.bar { height: var(--bar-h); flex: 0 0 auto; display: flex; align-items: center; gap: 1rem; padding: 0 .9rem; border-bottom: 1px solid var(--line); background: var(--panel); }
+.bar-left { display: flex; align-items: center; gap: .75rem; min-width: 0; }
+.logo { display: inline-flex; align-items: center; gap: .5rem; font-weight: 700; letter-spacing: -.01em; white-space: nowrap; }
+.logo img { border-radius: 6px; }
+.crumb { color: var(--muted); font-size: .82rem; white-space: nowrap; display: none; }
+@media (min-width: 1100px) { .crumb { display: inline; } }
+
+.tabs { flex: 1; display: flex; justify-content: center; gap: .3rem; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+.tabs::-webkit-scrollbar { display: none; }
+.tab { display: inline-flex; align-items: center; gap: .55rem; padding: .45rem .75rem; border-radius: 10px; border: 1px solid transparent; background: transparent; cursor: pointer; white-space: nowrap; color: var(--muted); transition: background .15s, color .15s, border-color .15s; }
+.tab:hover { background: #1b1b1f; color: var(--fg); }
+.tab.on { background: #1b1b1f; color: var(--fg); border-color: var(--line); }
+.tab .n { font-family: var(--mono); font-size: .72rem; color: var(--accent); }
+.tab .s { font-size: .72rem; color: var(--muted); display: none; }
+@media (min-width: 1280px) { .tab .s { display: inline; } }
+
+.bar-right { display: flex; align-items: center; gap: .5rem; }
+.seg { display: none; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+@media (min-width: 900px) { .seg { display: inline-flex; } }
+.seg button { padding: .42rem .7rem; font-size: .78rem; background: transparent; border: 0; border-right: 1px solid var(--line); color: var(--muted); cursor: pointer; }
+.seg button:last-child { border-right: 0; }
+.seg button.on { background: #1b1b1f; color: var(--fg); }
+
+.btn { display: inline-flex; align-items: center; gap: .45rem; padding: .48rem .85rem; border-radius: 10px; border: 1px solid var(--line); background: #1b1b1f; font-size: .82rem; font-weight: 600; cursor: pointer; transition: background .15s, border-color .15s; white-space: nowrap; }
+.btn:hover { background: #232328; border-color: #333339; }
+.btn.ghost { background: transparent; }
+.btn.primary { background: var(--accent); color: #022c22; border-color: transparent; }
+.btn.primary:hover { background: #6ee7b7; }
+.btn.ok { background: #065f46; color: #d1fae5; border-color: transparent; }
+
+/* ------------------------------------------------------------------ stage */
+.stage { flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: center; padding: 14px; gap: 8px;
+  background-image: radial-gradient(#1c1c20 1px, transparent 1px); background-size: 18px 18px; }
+.frame { flex: 1; min-height: 0; width: 100%; max-width: var(--w, 100%); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; background: #000; box-shadow: 0 30px 80px -40px rgba(0,0,0,.9); transition: max-width .35s cubic-bezier(.2,.7,.2,1); }
+.frame iframe { width: 100%; height: 100%; border: 0; display: block; background: #000; }
+.hint { margin: 0; font-size: .74rem; color: var(--muted); }
+.hint kbd { font-family: var(--mono); font-size: .7rem; padding: .1rem .35rem; border: 1px solid var(--line); border-radius: 5px; background: #121214; }
+
+/* ----------------------------------------------------------------- drawer */
+.drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(520px, 100%); background: var(--panel); border-left: 1px solid var(--line); transform: translateX(102%); transition: transform .3s cubic-bezier(.2,.7,.2,1); z-index: 20; display: flex; flex-direction: column; overflow-y: auto; padding: 1.1rem 1.25rem 2rem; }
+.drawer.open { transform: translateX(0); }
+.scrim { position: fixed; inset: 0; background: rgba(0,0,0,.45); opacity: 0; pointer-events: none; transition: opacity .3s; z-index: 15; }
+.scrim.open { opacity: 1; pointer-events: auto; }
+.drawer-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
+.eyebrow { font-size: .7rem; letter-spacing: .1em; text-transform: uppercase; color: var(--accent); font-weight: 700; }
+.drawer h2 { margin: .2rem 0 0; font-size: 1.15rem; letter-spacing: -.01em; }
+.icon { width: 34px; height: 34px; border-radius: 9px; border: 1px solid var(--line); background: transparent; cursor: pointer; color: var(--muted); }
+.icon:hover { color: var(--fg); background: #1b1b1f; }
+
+.meta { display: grid; grid-template-columns: auto 1fr; gap: .45rem 1rem; margin: 1.1rem 0 0; font-size: .82rem; }
+.meta dt { color: var(--muted); } .meta dd { margin: 0; }
+
+.drawer-actions { display: flex; gap: .5rem; margin: 1rem 0 .75rem; }
+
+.prompt { flex: 0 0 auto; margin: 0; padding: 1rem; border: 1px solid var(--line); border-radius: 12px; background: #0c0c0e; color: #d4d4d8; font-family: var(--mono); font-size: .76rem; line-height: 1.55; white-space: pre-wrap; word-break: break-word; max-height: 52vh; overflow: auto; }
+.prompt:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.compare { margin-top: 1.25rem; padding-top: 1rem; border-top: 1px solid var(--line); }
+.compare h3 { margin: 0 0 .5rem; font-size: .85rem; }
+.compare ul { margin: 0; padding-left: 1.1rem; font-size: .8rem; color: var(--muted); line-height: 1.6; }
+.compare b { color: var(--fg); font-weight: 600; }
+.compare code { font-family: var(--mono); font-size: .72rem; color: var(--fg); }
+
+@media (prefers-reduced-motion: reduce) { .drawer, .scrim, .frame { transition: none; } }
