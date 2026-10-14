@@ -149,3 +149,62 @@
     scroll-behavior: auto !important;
   }
 }
+
+/* ------------------------------------------------------------------------
+   Live demo (/demo): one layout, two quiet atmospheres expressed as tokens.
+   "evening" = concept B (stage: black, mint), "day" = concept C (gallery:
+   white, burnt amber). Components only ever reference the variables.
+   ------------------------------------------------------------------------ */
+.demo {
+  --bg: #0a0d0c;
+  --fg: #e9eeea;
+  --fg2: #9aa49f;
+  --fg3: #5f6a65;
+  --line: rgba(255, 255, 255, 0.09);
+  --line2: rgba(255, 255, 255, 0.05);
+  --accent: #8cf0c6;
+  --accent-ink: #062018;
+  --accent-soft: rgba(140, 240, 198, 0.12);
+  --warn: #f2b65a;
+  --bad: #f08a8a;
+  --scrim: rgba(4, 6, 5, 0.72);
+  --glow: radial-gradient(1100px 520px at 72% -12%, rgba(140, 240, 198, 0.07), transparent 60%);
+  --img: saturate(0.9) brightness(0.86);
+  --img-hover: saturate(1) brightness(0.95);
+  color-scheme: dark;
+}
+.demo[data-theme="day"] {
+  --bg: #ffffff;
+  --fg: #121212;
+  --fg2: #6b6b6b;
+  --fg3: #a3a3a3;
+  --line: #ebebeb;
+  --line2: #f3f3f3;
+  --accent: #b8740f;
+  --accent-ink: #ffffff;
+  --accent-soft: rgba(184, 116, 15, 0.1);
+  --warn: #c05621;
+  --bad: #c0392b;
+  --scrim: rgba(255, 255, 255, 0.78);
+  --glow: none;
+  --img: none;
+  --img-hover: none;
+  color-scheme: light;
+}
+.demo {
+  background-color: var(--bg);
+  color: var(--fg);
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+}
+.demo ::selection { background: var(--accent); color: var(--accent-ink); }
+.demo img.dish { filter: var(--img); transition: transform 1s cubic-bezier(0.2, 0.7, 0.2, 1), filter 0.5s; }
+.demo .group:hover img.dish { filter: var(--img-hover); transform: scale(1.04); }
+.demo input::placeholder { color: var(--fg3); }
+.demo input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; }
+
+@utility lining { font-variant-numeric: lining-nums tabular-nums; }
+@utility no-bar {
+  scrollbar-width: none;
+  &::-webkit-scrollbar { display: none; }
+}

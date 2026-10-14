@@ -43,20 +43,20 @@ export const MENU: MenuItem[] = [
 export const MENU_BY_ID: Record<string, MenuItem> = Object.fromEntries(MENU.map((m) => [m.id, m]));
 
 export type OrderType = "dine_in" | "room_service" | "takeaway";
-export type Table = { id: string; label: string; seats: number; type: OrderType; zone: "Floor" | "Terrace" | "Bar" | "Rooms" | "Counter" };
+export type Table = { id: string; label: string; code: string; name: string; seats: number; type: OrderType; zone: "Floor" | "Terrace" | "Bar" | "Rooms" | "Counter" };
 
 export const TABLES: Table[] = [
-  { id: "t1", label: "T1", seats: 2, type: "dine_in", zone: "Floor" },
-  { id: "t2", label: "T2", seats: 2, type: "dine_in", zone: "Floor" },
-  { id: "t3", label: "T3", seats: 4, type: "dine_in", zone: "Floor" },
-  { id: "t4", label: "T4", seats: 4, type: "dine_in", zone: "Floor" },
-  { id: "t5", label: "T5", seats: 6, type: "dine_in", zone: "Terrace" },
-  { id: "t6", label: "T6", seats: 4, type: "dine_in", zone: "Terrace" },
-  { id: "t7", label: "T7", seats: 4, type: "dine_in", zone: "Terrace" },
-  { id: "t8", label: "T8", seats: 8, type: "dine_in", zone: "Terrace" },
-  { id: "bar", label: "Bar", seats: 6, type: "dine_in", zone: "Bar" },
-  { id: "room12", label: "Room 12", seats: 2, type: "room_service", zone: "Rooms" },
-  { id: "takeaway", label: "Takeaway", seats: 0, type: "takeaway", zone: "Counter" },
+  { id: "t1", label: "T1", code: "01", name: "Table 01", seats: 2, type: "dine_in", zone: "Floor" },
+  { id: "t2", label: "T2", code: "02", name: "Table 02", seats: 2, type: "dine_in", zone: "Floor" },
+  { id: "t3", label: "T3", code: "03", name: "Table 03", seats: 4, type: "dine_in", zone: "Floor" },
+  { id: "t4", label: "T4", code: "04", name: "Table 04", seats: 4, type: "dine_in", zone: "Floor" },
+  { id: "t5", label: "T5", code: "05", name: "Table 05", seats: 6, type: "dine_in", zone: "Terrace" },
+  { id: "t6", label: "T6", code: "06", name: "Table 06", seats: 4, type: "dine_in", zone: "Terrace" },
+  { id: "t7", label: "T7", code: "07", name: "Table 07", seats: 4, type: "dine_in", zone: "Terrace" },
+  { id: "t8", label: "T8", code: "08", name: "Table 08", seats: 8, type: "dine_in", zone: "Terrace" },
+  { id: "bar", label: "Bar", code: "Bar", name: "The bar", seats: 6, type: "dine_in", zone: "Bar" },
+  { id: "room12", label: "Room 12", code: "R12", name: "Room 12", seats: 2, type: "room_service", zone: "Rooms" },
+  { id: "takeaway", label: "Takeaway", code: "T/A", name: "Takeaway", seats: 0, type: "takeaway", zone: "Counter" },
 ];
 
 export const TABLE_BY_ID: Record<string, Table> = Object.fromEntries(TABLES.map((t) => [t.id, t]));

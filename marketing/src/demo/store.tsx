@@ -13,6 +13,7 @@ import { priceLines, type Line } from "./pricing";
 
 export type KitchenStatus = "pending" | "preparing" | "ready" | "completed";
 export type Screen = "till" | "kitchen" | "drawer";
+export type Theme = "evening" | "day";
 export type PayMethod = "cash" | "momo";
 
 export type Ticket = {
@@ -65,6 +66,7 @@ export type Toast = { id: string; text: string; tone: "ok" | "warn" | "info" };
 
 export type State = {
   screen: Screen;
+  theme: Theme;
   online: boolean;
   tourOpen: boolean;
   selectedTableId: string | null;
@@ -83,6 +85,7 @@ export type State = {
 
 export type Action =
   | { type: "screen"; screen: Screen }
+  | { type: "theme"; theme: Theme }
   | { type: "tour"; open: boolean }
   | { type: "selectTable"; tableId: string | null }
   | { type: "addLine"; itemId: string }
@@ -182,6 +185,7 @@ export function seed(now = Date.now()): State {
   ];
   return {
     screen: "till",
+    theme: "evening",
     online: true,
     tourOpen: true,
     selectedTableId: null,
@@ -206,6 +210,8 @@ export function reducer(s: State, a: Action): State {
   switch (a.type) {
     case "screen":
       return { ...s, screen: a.screen };
+    case "theme":
+      return { ...s, theme: a.theme };
     case "tour":
       return { ...s, tourOpen: a.open };
     case "selectTable":
@@ -313,7 +319,7 @@ export function reducer(s: State, a: Action): State {
       return withToast({ ...s, shift: { ...s.shift, closedAt: Date.now(), countedCents: a.countedCents }, selectedTableId: null }, "Shift closed and audited");
     case "newShift":
     case "reset":
-      return { ...seed(), tourOpen: s.tourOpen, screen: a.type === "newShift" ? "drawer" : "till" };
+      return { ...seed(), theme: s.theme, tourOpen: s.tourOpen, screen: a.type === "newShift" ? "drawer" : "till" };
     case "toast":
       return withToast(s, a.text, a.tone);
     case "dismissToast":
@@ -361,7 +367,7 @@ export function movements(s: State): Movement[] {
 
 /* ------------------------------------------------------------ context */
 
-const KEY = "lushview-demo-v1";
+export const KEY = "lushview-demo-v2";
 type Ctx = { state: State; dispatch: React.Dispatch<Action>; now: number };
 const DemoContext = createContext<Ctx | null>(null);
 
@@ -372,7 +378,7 @@ function restore(): State | null {
     const parsed = JSON.parse(raw) as Partial<State>;
     // Ignore saved shifts from an older shape of the demo.
     if (typeof parsed.firstUserNumber !== "number" || !Array.isArray(parsed.orders)) return null;
-    return { ...(parsed as State), toasts: [] };
+    return { ...(parsed as State), theme: parsed.theme === "day" ? "day" : "evening", toasts: [] };
   } catch {
     return null;
   }
