@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Concept B · Stage — Till</title>
+<link rel="icon" href="/assets/logo.svg" type="image/svg+xml" />
+<style>
+  :root {
+    --bg: #0a0d0c; --fg: #e9eeea; --fg-2: #9aa49f; --fg-3: #5f6a65; --line: rgba(255,255,255,.08); --line-2: rgba(255,255,255,.05);
+    --accent: #8cf0c6; --accent-ink: #062018;
+    --sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --serif: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Palatino, "Times New Roman", Georgia, serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.45 var(--sans); -webkit-font-smoothing: antialiased; font-variant-numeric: tabular-nums;
+    background-image: radial-gradient(1100px 520px at 72% -12%, rgba(140,240,198,.07), transparent 60%); }
+  a { color: inherit; text-decoration: none; }
+  .num { font-family: var(--serif); font-variant-numeric: lining-nums tabular-nums; }
+  .caps { font-size: 11px; letter-spacing: .2em; text-transform: uppercase; color: var(--fg-3); font-weight: 600; }
+
+  header { height: 64px; display: flex; align-items: center; justify-content: space-between; padding: 0 56px; border-bottom: 1px solid var(--line); }
+  .brand { font-family: var(--serif); font-style: italic; font-size: 21px; color: var(--fg); }
+  .brand small { font-family: var(--sans); font-style: normal; font-size: 11px; letter-spacing: .2em; text-transform: uppercase; color: var(--fg-3); margin-left: 12px; vertical-align: 3px; }
+  nav { display: flex; gap: 36px; font-size: 14px; color: var(--fg-2); }
+  nav a { display: flex; align-items: center; gap: 8px; }
+  nav a.on { color: var(--fg); }
+  nav a.on::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); }
+  nav sup { font-size: 10px; color: var(--accent); font-weight: 700; }
+  .status { display: flex; align-items: center; gap: 18px; font-size: 13px; color: var(--fg-2); }
+  .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); display: inline-block; margin-right: 8px; animation: pulse 2.4s infinite; }
+  @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(140,240,198,.4);} 70% { box-shadow: 0 0 0 8px rgba(140,240,198,0);} 100% { box-shadow: 0 0 0 0 rgba(140,240,198,0);} }
+
+  main { height: calc(100% - 64px); display: grid; grid-template-columns: 110px 1fr 380px; column-gap: 56px; padding: 40px 56px 36px; }
+  section { min-width: 0; animation: rise .8s cubic-bezier(.2,.7,.2,1) both; }
+  section:nth-child(2) { animation-delay: .1s; } section:nth-child(3) { animation-delay: .2s; }
+  @keyframes rise { from { opacity: 0; transform: translateY(12px);} to { opacity: 1; transform: none;} }
+
+  /* rail */
+  .rail ol { list-style: none; margin: 16px 0 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+  .rail li { display: flex; align-items: center; gap: 10px; height: 46px; color: var(--fg-3); }
+  .rail li .num { font-size: 30px; font-weight: 300; letter-spacing: -.01em; width: 54px; }
+  .rail li.busy { color: var(--fg-2); }
+  .rail li.busy::after { content: ""; width: 5px; height: 5px; border-radius: 50%; background: var(--fg-2); }
+  .rail li.on { color: var(--accent); }
+  .rail li.on .num { font-style: italic; font-size: 36px; }
+  .rail li.on::after { content: ""; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 12px var(--accent); }
+
+  /* menu */
+  .tabs { display: flex; gap: 30px; align-items: baseline; }
+  .tabs a { font-size: 11px; letter-spacing: .2em; text-transform: uppercase; color: var(--fg-3); font-weight: 600; padding-bottom: 6px; }
+  .tabs a.on { color: var(--accent); border-bottom: 1px solid var(--accent); }
+  .tabs .hint { margin-left: auto; font-size: 12px; color: var(--fg-3); }
+  .grid { margin-top: 22px; display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+  .tile { position: relative; aspect-ratio: 16 / 11; border-radius: 16px; overflow: hidden; cursor: pointer; background: #111; }
+  .tile img { width: 100%; height: 100%; object-fit: cover; display: block; filter: saturate(.9) brightness(.86); transition: transform 1.1s cubic-bezier(.2,.7,.2,1), filter .5s; }
+  .tile::after { content: ""; position: absolute; inset: 0; background: linear-gradient(to top, rgba(10,13,12,.86) 0%, rgba(10,13,12,.25) 40%, transparent 65%); }
+  .tile:hover img { transform: scale(1.04); filter: saturate(1) brightness(.95); }
+  .tile .cap { position: absolute; left: 20px; right: 20px; bottom: 16px; display: flex; justify-content: space-between; align-items: baseline; z-index: 1; }
+  .tile .cap span { font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--fg); font-weight: 600; }
+  .tile .cap .num { font-size: 26px; font-weight: 300; color: var(--fg); }
+  .tile .qty { position: absolute; top: 14px; right: 14px; z-index: 1; width: 26px; height: 26px; border-radius: 50%; background: var(--accent); color: var(--accent-ink); font-size: 12px; font-weight: 800; display: grid; place-items: center; }
+  .grid-more { grid-column: 1 / -1; display: flex; gap: 10px; align-items: center; color: var(--fg-3); font-size: 12px; margin-top: 4px; }
+  .grid-more i { flex: 1; height: 1px; background: var(--line); }
+
+  /* bill */
+  .bill { display: flex; flex-direction: column; padding-left: 48px; border-left: 1px solid var(--line); }
+  .bill h1 { margin: 0; font-family: var(--serif); font-style: italic; font-weight: 400; font-size: 44px; letter-spacing: -.02em; line-height: 1; }
+  .bill h1 em { font-style: normal; color: var(--fg-3); font-size: 20px; margin-left: 8px; }
+  .meta { color: var(--fg-3); font-size: 13px; margin-top: 10px; }
+  .lines { list-style: none; margin: 30px 0 0; padding: 0; }
+  .lines li { display: grid; grid-template-columns: 1fr auto; column-gap: 16px; align-items: baseline; padding: 12px 0; border-bottom: 1px solid var(--line-2); }
+  .lines li .n { font-size: 15px; color: var(--fg); }
+  .lines li .n b { color: var(--fg-3); font-weight: 400; margin-left: 8px; font-size: 13px; }
+  .lines li .n small { display: block; color: var(--fg-3); font-style: italic; font-family: var(--serif); font-size: 14px; margin-top: 2px; }
+  .lines li .p { font-size: 19px; color: var(--fg-2); font-weight: 300; }
+  .sums { margin-top: 18px; font-size: 13px; color: var(--fg-3); }
+  .sums div { display: flex; justify-content: space-between; padding: 4px 0; }
+  .total { margin-top: auto; }
+  .total .caps { display: block; }
+  .total .num { font-size: 108px; font-style: italic; font-weight: 300; line-height: .95; letter-spacing: -.04em; color: var(--accent); margin-top: 6px; }
+  .total .num small { font-family: var(--sans); font-size: 18px; font-style: normal; color: var(--fg-3); letter-spacing: 0; margin-right: 8px; vertical-align: 58px; font-weight: 400; }
+  .total .num b { font-weight: 300; opacity: .55; }
+  .cta { margin-top: 26px; display: flex; flex-direction: column; gap: 16px; }
+  .btn { height: 58px; border-radius: 999px; background: var(--accent); color: var(--accent-ink); display: flex; align-items: center; justify-content: space-between; padding: 0 26px; font-weight: 700; font-size: 15px; transition: transform .3s cubic-bezier(.2,.7,.2,1), box-shadow .3s; box-shadow: 0 18px 40px -22px rgba(140,240,198,.6); }
+  .btn:hover { transform: translateY(-1px); box-shadow: 0 24px 50px -22px rgba(140,240,198,.8); }
+  .btn span:last-child { font-family: var(--serif); font-weight: 400; font-size: 17px; opacity: .8; }
+  .link { color: var(--accent); font-weight: 600; font-size: 14px; display: flex; justify-content: space-between; align-items: center; padding: 0 4px; }
+  .link em { color: var(--fg-3); font-weight: 400; font-style: normal; }
+
+  .concept { position: fixed; left: 20px; bottom: 16px; display: flex; gap: 14px; align-items: center; font-size: 12px; color: var(--fg-3); background: rgba(10,13,12,.8); padding: 6px 10px; border-radius: 8px; backdrop-filter: blur(6px); }
+  .concept b { color: var(--fg); font-weight: 600; }
+  .concept a:hover { color: var(--accent); }
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">Lush View <small>Point of sale</small></div>
+  <nav>
+    <a class="on" href="#">Till</a>
+    <a href="#">Kitchen <sup>2</sup></a>
+    <a href="#">Drawer</a>
+  </nav>
+  <div class="status"><span>Shift 2 · Ama</span><span>19:42</span><span><i class="dot"></i>Online</span></div>
+</header>
+
+<main>
+  <section class="rail">
+    <span class="caps">Tables</span>
+    <ol>
+      <li><span class="num">01</span></li>
+      <li><span class="num">02</span></li>
+      <li class="busy"><span class="num">03</span></li>
+      <li><span class="num">04</span></li>
+      <li class="busy"><span class="num">05</span></li>
+      <li><span class="num">06</span></li>
+      <li class="on"><span class="num">07</span></li>
+      <li><span class="num">08</span></li>
+      <li><span class="num">Bar</span></li>
+      <li><span class="num">R12</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <div class="tabs">
+      <a class="on" href="#">Kitchen</a><a href="#">Grill</a><a href="#">Snacks</a><a href="#">Drinks</a>
+      <span class="hint">Tap to add · hold for a note</span>
+    </div>
+    <div class="grid">
+      <div class="tile"><img src="/assets/menu-images/jollof-rice-grilled-chicken.jpg" alt="" /><span class="qty">1</span><div class="cap"><span>Jollof &amp; Grilled Chicken</span><span class="num">65</span></div></div>
+      <div class="tile"><img src="/assets/menu-images/banku-grilled-tilapia.jpg" alt="" /><span class="qty">1</span><div class="cap"><span>Banku &amp; Grilled Tilapia</span><span class="num">80</span></div></div>
+      <div class="tile"><img src="/assets/menu-images/fufu-groundnut-soup.jpg" alt="" /><div class="cap"><span>Fufu &amp; Groundnut Soup</span><span class="num">60</span></div></div>
+      <div class="tile"><img src="/assets/menu-images/waakye.jpg" alt="" /><div class="cap"><span>Waakye</span><span class="num">45</span></div></div>
+      <div class="grid-more"><i></i><span>Kontomire · Kenkey &amp; Fried Fish · Red Red · Omo Tuo · Fried Rice — scroll</span><i></i></div>
+    </div>
+  </section>
+
+  <section class="bill">
+    <h1>Table 07 <em>#10430</em></h1>
+    <p class="meta">Terrace · 4 seats · opened 19:21 · dine‑in</p>
+    <ul class="lines">
+      <li><span class="n">Jollof Rice &amp; Grilled Chicken<small>extra pepper</small></span><span class="p num">65.00</span></li>
+      <li><span class="n">Banku &amp; Grilled Tilapia</span><span class="p num">80.00</span></li>
+      <li><span class="n">Sobolo <b>× 2</b></span><span class="p num">24.00</span></li>
+    </ul>
+    <div class="sums">
+      <div><span>Subtotal</span><span class="num">169.00</span></div>
+      <div><span>VAT 15 %</span><span class="num">25.35</span></div>
+    </div>
+    <div class="total">
+      <span class="caps">Total due</span>
+      <div class="num"><small>GH₵</small>194<b>.35</b></div>
+    </div>
+    <div class="cta">
+      <a class="btn" href="#"><span>Charge</span><span>Cash · MoMo</span></a>
+      <a class="link" href="#"><span>Send 2 dishes to the kitchen →</span><em>Sobolo stays at the bar</em></a>
+    </div>
+  </section>
+</main>
+
+<div class="concept"><b>Concept B · Stage</b><a href="/till-concepts/">← all concepts</a></div>
+</body>
+</html>

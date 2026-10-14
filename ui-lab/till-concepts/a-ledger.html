@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Concept A · Ledger — Till</title>
+<link rel="icon" href="/assets/logo.svg" type="image/svg+xml" />
+<style>
+  :root {
+    --paper: #f6f3ec; --ink: #16211c; --ink-2: #5b655f; --ink-3: #9aa29c; --line: #e3ddd0; --line-2: #ece7dc;
+    --accent: #0e6b4e; --accent-ink: #ffffff;
+    --sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --serif: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Palatino, "Times New Roman", Georgia, serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body { margin: 0; background: var(--paper); color: var(--ink); font: 15px/1.45 var(--sans); -webkit-font-smoothing: antialiased; font-variant-numeric: tabular-nums; }
+  a { color: inherit; text-decoration: none; }
+  .num { font-family: var(--serif); font-variant-numeric: lining-nums tabular-nums; }
+  .caps { font-size: 11px; letter-spacing: .18em; text-transform: uppercase; color: var(--ink-3); font-weight: 600; }
+
+  header { height: 64px; display: flex; align-items: center; justify-content: space-between; padding: 0 56px; border-bottom: 1px solid var(--line); }
+  .brand { font-family: var(--serif); font-style: italic; font-size: 21px; letter-spacing: -.01em; }
+  .brand small { font-family: var(--sans); font-style: normal; font-size: 11px; letter-spacing: .18em; text-transform: uppercase; color: var(--ink-3); margin-left: 12px; vertical-align: 3px; }
+  nav { display: flex; gap: 36px; font-size: 14px; color: var(--ink-2); }
+  nav a { padding: 22px 0; position: relative; }
+  nav a.on { color: var(--ink); }
+  nav a.on::after { content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 1px; background: var(--ink); }
+  nav sup { font-size: 10px; color: var(--accent); margin-left: 4px; font-weight: 700; }
+  .status { display: flex; align-items: center; gap: 18px; font-size: 13px; color: var(--ink-2); }
+  .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); display: inline-block; margin-right: 8px; box-shadow: 0 0 0 0 rgba(14,107,78,.35); animation: pulse 2.4s infinite; }
+  @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(14,107,78,.35);} 70% { box-shadow: 0 0 0 8px rgba(14,107,78,0);} 100% { box-shadow: 0 0 0 0 rgba(14,107,78,0);} }
+
+  main { height: calc(100% - 64px); display: grid; grid-template-columns: 180px 1fr 380px; column-gap: 64px; padding: 36px 56px 32px; }
+  section { min-width: 0; animation: rise .7s cubic-bezier(.2,.7,.2,1) both; }
+  section:nth-child(2) { animation-delay: .08s; } section:nth-child(3) { animation-delay: .16s; }
+  @keyframes rise { from { opacity: 0; transform: translateY(10px);} to { opacity: 1; transform: none;} }
+
+  /* tables rail */
+  .tables ol { list-style: none; margin: 18px 0 0; padding: 0; }
+  .tables li { display: flex; justify-content: space-between; align-items: baseline; padding: 9px 0 8px; border-bottom: 1px solid var(--line-2); color: var(--ink-3); }
+  .tables li .num { font-size: 26px; font-weight: 300; color: var(--ink-2); letter-spacing: -.01em; }
+  .tables li.busy .num { color: var(--ink); }
+  .tables li.on { color: var(--accent); }
+  .tables li.on .num { color: var(--accent); font-style: italic; }
+  .tables li small { font-size: 12px; }
+  .tables li.on small { font-weight: 600; }
+
+  /* menu */
+  .tabs { display: flex; gap: 28px; border-bottom: 1px solid var(--line); }
+  .tabs a { padding: 0 0 14px; font-size: 11px; letter-spacing: .18em; text-transform: uppercase; color: var(--ink-3); font-weight: 600; position: relative; }
+  .tabs a.on { color: var(--ink); }
+  .tabs a.on::after { content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 1px; background: var(--ink); }
+  .menu { display: grid; grid-template-columns: 1fr 1fr; column-gap: 56px; margin-top: 8px; }
+  .item { display: grid; grid-template-columns: 48px 1fr auto; align-items: center; gap: 16px; height: 74px; border-bottom: 1px solid var(--line-2); cursor: pointer; }
+  .item img { width: 48px; height: 48px; border-radius: 10px; object-fit: cover; display: block; filter: saturate(.92); }
+  .item .name { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+  .item .name span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .item .name i { flex: 1; border-bottom: 1px dotted #cfc8ba; transform: translateY(-4px); min-width: 16px; }
+  .item .price { font-size: 21px; font-weight: 400; color: var(--ink-2); transition: color .2s; }
+  .item:hover .price { color: var(--accent); }
+  .item .qty { width: 22px; height: 22px; border-radius: 50%; background: var(--accent); color: #fff; font-size: 11px; font-weight: 700; display: grid; place-items: center; margin-left: 10px; font-family: var(--sans); }
+  .more { margin-top: 18px; font-size: 13px; color: var(--ink-3); }
+
+  /* bill */
+  .bill { display: flex; flex-direction: column; border-left: 1px solid var(--line); padding-left: 48px; }
+  .bill h1 { margin: 0; font-family: var(--serif); font-style: italic; font-weight: 400; font-size: 40px; letter-spacing: -.02em; line-height: 1; }
+  .bill h1 em { font-style: normal; color: var(--ink-3); font-size: 22px; margin-left: 8px; }
+  .meta { color: var(--ink-3); font-size: 13px; margin-top: 10px; }
+  .lines { list-style: none; margin: 30px 0 0; padding: 0; }
+  .lines li { display: grid; grid-template-columns: 26px 1fr auto; column-gap: 12px; align-items: baseline; padding: 11px 0; border-bottom: 1px solid var(--line-2); }
+  .lines li .q { color: var(--ink-3); font-size: 13px; }
+  .lines li .n { font-size: 15px; }
+  .lines li .n small { display: block; color: var(--ink-3); font-style: italic; font-family: var(--serif); font-size: 14px; margin-top: 2px; }
+  .lines li .p { font-size: 18px; color: var(--ink-2); }
+  .sums { margin-top: 18px; font-size: 13px; color: var(--ink-2); }
+  .sums div { display: flex; justify-content: space-between; padding: 4px 0; }
+  .total { margin-top: auto; padding-top: 12px; }
+  .total .caps { display: block; margin-bottom: 2px; }
+  .total .num { font-size: 92px; font-style: italic; font-weight: 400; line-height: 1; letter-spacing: -.035em; color: var(--ink); }
+  .total .num small { font-size: 22px; font-style: normal; color: var(--ink-3); letter-spacing: 0; margin-right: 6px; font-family: var(--sans); font-weight: 400; vertical-align: 46px; }
+  .total .num b { font-weight: 400; color: var(--ink-3); }
+  .cta { margin-top: 26px; display: flex; flex-direction: column; gap: 14px; }
+  .btn { height: 56px; border-radius: 999px; background: var(--accent); color: var(--accent-ink); display: flex; align-items: center; justify-content: space-between; padding: 0 26px; font-weight: 600; font-size: 15px; transition: transform .25s cubic-bezier(.2,.7,.2,1), background .2s; }
+  .btn:hover { transform: translateY(-1px); background: #0b5a42; }
+  .btn span:last-child { font-family: var(--serif); font-size: 17px; font-weight: 400; }
+  .link { color: var(--accent); font-weight: 600; font-size: 14px; display: flex; justify-content: space-between; align-items: center; padding: 0 4px; }
+  .link em { color: var(--ink-3); font-weight: 400; font-style: normal; }
+  .link:hover { text-decoration: underline; text-underline-offset: 4px; }
+
+  .concept { position: fixed; left: 20px; bottom: 16px; display: flex; gap: 14px; align-items: center; font-size: 12px; color: var(--ink-3); background: rgba(246,243,236,.9); padding: 6px 10px; border-radius: 8px; backdrop-filter: blur(6px); }
+  .concept b { color: var(--ink); font-weight: 600; }
+  .concept a:hover { color: var(--accent); }
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">Lush View <small>Point of sale</small></div>
+  <nav>
+    <a class="on" href="#">Till</a>
+    <a href="#">Kitchen<sup>2</sup></a>
+    <a href="#">Drawer</a>
+  </nav>
+  <div class="status"><span>Shift 2 · Ama</span><span>19:42</span><span><i class="dot"></i>Online</span></div>
+</header>
+
+<main>
+  <section class="tables">
+    <span class="caps">Tables</span>
+    <ol>
+      <li><span class="num">01</span><small>2 seats</small></li>
+      <li><span class="num">02</span><small>2 seats</small></li>
+      <li class="busy"><span class="num">03</span><small>246.10</small></li>
+      <li><span class="num">04</span><small>4 seats</small></li>
+      <li class="busy"><span class="num">05</span><small>97.75</small></li>
+      <li><span class="num">06</span><small>4 seats</small></li>
+      <li class="on"><span class="num">07</span><small>In progress</small></li>
+      <li><span class="num">08</span><small>8 seats</small></li>
+      <li><span class="num">Bar</span><small>6 seats</small></li>
+      <li><span class="num">R12</span><small>Room</small></li>
+      <li><span class="num">T/A</span><small>Takeaway</small></li>
+    </ol>
+  </section>
+
+  <section>
+    <div class="tabs">
+      <a class="on" href="#">Kitchen</a><a href="#">Grill</a><a href="#">Snacks</a><a href="#">Drinks</a>
+    </div>
+    <div class="menu">
+      <div class="item"><img src="/assets/menu-images/waakye.jpg" alt="" /><div class="name"><span>Waakye</span><i></i></div><span class="price num">45</span></div>
+      <div class="item"><img src="/assets/menu-images/kenkey-fried-fish.jpg" alt="" /><div class="name"><span>Kenkey &amp; Fried Fish</span><i></i></div><span class="price num">45</span></div>
+      <div class="item"><img src="/assets/menu-images/jollof-rice-grilled-chicken.jpg" alt="" /><div class="name"><span>Jollof Rice &amp; Grilled Chicken</span><i></i></div><span class="price num">65<span class="qty">1</span></span></div>
+      <div class="item"><img src="/assets/menu-images/red-red.jpg" alt="" /><div class="name"><span>Red Red with Fried Plantain</span><i></i></div><span class="price num">40</span></div>
+      <div class="item"><img src="/assets/menu-images/banku-grilled-tilapia.jpg" alt="" /><div class="name"><span>Banku &amp; Grilled Tilapia</span><i></i></div><span class="price num">80<span class="qty">1</span></span></div>
+      <div class="item"><img src="/assets/menu-images/omo-tuo.jpg" alt="" /><div class="name"><span>Omo Tuo with Soup</span><i></i></div><span class="price num">55</span></div>
+      <div class="item"><img src="/assets/menu-images/fufu-groundnut-soup.jpg" alt="" /><div class="name"><span>Fufu &amp; Groundnut Soup</span><i></i></div><span class="price num">60</span></div>
+      <div class="item"><img src="/assets/menu-images/fried-rice-grilled-chicken.jpg" alt="" /><div class="name"><span>Fried Rice &amp; Grilled Chicken</span><i></i></div><span class="price num">65</span></div>
+      <div class="item"><img src="/assets/menu-images/kontomire.jpg" alt="" /><div class="name"><span>Kontomire (Palava Sauce)</span><i></i></div><span class="price num">50</span></div>
+    </div>
+    <p class="more">Tap a dish to add it · hold for a kitchen note</p>
+  </section>
+
+  <section class="bill">
+    <h1>Table 07 <em>#10430</em></h1>
+    <p class="meta">Terrace · 4 seats · opened 19:21 · dine‑in</p>
+    <ul class="lines">
+      <li><span class="q">1×</span><span class="n">Jollof Rice &amp; Grilled Chicken<small>extra pepper</small></span><span class="p num">65.00</span></li>
+      <li><span class="q">1×</span><span class="n">Banku &amp; Grilled Tilapia</span><span class="p num">80.00</span></li>
+      <li><span class="q">2×</span><span class="n">Sobolo</span><span class="p num">24.00</span></li>
+    </ul>
+    <div class="sums">
+      <div><span>Subtotal</span><span class="num">169.00</span></div>
+      <div><span>VAT 15 %</span><span class="num">25.35</span></div>
+    </div>
+    <div class="total">
+      <span class="caps">Total due</span>
+      <div class="num"><small>GH₵</small>194<b>.35</b></div>
+    </div>
+    <div class="cta">
+      <a class="btn" href="#"><span>Charge</span><span>Cash · MoMo</span></a>
+      <a class="link" href="#"><span>Send 2 dishes to the kitchen →</span><em>Sobolo stays at the bar</em></a>
+    </div>
+  </section>
+</main>
+
+<div class="concept"><b>Concept A · Ledger</b><a href="/till-concepts/">← all concepts</a></div>
+</body>
+</html>
