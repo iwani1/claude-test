@@ -8,7 +8,7 @@ The original `11claude.zip` is kept on the owner's machine only and is not in Gi
 - [One-branch pilot and sign-off checklist](docs/PILOT_RUNBOOK.md)
 - [Development dependency advisory review](docs/DEPENDENCY_REVIEW.md)
 - [UI Lab: four hero-section styles with their prompts](ui-lab/README.md) — `npm run ui:lab`, static HTML prototypes
-- [Marketing site: four complete landing pages in React/Tailwind/Motion](marketing/README.md) — `cd marketing && npm run dev`, separate app
+- [Marketing site: four complete landing pages in React/Tailwind/Motion, plus a live in-browser product demo at `/demo/`](marketing/README.md) — `cd marketing && npm run dev`, separate app
 
 ```sh
 npm ci

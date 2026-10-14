@@ -164,7 +164,7 @@ export function AuroraHero() {
                 <span>{ghs(order.subtotal)}</span>
               </div>
               <div className="tabular flex justify-between py-0.5">
-                <span>VAT &amp; levies</span>
+                <span>VAT 15%</span>
                 <span>{ghs(order.tax)}</span>
               </div>
               <div className="tabular flex justify-between pt-2 text-base font-bold text-white">

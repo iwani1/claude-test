@@ -172,8 +172,8 @@ export const order = {
     { ...dishes.sobolo, note: "1 × · chilled" },
   ],
   subtotal: 157,
-  tax: 33,
-  total: 190,
+  tax: 23.55,
+  total: 180.55,
   tender: "MoMo",
 } as const;
 
@@ -202,8 +202,8 @@ export const receipt = {
     { qty: 3, name: "Sobolo", amount: 36 },
   ],
   subtotal: 221,
-  tax: 46.41,
-  total: 267.41,
+  tax: 33.15,
+  total: 254.15,
   tender: "MoMo (MTN) · ****4471",
   footer: "Thank you for visiting Lush View Hotel",
 } as const;

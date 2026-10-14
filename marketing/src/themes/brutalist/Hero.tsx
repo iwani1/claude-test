@@ -128,7 +128,7 @@ export function BrutalistHero() {
               <span>{fmt(receipt.subtotal)}</span>
             </div>
             <div className="flex justify-between">
-              <span>VAT &amp; levies</span>
+              <span>VAT 15%</span>
               <span>{fmt(receipt.tax)}</span>
             </div>
             <div className="flex justify-between text-[1.05rem] font-extrabold">

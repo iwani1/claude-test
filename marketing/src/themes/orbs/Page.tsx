@@ -152,7 +152,7 @@ export function OrbsPage() {
             <a href="#pricing" className="inline-flex items-center gap-2 rounded-full bg-emerald-400 px-6 py-3.5 font-semibold text-emerald-950 shadow-[0_10px_30px_-10px_rgba(52,211,153,.8)] hover:bg-emerald-300">
               {cta.primary} <ArrowRight size={16} aria-hidden="true" />
             </a>
-            <a href="#how" className={`inline-flex items-center rounded-full border ${LINE} bg-white/5 px-6 py-3.5 font-semibold backdrop-blur hover:bg-white/10`}>
+            <a href="/demo/" className={`inline-flex items-center rounded-full border ${LINE} bg-white/5 px-6 py-3.5 font-semibold backdrop-blur hover:bg-white/10`}>
               {cta.secondary}
             </a>
           </div>

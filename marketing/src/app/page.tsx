@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import { ArrowUpRight } from "lucide-react";
+import { ArrowUpRight, Play } from "lucide-react";
 import { brand, themes } from "@/content/site";
 import { Reveal } from "@/components/shared/Reveal";
 
@@ -90,8 +90,14 @@ export default function Gallery() {
             <kbd className="rounded border border-zinc-700 px-1 font-mono text-xs">4</kbd> to jump between them.
           </p>
         </div>
-        <div className="text-sm text-zinc-500">
-          Static export · no webfonts · no third-party scripts
+        <div className="flex flex-col items-start gap-3 sm:items-end">
+          <Link
+            href="/demo/"
+            className="inline-flex items-center gap-2 rounded-full bg-emerald-400 px-5 py-2.5 text-sm font-semibold text-emerald-950 shadow-[0_10px_30px_-10px_rgba(52,211,153,.8)] transition-colors hover:bg-emerald-300"
+          >
+            <Play size={14} fill="currentColor" aria-hidden="true" /> Live product demo (Orbs UI)
+          </Link>
+          <span className="text-sm text-zinc-500">Static export · no webfonts · no third-party scripts</span>
         </div>
       </Reveal>
 
@@ -131,7 +137,11 @@ export default function Gallery() {
       </div>
 
       <p className="mt-10 text-xs text-zinc-500">
-        Static HTML prototypes of the four heroes, with the prompts that reproduce them, live in <code className="font-mono">ui-lab/</code>.
+        Static HTML prototypes of the four heroes, with the prompts that reproduce them, live in <code className="font-mono">ui-lab/</code>. The{" "}
+        <Link href="/demo/" className="text-emerald-400 underline-offset-2 hover:underline">
+          live demo
+        </Link>{" "}
+        is a simulated shift in the Orbs look — till, kitchen pass and cash drawer, with the real app&apos;s billing rules and no backend.
       </p>
     </main>
   );

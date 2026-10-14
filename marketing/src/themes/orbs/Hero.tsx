@@ -93,7 +93,7 @@ export function OrbsHero() {
             </a>
           ))}
         </div>
-        <a href="#pricing" className="rounded-full border border-emerald-50/10 bg-white/5 px-4 py-2 text-sm font-semibold backdrop-blur-md hover:bg-white/10">
+        <a href="/demo/" className="rounded-full border border-emerald-50/10 bg-white/5 px-4 py-2 text-sm font-semibold backdrop-blur-md hover:bg-white/10">
           {cta.nav}
         </a>
       </Reveal>
@@ -122,8 +122,8 @@ export function OrbsHero() {
           <a href="#pricing" className="inline-flex items-center rounded-full bg-emerald-400 px-5.5 py-3.5 text-[.95rem] font-semibold text-emerald-950 shadow-[0_10px_30px_-10px_rgba(52,211,153,.8)] transition-all hover:-translate-y-px hover:bg-emerald-300 hover:shadow-[0_16px_40px_-10px_rgba(52,211,153,.9)]">
             {cta.primary}
           </a>
-          <a href="#how" className="inline-flex items-center gap-2 rounded-full border border-emerald-50/10 bg-white/5 px-5.5 py-3.5 text-[.95rem] font-semibold backdrop-blur-md transition-colors hover:border-white/25 hover:bg-white/10">
-            Watch a ticket go through <Play size={14} fill="currentColor" aria-hidden="true" />
+          <a href="/demo/" className="inline-flex items-center gap-2 rounded-full border border-emerald-50/10 bg-white/5 px-5.5 py-3.5 text-[.95rem] font-semibold backdrop-blur-md transition-colors hover:border-white/25 hover:bg-white/10">
+            Try the live demo <Play size={14} fill="currentColor" aria-hidden="true" />
           </a>
         </Reveal>
       </div>

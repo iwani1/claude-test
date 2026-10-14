@@ -14,7 +14,7 @@ export const viewport: Viewport = { width: "device-width", initialScale: 1, view
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" className="h-full">
+    <html lang="en" className="h-full" data-scroll-behavior="smooth">
       <body className="min-h-full bg-zinc-950 font-sans text-zinc-50">{children}</body>
     </html>
   );
