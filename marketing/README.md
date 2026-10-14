@@ -20,7 +20,7 @@ npm run typecheck
 | `/grid/` | **02 Grid & Shimmer** — light · bento | Magic UI | animated grid cells, shiny text, blur-in headline, shimmer CTA, double marquee, number ticker, border beam |
 | `/orbs/` | **03 Orbs** — dark · canvas · on-brand | React Bits | particle constellation with pointer repulsion, drifting orbs, film grain, split-text headline, 3D tilt KDS ticket |
 | `/brutalist/` | **04 Brutalist** — paper · ink | Promter | ticker band, 3px borders, hard shadows that press in, monospace receipt with torn edge, wobbling sticker |
-| `/demo/` | **Live product demo** — Stage × Gallery look, Day / Evening | the POS itself | the whole system simulated in the browser: sign-in & roles, till, floor, kitchen, orders & refunds, drawer, menu, recipes, stock, purchasing, reports, audit, staff, settings, hardware — guided by a 13-step tour |
+| `/demo/` | **Live product demo** — *Sunbird*: cream & ink, sunflower / forest / terracotta / cobalt colour blocks, Sora + Inter | the POS itself | the whole system simulated in the browser: sign-in & roles, Today, Till, Floor, Kitchen, Orders & refunds, Drawer, Menu, Recipes & costing, Ingredients, Purchasing, Reports (CSV), Audit trail, Staff & roles, Settings, Hardware & tenders — with a guided tour |
 
 **Demo controls (any page):** keys `1`–`4` jump between directions, `←` `→` cycle, `Esc` returns to the gallery; the floating pill at the bottom does the same with a mouse.
 
@@ -30,78 +30,81 @@ An interactive, client-side simulation of the **whole product** — no backend, 
 linked from the Orbs page ("Open the till", "Try the live demo", "See how a shift runs") and from the
 gallery. `npm run demo` serves it on :3200 with `/` redirecting straight to it.
 
-**Look.** A premium-minimal mix of the two till concepts in `../ui-lab/till-concepts/` (B *Stage* +
-C *Gallery*): no panels or cards, hairlines instead of boxes, system serif numerals, photography, one
-accent colour, one pill button per screen and text links for everything secondary. Two themes expressed
-purely as CSS tokens — **Evening** (near-black, mint) and **Day** (white, burnt amber) — toggled with
-the sun/moon in the header or the `T` key; the layout never changes.
+**Look — "Sunbird".** The warm, brand-forward concept from `../ui-lab/till-v2/3-sunbird.html`, carried
+through every module: cream canvas, ink panels, four brand colours (sunflower, forest, terracotta,
+cobalt) used as *colour blocks* rather than accents, a kente-stripe band under the header, Sora for
+display type and Inter for everything else, 2px borders and big radii. Service modules sit in the
+header; the **Back office** button (or `B`) opens a full-screen launcher of colour tiles grouped Stock ·
+Money · Setup. The design system is one file, `src/demo/sunbird.css`; layout uses Tailwind utilities.
+Fonts are self-hosted via `@fontsource-variable/{sora,inter}` so the export works offline.
 
-**Sign in.** The demo opens on a PIN screen. Pick a person; the role decides which areas the header
-shows (the same matrix as `src/lib/permissions.ts`):
+**Sign in.** Pick a person, type the PIN (keyboard works). The role decides which modules exist for
+that person — the same matrix as `src/lib/permissions.ts`:
 
 | Person | Role | PIN | Sees |
 | --- | --- | --- | --- |
 | Kofi Mensah | Owner | `1111` | everything |
-| Efua Boateng | Manager | `2222` | everything except Settings / Hardware |
-| Ama Owusu · Yaw Darko | Cashiers | `3333` · `3434` | Till · Floor · Kitchen · Orders · Drawer |
-| Adwoa Nkrumah | Inventory | `4444` | Today · Menu · Recipes · Ingredients · Purchasing · Reports |
+| Efua Asante | Manager | `2222` | everything except Settings |
+| Ama Owusu · Yaw Boateng | Cashiers | `3333` · `3434` | Today · Till · Floor · Kitchen · Orders · Drawer |
+| Adwoa Darko | Inventory | `4444` | Today · Menu · Recipes · Ingredients · Purchasing · Reports |
 | Kojo Appiah | Accountant | `5555` | Today · Orders · Drawer · Reports · Audit |
-| Kwame Asante | Cook | — | no terminal login (greyed out) |
+| Kwame Tetteh | Cook | `6666` | Kitchen only |
 
-"Skip the PIN" is there for impatient visitors; a physical keyboard types the PIN too.
+**Modules.**
 
-**Areas** (header → second row):
+- **Today** — greeting, four colour-block stats (sales, open tables, pass, drawer), sales by hour,
+  a "Needs a decision" list that deep-links (late tickets, unsent items, stock below par, no drawer,
+  86'd dishes), top dishes, open tables, back-office shortcuts.
+- **Till** — category colour blocks, table strip, photo tiles framed in their category colour, the
+  bill as an ink panel; hover/tap a line for ± steppers, notes with presets, discounts with a reason,
+  guests, move table, print bill, void (managers). **Charge** → pay sheet with Cash keypad and change
+  due, MoMo by network (MTN / Telecel / AirtelTigo), Split, GhQR → receipt. Unsent items are sent
+  automatically on charge; cashiers cannot remove a sent line (managers can — logged as a void).
+- **Floor** — tables by zone (Floor, Bar, Rooms, Takeaway): yellow open with total and minutes,
+  dashed blue reserved, stripes to clear. Seat with a guest count, reserve, cancel, clear, open in Till.
+- **Kitchen** — ink screen, New → Cooking → Ready columns, live mm:ss timers, yellow at 8 min and red
+  at 15 (configurable), station filter, all-day counts. Bumping marks the bill lines served.
+- **Orders** — every order with filters and search; detail panel with lines, totals, payments and a
+  timeline; reprint; **refund** by item or whole order (VAT share included) — a cashier is asked for a
+  manager PIN; void open orders (managers).
+- **Drawer** — expected cash = float + cash sales − payouts − cash refunds, event ledger with running
+  balance, pay in / pay out with reasons, **count by denomination** → variance → Z summary; sessions
+  history; open a new drawer with a float.
+- **Menu** — dish cards with margin badges, availability switches (86'd greys the Till tile), edit
+  prices (logged), add dishes with a photo.
+- **Recipes & costing** — ingredient lines per dish, plated cost, gross margin vs a 65 % target,
+  what-if pricing. Sales deduct stock through these recipes on payment.
+- **Ingredients** — on hand vs par with status bars, used today, value; waste / recount / receive
+  adjustments with reasons.
+- **Purchasing** — suppliers with low-stock counts; POs Draft → Sent → Received (GRN, stock goes up by
+  what you count) → Invoiced (variance flagged); new PO pre-filled from items below par.
+- **Reports** — Today / 7 days / 30 days; gross, net, VAT, value forgone; by hour or day, tender
+  breakdown with MoMo networks, categories, top dishes, staff; **CSV export** (real download).
+- **Audit trail** — Timestamp · User · Action · Entity · Details, filters by person and action,
+  search, CSV. Every sale, refund, void, discount, price change, stock move, PO step and sign-in lands here.
+- **Staff & roles** — people with role badges and last sign-in, add / edit (unique 4-digit PIN,
+  deactivate), the permissions matrix.
+- **Settings** (owner) — business and GRA TIN, VAT % and room-service charge with a worked example,
+  receipt text, KDS thresholds, reset.
+- **Hardware & tenders** — ESC/POS printer (IP:9100, test print, offline simulation), drawer kick,
+  kitchen screens, tender switches that change the Till's pay sheet immediately.
+- **Tour** — avatar menu → "Take the tour": 14 steps that walk the modules.
 
-- **Today** — the owner's morning page: gross sales, cash in drawer, food cost of what sold, stock
-  value, kitchen pass time; a "Needs a look" list that deep-links to the problem (late tickets,
-  unsent items, low stock, overdue deliveries, 86'd dishes, offline queue); takings by hour, tenders,
-  categories, open tables, best sellers, recent audit events.
-- **Service** — **Till** (table strip, dish film-strip, hairline bill, Extras: discount / tip /
-  complimentary with manager PIN / guest name; Charge → cash, MoMo prompt, split, GhQR; VAT receipt),
-  **Floor** (tables by zone with running totals and minutes, seat / reserve / clear / move a party /
-  add a table), **Kitchen** (New → Cooking → Ready, 8 / 15-minute thresholds), **Orders** (history,
-  search, reprint, **refund** with reason — a cashier needs a manager's PIN).
-- **Stock** — **Menu** (availability switches that grey the dish on every till, prices, recipe cost
-  and food-cost %, add / edit dishes), **Recipes & costing** (per-portion ingredients, unit cost,
-  food cost % vs the 28–35 % band, gross margin; sales auto-deduct stock), **Ingredients** (stock on
-  hand valued, low-stock list, waste / correction / direct-delivery adjustments with a reason, cycle
-  count with variance valuation, the movement ledger), **Purchasing** (purchase orders, "fill from low
-  stock", goods receipt against a supplier invoice with short-delivery handling, suppliers).
-- **Money** — **Drawer** (float, sales, payouts, refunds, expected vs counted, close shift / start a
-  new one — history is kept, the shift window moves), **Reports** (gross / net / VAT / value forgone /
-  tips, takings by hour, tender and category splits, best sellers, by cashier, kitchen pass time;
-  **real CSV downloads** — sales export and a QuickBooks / Xero journal), **Audit trail**
-  (append-only: Timestamp · User · Action · Entity · Details, filter, search, export).
-- **Setup** — **Staff & roles** (team list, activate / deactivate, add people with a unique PIN, the
-  permission matrix), **Settings** (name, GRA TIN, VAT %, service charge, room-service charge,
-  complimentary breakfast, MoMo merchant, receipt header / footer — with a live receipt preview),
-  **Hardware & tenders** (ESC/POS printer IP:9100 or browser print, kitchen printer, which tenders the
-  pay sheet offers, accounting export target, the Online / Offline switch).
-- **Online / Offline** in the header: cash sales queue as "taken offline" and sync when you flip back;
-  MoMo prompts are refused without a network.
-- **Guide** ("Run the whole system", a right-hand aside on wide screens) is a 13-step tour in three
-  chapters — *Front of house* (sign in, order, send, pass, MoMo, offline sale), *Back office* (receive
-  PO-0417, 86 a dish, refund, change settings, export CSV) and *End of day* (close the shift, hand over
-  to a cashier). Steps tick themselves from real state and "Take me there" navigates — or signs you out
-  with a hint when the step needs a different role.
-- Keys: `1` `2` `3` jump to Till / Kitchen / Drawer, `G` toggles the guide, `O` toggles offline, `T`
-  flips Day / Evening. Everything is kept in `sessionStorage`; **Reset** starts a fresh day.
+Keys: `1`–`6` service modules, `B` back office, `/` search on the Till, `Esc` closes sheets. State is
+kept in `localStorage` (`lushview-sunbird-v1`); **Reset demo data** (avatar menu or Settings) restores
+the opening state: 12 paid orders, a partial refund, a payout, three open tables with kitchen tickets
+at different ages, a reservation, a table to clear, three purchase orders at different stages.
 
-The maths mirrors the POS: integer pesewas, VAT 15 % on goods plus the GH₵ 30 room-service charge
-(`src/lib/pricing-core.ts`), recipe deduction aggregated per ingredient on send / pay
-(`src/lib/inventory-deduction.ts`), expected cash = float + cash − payouts − cash refunds. Kitchen status
-names, the GH₵ 1,200 opening float, PO / GRN / cycle-count vocabulary and the audit wording follow the
-real screens. The seed is a branch mid-shift: 12 paid bills, a refund, a payout, two open tables, a
-received and an outstanding purchase order, a waste entry — so no screen is empty on first visit.
+The maths mirrors the POS: integer pesewas, VAT 15 % on goods after discounts plus the GH₵ 30
+room-service charge, recipe deduction aggregated per ingredient on payment, expected cash = float +
+cash − payouts − cash refunds.
 
-Code lives in `src/demo/`: `data.ts` (menu, tables, staff, ingredients, recipes, suppliers, settings,
-hardware), `pricing.ts`, `store.tsx` (the whole state machine — one reducer, every action logged to the
-audit trail; `seed()` replays real actions to build the opening state), `ui.tsx` (hairline / serif
-primitives: `Money`, `Pill`, `TextLink`, `Caps`, `Modal`, `PageHead`, `Rows`, `Figure`, `Bars`, `Split`,
-`Switch`, `PinPad`), `screens/*.tsx` (one file per area), `Tour.tsx` and `DemoShell.tsx` (header, groups,
-permissions, keyboard). The colour tokens are the `.demo` / `.demo[data-theme="day"]` blocks at the end
-of `src/app/globals.css`. The route renders client-side only (`ssr: false`) because the saved day is read
-from `sessionStorage` on first paint.
+Code lives in `src/demo/`: `data.ts` (types + seed), `money.ts` (pesewa maths, time, CSV), `store.tsx`
+(state, every action, audit logging, persistence), `ui.tsx` (primitives: `Money`, `Badge`, `Stat`,
+`Card`, `Field`, `Toggle`, `Seg`, `Stepper`, `Modal`, `Keypad`, `PinPad`), `Shell.tsx` (header, nav,
+launcher, user menu, toast), `Tour.tsx`, `screens/*.tsx` (one file per module, `Office.tsx` is the
+back-office page header), `sunbird.css` (the design system). The route renders client-side only
+(`ssr: false`) because the saved state is read from `localStorage` on first paint.
 
 ## Where things live
 
@@ -109,13 +112,12 @@ from `sessionStorage` on first paint.
 marketing/
 ├── src/content/site.ts        ← ALL copy, dishes, order/ticket/receipt mock data, pricing, FAQ, theme list
 ├── src/app/                   routes: / (gallery) · /aurora · /grid · /orbs · /brutalist · /demo
-├── src/demo/                  the live demo: data.ts (menu, tables, staff, stock, suppliers, settings) · pricing.ts · store.tsx ·
-│                              ui.tsx (hairline / serif primitives) · screens/ (16 areas) · Tour.tsx · DemoShell.tsx
+├── src/demo/                  the live demo (Sunbird): data.ts · money.ts · store.tsx · ui.tsx · Shell.tsx · Tour.tsx ·
+│                              screens/ (16 modules) · sunbird.css (the design system)
 ├── src/themes/<id>/Hero.tsx   the hero for that direction
 ├── src/themes/<id>/Page.tsx   the full page: features · how · pricing · FAQ · CTA · footer · switcher
 ├── src/components/shared/     Reveal, SplitText, Marquee, NumberTicker, Faq, Particles, ThemeSwitcher, Icon
-├── src/app/globals.css        Tailwind theme tokens, keyframes, custom utilities (conic-sweep, border-beam, press, torn…),
-│                              the demo's Evening / Day colour tokens (.demo blocks)
+├── src/app/globals.css        Tailwind theme tokens, keyframes, custom utilities (conic-sweep, border-beam, press, torn…)
 └── public/dishes/             720×480 copies of all 17 POS menu photos (the originals stay in ../public/menu-images)
 ```
 
@@ -125,8 +127,9 @@ marketing/
   worker and a body that never scrolls — the wrong host for a marketing page. This folder has its own
   `package.json`, builds to static files, and shares nothing with the POS runtime. The root `tsconfig`
   and ESLint config exclude it so the POS's CI stays scoped.
-- **No webfonts, no third-party scripts.** System font stacks only (Inter where installed); every
-  animation is CSS or Motion. The export is ~2 MB including photos.
+- **No webfonts, no third-party scripts.** The landing pages use system font stacks only (Inter where
+  installed); the demo self-hosts Sora and Inter from npm (`@fontsource-variable`), so nothing is fetched
+  from a third party at runtime; every animation is CSS or Motion. The export is ~2 MB including photos.
 - **Pricing is number-free** (`Free` / `One-time` / `Talk to us`) until the commercial model is decided.
   Change `pricing` in `site.ts` — nothing else.
 - **Accessibility:** every decorative layer is `aria-hidden`; mock-ups carry `role="img"` labels; the FAQ
@@ -139,5 +142,5 @@ marketing/
 When a direction is chosen: delete the other three `src/themes/*` folders and their routes, move the
 winner's `Page` to `src/app/page.tsx`, drop `ThemeSwitcher`, and point the real CTAs at a form or
 WhatsApp link. Everything else stays. The live demo has its own look (see above) and is independent
-of the landing-page direction; to recolour it, edit the `.demo` token blocks in `src/app/globals.css` —
+of the landing-page direction; to recolour it, edit the tokens at the top of `src/demo/sunbird.css` —
 every demo component reads those variables and nothing else.

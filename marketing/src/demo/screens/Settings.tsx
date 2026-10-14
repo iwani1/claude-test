@@ -1,127 +1,78 @@
 "use client";
 
+import { RotateCcw, Save } from "lucide-react";
 import { useState } from "react";
-import { type Settings as SettingsT } from "../data";
-import { ghs, toCents } from "../pricing";
-import { useDemo } from "../store";
-import { Caps, Field, inputCls, K, Money, Num, PageHead, Pill, Switch, TextLink } from "../ui";
-import { Receipt } from "./Till";
+import type { Settings as SettingsT } from "../data";
+import { cedi, num, parseCedi } from "../money";
+import { useStore } from "../store";
+import { Card, Field, Toggle } from "../ui";
+import { OfficeHead } from "./Office";
 
 export function Settings() {
-  const { state, dispatch } = useDemo();
-  const s = state.settings;
-  const [d, setD] = useState<SettingsT>(s);
-  const dirty = (Object.keys(s) as (keyof SettingsT)[]).some((k) => s[k] !== d[k]);
-  const set = <K extends keyof SettingsT>(k: K, v: SettingsT[K]) => setD({ ...d, [k]: v });
-  const sample = state.orders.find((o) => o.payment && o.type === "dine_in" && !o.refund) ?? state.orders.find((o) => o.payment);
-  const sampleVat = 100 * (d.vatPercent / 100);
+  const { state, api } = useStore();
+  const [s, setS] = useState<SettingsT>(() => JSON.parse(JSON.stringify(state.settings)) as SettingsT);
+  const [room, setRoom] = useState(num(state.settings.roomService));
+  const dirty = JSON.stringify({ ...s, roomService: parseCedi(room) }) !== JSON.stringify(state.settings);
+  const patch = <K extends keyof SettingsT>(k: K, v: Partial<SettingsT[K]>) => setS((x) => ({ ...x, [k]: typeof x[k] === "object" ? { ...(x[k] as object), ...v } : v }));
+  const save = () => {
+    const next = { ...s, roomService: parseCedi(room) };
+    const changed: string[] = [];
+    if (next.vat !== state.settings.vat) changed.push(`VAT ${state.settings.vat}% → ${next.vat}%`);
+    if (next.roomService !== state.settings.roomService) changed.push(`room service ${cedi(state.settings.roomService)} → ${cedi(next.roomService)}`);
+    if (JSON.stringify(next.business) !== JSON.stringify(state.settings.business)) changed.push("business details");
+    if (JSON.stringify(next.receipt) !== JSON.stringify(state.settings.receipt)) changed.push("receipt text");
+    api.saveSettings(next, changed.join(", ") || "no material change");
+  };
 
   return (
-    <div className="px-6 pb-20 pt-8 lg:px-14">
-      <PageHead kicker="Restaurant settings" title="How the bill is built." lede="Tax, charges and receipt wording. Changes apply to the next bill priced — nothing already paid is touched, and every save is written to the audit log.">
-        {dirty && (
-          <TextLink tone="fg3" arrow={false} onClick={() => setD(s)}>
-            Discard
-          </TextLink>
-        )}
-        <Pill tone="accent" size="md" className="!w-auto" disabled={!dirty} onClick={() => dispatch({ type: "settingsSave", patch: d })}>
-          Save settings
-        </Pill>
-      </PageHead>
+    <div className="page">
+      <OfficeHead module="settings" title="Settings" sub="Business identity, tax and receipts. Owner only — every change is logged."
+        actions={<><button type="button" className="btn btn-ghost" disabled={!dirty} onClick={() => { setS(JSON.parse(JSON.stringify(state.settings)) as SettingsT); setRoom(num(state.settings.roomService)); }}>Discard</button><button type="button" className="btn btn-ink" disabled={!dirty} onClick={save}><Save size={16} /> Save changes</button></>} />
 
-      <div className="mt-10 grid gap-14 lg:grid-cols-[minmax(0,1fr)_360px] lg:gap-20">
-        <div className="space-y-14">
-          <section>
-            <Caps>Business</Caps>
-            <div className="mt-5 grid gap-7 sm:grid-cols-2">
-              <Field label="Trading name">
-                <input value={d.name} onChange={(e) => set("name", e.target.value.slice(0, 60))} className={inputCls} />
-              </Field>
-              <Field label="GRA TIN" hint="Printed on every receipt.">
-                <input value={d.tin} onChange={(e) => set("tin", e.target.value.toUpperCase().slice(0, 15))} className={`${inputCls} lining`} />
-              </Field>
-              <Field label="Address">
-                <input value={d.address} onChange={(e) => set("address", e.target.value.slice(0, 80))} className={inputCls} />
-              </Field>
-              <div className="grid grid-cols-2 gap-6">
-                <Field label="Phone">
-                  <input value={d.phone} onChange={(e) => set("phone", e.target.value.slice(0, 16))} className={`${inputCls} lining`} />
-                </Field>
-                <Field label="Email">
-                  <input value={d.email} onChange={(e) => set("email", e.target.value.slice(0, 48))} className={inputCls} />
-                </Field>
-              </div>
-            </div>
-          </section>
+      <div className="grid gap-4 xl:grid-cols-2">
+        <Card title="Business">
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Trading name" className="col-span-2"><input className="input" value={s.business.name} onChange={(e) => patch("business", { name: e.target.value })} /></Field>
+            <Field label="Branch"><input className="input" value={s.business.branch} onChange={(e) => patch("business", { branch: e.target.value })} /></Field>
+            <Field label="Phone"><input className="input" value={s.business.phone} onChange={(e) => patch("business", { phone: e.target.value })} /></Field>
+            <Field label="Address" className="col-span-2"><input className="input" value={s.business.address} onChange={(e) => patch("business", { address: e.target.value })} /></Field>
+            <Field label="GRA TIN" hint="Printed on every receipt when enabled below"><input className="input" value={s.business.tin} onChange={(e) => patch("business", { tin: e.target.value })} /></Field>
+          </div>
+        </Card>
 
-          <section>
-            <Caps>Tax & charges</Caps>
-            <div className="mt-5 grid gap-7 sm:grid-cols-3">
-              <Field label="VAT %" hint={`On GH₵ 100 of food: ${ghs(toCents(sampleVat))} tax`}>
-                <input inputMode="decimal" value={String(d.vatPercent)} onChange={(e) => set("vatPercent", Math.min(100, Math.max(0, Number(e.target.value) || 0)))} className={`${inputCls} font-serif text-[28px] lining`} />
-              </Field>
-              <Field label="Service charge %" hint="0 keeps tips voluntary.">
-                <input inputMode="decimal" value={String(d.serviceChargePercent)} onChange={(e) => set("serviceChargePercent", Math.min(25, Math.max(0, Number(e.target.value) || 0)))} className={`${inputCls} font-serif text-[28px] lining`} />
-              </Field>
-              <Field label="Room-service charge (GH₵)" hint="Added to every room bill before VAT.">
-                <input inputMode="decimal" value={(d.roomChargeCents / 100).toFixed(2)} onChange={(e) => set("roomChargeCents", toCents(Math.max(0, Number(e.target.value) || 0)))} className={`${inputCls} font-serif text-[28px] lining`} />
-              </Field>
-            </div>
-            <div className="mt-7">
-              <Switch on={d.compBreakfast} onChange={(v) => set("compBreakfast", v)} label="Complimentary breakfast for hotel guests — the till can zero a room bill with a manager’s approval" />
-            </div>
-          </section>
+        <Card title="Tax & charges">
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="VAT rate (%)" hint="Applied to goods after discounts; tips are never taxed"><input className="input lg" value={s.vat} inputMode="decimal" onChange={(e) => setS((x) => ({ ...x, vat: Math.max(0, Math.min(50, Number.parseFloat(e.target.value) || 0)) }))} /></Field>
+            <Field label="Room-service charge (GH₵)" hint="Added to orders on Rooms, not taxed"><input className="input lg" value={room} inputMode="decimal" onChange={(e) => setRoom(e.target.value)} /></Field>
+          </div>
+          <div className="mt-4 rounded-2xl bg-[var(--cream2)] p-4 text-[13px]">
+            <div className="kicker mb-2">Worked example</div>
+            Jollof 65.00 + Sobolo 12.00 = 77.00 · VAT {s.vat}% = {num(Math.round(7700 * s.vat / 100))} · <b>total {cedi(7700 + Math.round(7700 * s.vat / 100))}</b>{parseCedi(room) ? ` · in a room ${cedi(7700 + Math.round(7700 * s.vat / 100) + parseCedi(room))}` : ""}
+          </div>
+        </Card>
 
-          <section>
-            <Caps>Mobile money</Caps>
-            <div className="mt-5 grid gap-7 sm:grid-cols-2">
-              <Field label="Merchant number" hint="Shown on the MoMo prompt and the receipt.">
-                <input value={d.momoMerchant} onChange={(e) => set("momoMerchant", e.target.value.slice(0, 16))} className={`${inputCls} font-serif text-[22px] lining`} />
-              </Field>
-              <Field label="Default network">
-                <div className="flex gap-6 pt-2">
-                  {["MTN", "Telecel", "AirtelTigo"].map((n) => (
-                    <button key={n} type="button" onClick={() => set("momoNetwork", n)} className={`text-sm transition-colors ${d.momoNetwork === n ? `${K.fg} underline underline-offset-4 decoration-(--accent)` : `${K.fg3} hover:text-(--fg)`}`}>
-                      {n}
-                    </button>
-                  ))}
-                </div>
-              </Field>
-            </div>
-          </section>
+        <Card title="Receipts">
+          <div className="grid gap-3">
+            <Field label="Header line"><input className="input" value={s.receipt.header} onChange={(e) => patch("receipt", { header: e.target.value })} /></Field>
+            <Field label="Footer line"><input className="input" value={s.receipt.footer} onChange={(e) => patch("receipt", { footer: e.target.value })} /></Field>
+            <div className="flex items-center justify-between rounded-2xl border-2 border-[var(--line)] bg-white px-4 py-3"><span className="font-bold">Print GRA TIN on receipts</span><Toggle on={s.receipt.showTin} onChange={(v) => patch("receipt", { showTin: v })} /></div>
+          </div>
+        </Card>
 
-          <section>
-            <Caps>Receipt</Caps>
-            <div className="mt-5 grid gap-7 sm:grid-cols-2">
-              <Field label="Header line">
-                <input value={d.receiptHeader} onChange={(e) => set("receiptHeader", e.target.value.slice(0, 32))} className={`${inputCls} uppercase tracking-[.1em]`} />
-              </Field>
-              <Field label="Footer line">
-                <input value={d.receiptFooter} onChange={(e) => set("receiptFooter", e.target.value.slice(0, 48))} className={inputCls} />
-              </Field>
-            </div>
-          </section>
-        </div>
+        <Card title="Kitchen display">
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Warn after (min)"><input className="input lg" value={s.kds.warn} inputMode="numeric" onChange={(e) => patch("kds", { warn: Math.max(1, Number.parseInt(e.target.value, 10) || 1) })} /></Field>
+            <Field label="Urgent after (min)"><input className="input lg" value={s.kds.urgent} inputMode="numeric" onChange={(e) => patch("kds", { urgent: Math.max(2, Number.parseInt(e.target.value, 10) || 2) })} /></Field>
+          </div>
+          <p className="mt-3 text-[12.5px] font-medium text-[var(--ink3)]">Tickets turn yellow at the warning and red at urgent, on every pass screen.</p>
+        </Card>
 
-        <aside className={`self-start border-t pt-6 lg:sticky lg:top-[124px] lg:border-l lg:border-t-0 lg:pl-12 lg:pt-0 ${K.line}`}>
-          <Caps>Live preview</Caps>
-          <p className={`mt-1 text-xs ${K.fg3}`}>A paid bill from this shift, printed with the draft settings.</p>
-          <div className="mt-5">{sample ? <Receipt order={sample} settings={d} /> : <p className={`font-serif italic ${K.fg3}`}>No paid bill yet.</p>}</div>
-          <dl className={`mt-6 grid grid-cols-2 gap-4 border-t pt-4 text-xs ${K.line} ${K.fg3}`}>
-            <div>
-              <dt>Room bill of GH₵ 100</dt>
-              <dd className="mt-1">
-                <Money cents={Math.round((10000 + d.roomChargeCents) * (1 + d.vatPercent / 100))} size="sm" tone="fg2" />
-              </dd>
-            </div>
-            <div>
-              <dt>Tax on GH₵ 100 dine-in</dt>
-              <dd className="mt-1 font-serif text-[18px] lining text-(--fg2)">
-                <Num>{ghs(toCents(sampleVat))}</Num>
-              </dd>
-            </div>
-          </dl>
-        </aside>
+        <Card title="Demo data" className="xl:col-span-2">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="max-w-[60ch] text-[13px] text-[var(--ink2)]">Everything you do here is saved in this browser only. Reset puts the restaurant back to the start of tonight's service: three open tables, twelve paid orders, one drawer, a couple of purchase orders.</p>
+            <button type="button" className="btn btn-terra" onClick={() => { if (confirm("Reset the demo? All changes in this browser are lost.")) api.reset(); }}><RotateCcw size={16} /> Reset demo data</button>
+          </div>
+        </Card>
       </div>
     </div>
   );

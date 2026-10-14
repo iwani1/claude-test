@@ -1,363 +1,162 @@
 "use client";
 
+import { Phone, Plus, Send, Truck } from "lucide-react";
 import { useState } from "react";
-import { type Supplier } from "../data";
-import { ghs } from "../pricing";
-import { ingredientOf, lowStock, staffById, useDemo, type PurchaseOrder } from "../store";
-import { Caps, dateOf, Field, Figure, inputCls, K, Modal, Money, Num, PageHead, Pill, qty3, Rows, Select, Tab, TextLink, whenOf } from "../ui";
-
-const poTotal = (po: PurchaseOrder) => Math.round(po.items.reduce((n, i) => n + i.qty * i.unitCost, 0) * 100);
-const poReceivedTotal = (po: PurchaseOrder) => Math.round(po.items.reduce((n, i) => n + (i.received ?? 0) * i.unitCost, 0) * 100);
+import type { PO, POLine } from "../data";
+import { cedi, num, parseCedi, stamp } from "../money";
+import { useStore } from "../store";
+import { Badge, Card, Field, Modal, PO_STATUS, cx } from "../ui";
+import { OfficeHead } from "./Office";
 
 export function Purchasing() {
-  const { state, now } = useDemo();
-  const [tab, setTab] = useState<"orders" | "suppliers">("orders");
-  const [receiving, setReceiving] = useState<string | null>(null);
-  const [creating, setCreating] = useState(false);
-  const [addingSupplier, setAddingSupplier] = useState(false);
-  const open = state.purchaseOrders.filter((p) => p.status === "ordered");
-  const outstanding = open.reduce((n, p) => n + poTotal(p), 0);
-  const month = state.purchaseOrders.filter((p) => p.status === "received").reduce((n, p) => n + poReceivedTotal(p), 0);
-  const low = lowStock(state);
-  const list = [...state.purchaseOrders].sort((a, b) => b.at - a.at);
+  const { state, api } = useStore();
+  const [sheet, setSheet] = useState<{ kind: "new"; supplierId?: string } | { kind: "receive"; po: PO } | { kind: "invoice"; po: PO } | null>(null);
+  const poTotal = (po: PO) => po.lines.reduce((s, l) => s + l.qty * l.cost, 0);
+  const pos = [...state.pos].sort((a, b) => b.createdAt - a.createdAt);
+  const low = state.ingredients.filter((i) => i.onHand < i.par);
 
   return (
-    <div className="px-6 pb-20 pt-8 lg:px-14">
-      <PageHead kicker="Purchasing" title="Orders & deliveries." lede="Raise a purchase order from the low-stock list, then receive it against the supplier’s invoice when the van arrives. Received goods land in stock the moment you confirm.">
-        <TextLink tone="fg2" onClick={() => setAddingSupplier(true)}>
-          New supplier
-        </TextLink>
-        <TextLink onClick={() => setCreating(true)}>New purchase order</TextLink>
-      </PageHead>
+    <div className="page">
+      <OfficeHead module="purchasing" title="Purchasing" sub={`${state.suppliers.length} suppliers · ${pos.filter((p) => p.status === "sent").length} orders in transit · ${low.length} ingredients below par`}
+        actions={<button type="button" className="btn btn-ink" onClick={() => setSheet({ kind: "new" })}><Plus size={16} strokeWidth={3} /> New purchase order</button>} />
 
-      <dl className={`mt-10 grid gap-8 border-y py-8 sm:grid-cols-3 sm:gap-0 sm:divide-x sm:divide-(--line) ${K.line}`}>
-        <Figure label="Awaiting delivery" sub={open.length ? open.map((p) => `${p.number} · ${state.suppliers.find((s) => s.id === p.supplierId)?.name.split(" ")[0]}`).join(" · ") : "nothing on order"} warn={open.length > 0}>
-          <Money cents={outstanding} size="lg" />
-        </Figure>
-        <Figure label="Received this period" className="sm:pl-8" sub="goods receipt notes, valued at PO cost">
-          <Money cents={month} size="lg" />
-        </Figure>
-        <Figure label="Below minimum" className="sm:pl-8" sub={low.length ? "suggested in a new order" : "stock levels healthy"} warn={low.length > 0}>
-          <Num className={`text-[52px] leading-none tracking-[-.03em] ${low.length ? K.warn : K.fg}`}>{low.length}</Num>
-        </Figure>
-      </dl>
-
-      <div className="mt-10 flex gap-7">
-        <Tab name="purch" on={tab === "orders"} onClick={() => setTab("orders")}>
-          Purchase orders · {state.purchaseOrders.length}
-        </Tab>
-        <Tab name="purch" on={tab === "suppliers"} onClick={() => setTab("suppliers")}>
-          Suppliers · {state.suppliers.length}
-        </Tab>
+      <div className="grid grid-cols-2 gap-3.5 xl:grid-cols-4">
+        {state.suppliers.map((s) => {
+          const items = state.ingredients.filter((i) => i.supplierId === s.id);
+          const lowHere = items.filter((i) => i.onHand < i.par);
+          return (
+            <div key={s.id} className="card p-4">
+              <div className="flex items-start justify-between gap-2">
+                <div><div className="d text-[16px] font-bold">{s.name}</div><div className="text-[12px] font-semibold text-[var(--ink3)]">{s.supplies}</div></div>
+                <Badge tone={lowHere.length ? "terra" : "forest"}>{lowHere.length ? `${lowHere.length} low` : "stocked"}</Badge>
+              </div>
+              <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[12px] font-semibold text-[var(--ink2)]">
+                <span className="flex items-center gap-1"><Phone size={12} />{s.contact} · {s.phone}</span>
+                <span className="flex items-center gap-1"><Truck size={12} />{s.leadDays} day lead · {s.terms}</span>
+              </div>
+              <button type="button" className="btn btn-sm btn-soft mt-3 w-full" onClick={() => setSheet({ kind: "new", supplierId: s.id })}>Order from {s.name.split(" ")[0]}{lowHere.length ? ` · ${lowHere.length} suggested` : ""}</button>
+            </div>
+          );
+        })}
       </div>
 
-      {tab === "orders" && (
-        <div className="mt-6">
-          <Rows head={["PO", "Supplier", "Lines", "Raised", "Expected", "Status", "Value"]}>
-            {list.map((po) => {
+      <Card className="mt-4" title="Purchase orders" pad={false}>
+        <table className="tbl">
+          <thead><tr><th>PO</th><th>Supplier</th><th>Lines</th><th className="r">Value</th><th>Created</th><th>Status</th><th>Invoice</th><th className="r">Next step</th></tr></thead>
+          <tbody>
+            {pos.map((po) => {
               const sup = state.suppliers.find((s) => s.id === po.supplierId);
-              const late = po.status === "ordered" && now > po.expectedAt;
               return (
                 <tr key={po.id}>
-                  <td className="py-3 pr-4 font-serif text-[17px] lining">{po.number}</td>
-                  <td className={`py-3 pr-4 ${K.fg2}`}>
-                    {sup?.name}
-                    <span className={`block text-xs ${K.fg3}`}>{sup?.terms}</span>
-                  </td>
-                  <td className={`max-w-[280px] truncate py-3 pr-4 text-xs ${K.fg3}`}>{po.items.map((i) => `${qty3(i.qty)} ${ingredientOf(state, i.ingredientId)?.unit} ${ingredientOf(state, i.ingredientId)?.name.split(" (")[0]}`).join(", ")}</td>
-                  <td className={`py-3 pr-4 text-xs ${K.fg3}`}>
-                    {whenOf(po.at, now)} · {staffById(state, po.byId)?.name.split(" ")[0]}
-                  </td>
-                  <td className={`py-3 pr-4 text-xs ${late ? K.warn : K.fg3}`}>{po.status === "received" ? `received ${whenOf(po.receivedAt!, now)}` : `${dateOf(po.expectedAt)}${late ? " · overdue" : ""}`}</td>
-                  <td className="py-3 pr-4">
-                    {po.status === "ordered" ? (
-                      <TextLink onClick={() => setReceiving(po.id)}>Receive goods</TextLink>
-                    ) : (
-                      <span className={`text-[11px] font-semibold uppercase tracking-[.16em] ${K.fg3}`}>
-                        GRN · inv {po.invoice}
-                        {poReceivedTotal(po) !== poTotal(po) ? " · short" : ""}
-                      </span>
-                    )}
-                  </td>
-                  <td className="py-3 text-right">
-                    <Num className="text-[16px]">{ghs(po.status === "received" ? poReceivedTotal(po) : poTotal(po))}</Num>
+                  <td className="d strong">{po.id}</td>
+                  <td className="strong">{sup?.name}</td>
+                  <td className="max-w-[320px] truncate text-[var(--ink2)]">{po.lines.map((l) => `${l.qty} ${state.ingredients.find((i) => i.id === l.ingId)?.unit} ${state.ingredients.find((i) => i.id === l.ingId)?.name}`).join(", ")}</td>
+                  <td className="r d strong">{num(poTotal(po))}</td>
+                  <td>{stamp(po.createdAt)}</td>
+                  <td><Badge tone={PO_STATUS[po.status].tone}>{PO_STATUS[po.status].label}</Badge></td>
+                  <td className="text-[var(--ink2)]">{po.invoice ? `${po.invoice.no} · ${cedi(po.invoice.total)}` : "—"}</td>
+                  <td className="r">
+                    {po.status === "draft" && <button type="button" className="btn btn-xs btn-cobalt" onClick={() => api.sendPO(po.id)}><Send size={12} /> Send</button>}
+                    {po.status === "sent" && <button type="button" className="btn btn-xs btn-sun" onClick={() => setSheet({ kind: "receive", po })}>Receive (GRN)</button>}
+                    {po.status === "received" && <button type="button" className="btn btn-xs btn-forest" onClick={() => setSheet({ kind: "invoice", po })}>Record invoice</button>}
+                    {po.status === "invoiced" && <span className="text-[12px] font-bold text-[var(--ink3)]">Complete</span>}
                   </td>
                 </tr>
               );
             })}
-          </Rows>
-        </div>
-      )}
+          </tbody>
+        </table>
+      </Card>
 
-      {tab === "suppliers" && (
-        <div className="mt-6">
-          <Rows head={["Supplier", "Contact", "Terms", "Lead time", "Supplies", "Open POs", "Spend"]}>
-            {state.suppliers.map((s) => {
-              const pos = state.purchaseOrders.filter((p) => p.supplierId === s.id);
-              return (
-                <tr key={s.id}>
-                  <td className="py-3 pr-4 font-serif text-[17px]">{s.name}</td>
-                  <td className={`py-3 pr-4 ${K.fg2}`}>
-                    {s.contact}
-                    <span className={`block text-xs ${K.fg3}`}>{s.phone}</span>
-                  </td>
-                  <td className={`py-3 pr-4 text-xs ${K.fg3}`}>{s.terms}</td>
-                  <td className={`py-3 pr-4 ${K.fg2}`}>
-                    <Num>{s.leadDays}</Num> <span className={`text-xs ${K.fg3}`}>day{s.leadDays === 1 ? "" : "s"}</span>
-                  </td>
-                  <td className={`max-w-[240px] truncate py-3 pr-4 text-xs ${K.fg3}`}>{state.ingredients.filter((i) => i.supplierId === s.id).map((i) => i.name.split(" (")[0]).join(", ") || "—"}</td>
-                  <td className={`py-3 pr-4 ${K.fg2}`}>
-                    <Num>{pos.filter((p) => p.status === "ordered").length}</Num>
-                  </td>
-                  <td className="py-3 text-right">
-                    <Num className="text-[16px]">{ghs(pos.reduce((n, p) => n + (p.status === "received" ? poReceivedTotal(p) : 0), 0))}</Num>
-                  </td>
-                </tr>
-              );
-            })}
-          </Rows>
-        </div>
-      )}
-
-      <ReceiveModal poId={receiving} onClose={() => setReceiving(null)} />
-      <NewPoModal open={creating} onClose={() => setCreating(false)} />
-      <NewSupplier open={addingSupplier} onClose={() => setAddingSupplier(false)} />
+      {sheet?.kind === "new" && <NewPOSheet supplierId={sheet.supplierId} onClose={() => setSheet(null)} />}
+      {sheet?.kind === "receive" && <ReceiveSheet po={sheet.po} onClose={() => setSheet(null)} />}
+      {sheet?.kind === "invoice" && <InvoiceSheet po={sheet.po} onClose={() => setSheet(null)} />}
     </div>
   );
 }
 
-function ReceiveModal({ poId, onClose }: { poId: string | null; onClose: () => void }) {
-  const { state, dispatch } = useDemo();
-  const po = state.purchaseOrders.find((p) => p.id === poId);
-  const [qty, setQty] = useState<Record<string, string>>({});
-  const [invoice, setInvoice] = useState("");
-  const sup = po ? state.suppliers.find((s) => s.id === po.supplierId) : undefined;
-  const received = po ? po.items.map((i) => ({ ingredientId: i.ingredientId, qty: qty[i.ingredientId] === undefined || qty[i.ingredientId] === "" ? i.qty : Number(qty[i.ingredientId]) || 0 })) : [];
-  const value = po ? Math.round(received.reduce((n, r) => n + r.qty * (po.items.find((i) => i.ingredientId === r.ingredientId)?.unitCost ?? 0), 0) * 100) : 0;
-  const ok = Boolean(po && invoice.trim().length >= 3 && received.some((r) => r.qty > 0));
+function NewPOSheet({ supplierId, onClose }: { supplierId?: string; onClose: () => void }) {
+  const { state, api } = useStore();
+  const lowBy = (sid: string) => state.ingredients.filter((i) => i.supplierId === sid && i.onHand < i.par);
+  const [sup, setSup] = useState(supplierId ?? [...state.suppliers].sort((a, b) => lowBy(b.id).length - lowBy(a.id).length)[0].id);
+  const suggest = (sid: string): POLine[] => lowBy(sid).map((i) => ({ ingId: i.id, qty: Math.ceil((i.par * 1.5 - i.onHand) * 10) / 10, cost: i.cost, received: null }));
+  const [lines, setLines] = useState<POLine[]>(() => suggest(sup));
+  const items = state.ingredients.filter((i) => i.supplierId === sup);
+  const total = lines.reduce((s, l) => s + l.qty * l.cost, 0);
+  const unused = items.filter((i) => !lines.some((l) => l.ingId === i.id));
   return (
-    <Modal open={Boolean(po)} onClose={onClose} kicker={po ? `${po.number} · ${sup?.name} · raised ${dateOf(po.at)}` : undefined} title="Receive goods" width="max-w-xl">
-      {po && (
-        <div className="space-y-7">
-          <p className={`text-sm ${K.fg2}`}>Verify what came off the van. Leave a quantity blank to accept the ordered amount; type a smaller number for a short delivery.</p>
-          <table className="w-full text-sm">
-            <thead className={`text-left text-[11px] font-semibold uppercase tracking-[.18em] ${K.fg3}`}>
-              <tr className={`border-b ${K.line}`}>
-                <th className="py-2 pr-4 font-semibold">Ingredient</th>
-                <th className="py-2 pr-4 font-semibold">Ordered</th>
-                <th className="py-2 pr-4 font-semibold">Received</th>
-                <th className="py-2 text-right font-semibold">Value</th>
+    <Modal title="New purchase order" sub="Lines below par are suggested at 1.5 × par" onClose={onClose} size="w"
+      foot={<><button type="button" className="btn btn-ghost" onClick={onClose}>Cancel</button><button type="button" className="btn btn-ink grow" disabled={!lines.length || lines.some((l) => l.qty <= 0)} onClick={() => { api.createPO(sup, lines); onClose(); }}>Draft PO · {cedi(total)}</button></>}>
+      <Field label="Supplier"><select className="select" value={sup} onChange={(e) => { setSup(e.target.value); setLines(suggest(e.target.value)); }}>{state.suppliers.map((s) => <option key={s.id} value={s.id}>{s.name} — {s.supplies}</option>)}</select></Field>
+      <table className="tbl card overflow-hidden">
+        <thead><tr><th>Ingredient</th><th className="r">On hand</th><th className="r">Par</th><th className="r">Order qty</th><th className="r">Unit cost</th><th className="r">Line</th><th /></tr></thead>
+        <tbody>
+          {lines.map((l, i) => {
+            const ing = state.ingredients.find((x) => x.id === l.ingId)!;
+            return (
+              <tr key={l.ingId}>
+                <td className="strong">{ing.name}</td><td className={cx("r num", ing.onHand < ing.par && "c-terra font-bold")}>{ing.onHand}</td><td className="r num text-[var(--ink3)]">{ing.par}</td>
+                <td className="r"><input className="input !h-9 !w-20 !px-2 text-right" value={l.qty} inputMode="decimal" onChange={(e) => setLines((ls) => ls.map((x, k) => (k === i ? { ...x, qty: Math.max(0, Number.parseFloat(e.target.value) || 0) } : x)))} /> <span className="text-[11px] text-[var(--ink3)]">{ing.unit}</span></td>
+                <td className="r num">{num(l.cost)}</td><td className="r d strong">{num(l.qty * l.cost)}</td>
+                <td className="r"><button type="button" className="btn btn-xs btn-soft" onClick={() => setLines((ls) => ls.filter((_, k) => k !== i))}>×</button></td>
               </tr>
-            </thead>
-            <tbody className="divide-y divide-(--line2)">
-              {po.items.map((i) => {
-                const ing = ingredientOf(state, i.ingredientId);
-                const r = received.find((x) => x.ingredientId === i.ingredientId)!;
-                return (
-                  <tr key={i.ingredientId}>
-                    <td className="py-2 pr-4">
-                      {ing?.name}
-                      <span className={`block text-xs ${K.fg3}`}>
-                        {ghs(Math.round(i.unitCost * 100))} / {ing?.unit} · now {qty3(ing?.stock ?? 0)} {ing?.unit}
-                      </span>
-                    </td>
-                    <td className={`py-2 pr-4 ${K.fg2}`}>
-                      <Num>{qty3(i.qty)}</Num> <span className={`text-xs ${K.fg3}`}>{ing?.unit}</span>
-                    </td>
-                    <td className="py-2 pr-4">
-                      <input inputMode="decimal" value={qty[i.ingredientId] ?? ""} onChange={(e) => setQty({ ...qty, [i.ingredientId]: e.target.value })} placeholder={qty3(i.qty)} className={`${inputCls} w-24 py-1 font-serif text-[18px] lining`} />
-                      {r.qty < i.qty && <span className={`ml-2 text-[11px] font-semibold uppercase tracking-[.14em] ${K.warn}`}>short</span>}
-                    </td>
-                    <td className="py-2 text-right">
-                      <Num>{ghs(Math.round(r.qty * i.unitCost * 100))}</Num>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-          <div className="grid grid-cols-[1fr_auto] items-end gap-8">
-            <Field label="Supplier invoice number" hint="Matched against the PO for the accountant.">
-              <input autoFocus value={invoice} onChange={(e) => setInvoice(e.target.value.slice(0, 24))} placeholder={`${sup?.name.slice(0, 2).toUpperCase()}-${Math.floor(10000 + ((po.at / 1000) % 80000))}`} className={`${inputCls} font-serif text-[22px] lining`} />
-            </Field>
-            <div className="text-right">
-              <Caps>Goods value</Caps>
-              <div className="mt-1">
-                <Money cents={value} size="md" />
-              </div>
-            </div>
-          </div>
-          <Pill
-            tone="accent"
-            disabled={!ok}
-            right={ok ? "adds to stock now" : undefined}
-            onClick={() => {
-              dispatch({ type: "poReceive", poId: po.id, received, invoice: invoice.trim() });
-              setQty({});
-              setInvoice("");
-              onClose();
-            }}
-          >
-            Confirm goods received
-          </Pill>
-        </div>
-      )}
+            );
+          })}
+          <tr><td colSpan={7}>
+            {unused.length ? (
+              <select className="select !h-9 !w-auto !text-[13px]" value="" onChange={(e) => { const ing = state.ingredients.find((x) => x.id === e.target.value); if (ing) setLines((ls) => [...ls, { ingId: ing.id, qty: ing.par, cost: ing.cost, received: null }]); }}>
+                <option value="">+ Add ingredient…</option>{unused.map((i) => <option key={i.id} value={i.id}>{i.name} ({i.onHand}/{i.par} {i.unit})</option>)}
+              </select>
+            ) : <span className="text-[12px] font-semibold text-[var(--ink3)]">All of this supplier's items are on the order</span>}
+          </td></tr>
+        </tbody>
+      </table>
     </Modal>
   );
 }
 
-function NewPoModal({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { state, dispatch } = useDemo();
-  const [supplierId, setSupplierId] = useState("");
-  const [lines, setLines] = useState<Record<string, string>>({});
-  const sup = state.suppliers.find((s) => s.id === supplierId) ?? null;
-  const candidates = state.ingredients.filter((i) => !sup || i.supplierId === sup.id);
-  const low = lowStock(state);
-  const chosen = candidates
-    .map((i) => ({ i, qty: Number(lines[i.id]) || 0 }))
-    .filter((x) => x.qty > 0);
-  const total = Math.round(chosen.reduce((n, x) => n + x.qty * x.i.cost, 0) * 100);
-  const suggest = () => {
-    const next: Record<string, string> = {};
-    low.filter((i) => !sup || i.supplierId === sup.id).forEach((i) => (next[i.id] = qty3(Math.max(i.min * 2 - i.stock, i.min))));
-    setLines(next);
-  };
+function ReceiveSheet({ po, onClose }: { po: PO; onClose: () => void }) {
+  const { state, api } = useStore();
+  const [rec, setRec] = useState<Record<string, number>>(() => Object.fromEntries(po.lines.map((l) => [l.ingId, l.qty])));
+  const short = po.lines.filter((l) => (rec[l.ingId] ?? 0) < l.qty);
   return (
-    <Modal open={open} onClose={onClose} kicker="Purchasing" title="New purchase order" width="max-w-xl">
-      <div className="space-y-7">
-        <div className="grid grid-cols-[1fr_auto] items-end gap-8">
-          <Field label="Supplier" hint={sup ? `${sup.contact} · ${sup.phone} · ${sup.terms} · ${sup.leadDays}-day lead time` : "Pick a supplier to see what they stock."}>
-            <Select value={supplierId} onChange={(e) => { setSupplierId(e.target.value); setLines({}); }}>
-              <option value="">Choose…</option>
-              {state.suppliers.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </Select>
-          </Field>
-          <TextLink tone="fg2" onClick={suggest} disabled={!low.filter((i) => !sup || i.supplierId === sup.id).length}>
-            Fill from low stock
-          </TextLink>
-        </div>
-        {sup && (
-          <table className="w-full text-sm">
-            <thead className={`text-left text-[11px] font-semibold uppercase tracking-[.18em] ${K.fg3}`}>
-              <tr className={`border-b ${K.line}`}>
-                <th className="py-2 pr-4 font-semibold">Ingredient</th>
-                <th className="py-2 pr-4 font-semibold">On hand</th>
-                <th className="py-2 pr-4 font-semibold">Order</th>
-                <th className="py-2 text-right font-semibold">Cost</th>
+    <Modal title={`Receive ${po.id}`} sub={`Goods received note · ${state.suppliers.find((s) => s.id === po.supplierId)?.name} · stock goes up by what you actually count`} onClose={onClose} size="w"
+      foot={<><button type="button" className="btn btn-ghost" onClick={onClose}>Cancel</button><button type="button" className="btn btn-sun grow" onClick={() => { api.receivePO(po.id, rec); onClose(); }}>Confirm GRN{short.length ? ` · ${short.length} short` : ""}</button></>}>
+      <table className="tbl card overflow-hidden">
+        <thead><tr><th>Ingredient</th><th className="r">Ordered</th><th className="r">Received</th><th className="r">Variance</th></tr></thead>
+        <tbody>
+          {po.lines.map((l) => {
+            const ing = state.ingredients.find((x) => x.id === l.ingId)!;
+            const r = rec[l.ingId] ?? 0;
+            return (
+              <tr key={l.ingId}>
+                <td className="strong">{ing.name}</td><td className="r num">{l.qty} {ing.unit}</td>
+                <td className="r"><input className="input !h-9 !w-24 !px-2 text-right" value={r} inputMode="decimal" onChange={(e) => setRec((x) => ({ ...x, [l.ingId]: Math.max(0, Number.parseFloat(e.target.value) || 0) }))} /></td>
+                <td className={cx("r d strong", r < l.qty ? "c-terra" : r > l.qty ? "c-cobalt" : "c-forest")}>{r === l.qty ? "✓" : `${r > l.qty ? "+" : ""}${Math.round((r - l.qty) * 100) / 100}`}</td>
               </tr>
-            </thead>
-            <tbody className="divide-y divide-(--line2)">
-              {candidates.map((i) => {
-                const q = Number(lines[i.id]) || 0;
-                return (
-                  <tr key={i.id}>
-                    <td className="py-2 pr-4">
-                      {i.name}
-                      <span className={`block text-xs ${K.fg3}`}>
-                        {ghs(Math.round(i.cost * 100))} / {i.unit}
-                      </span>
-                    </td>
-                    <td className={`py-2 pr-4 ${i.stock <= i.min ? K.warn : K.fg2}`}>
-                      <Num>{qty3(i.stock)}</Num> <span className={`text-xs ${K.fg3}`}>/ min {qty3(i.min)}</span>
-                    </td>
-                    <td className="py-2 pr-4">
-                      <span className="flex items-baseline gap-2">
-                        <input inputMode="decimal" value={lines[i.id] ?? ""} onChange={(e) => setLines({ ...lines, [i.id]: e.target.value })} placeholder="0" className={`${inputCls} w-20 py-1 font-serif text-[18px] lining`} />
-                        <span className={`text-xs ${K.fg3}`}>{i.unit}</span>
-                      </span>
-                    </td>
-                    <td className={`py-2 text-right ${q ? "" : K.fg3}`}>
-                      <Num>{q ? ghs(Math.round(q * i.cost * 100)) : "—"}</Num>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        )}
-        <div className="flex items-end justify-between">
-          <div>
-            <Caps>
-              {chosen.length} line{chosen.length === 1 ? "" : "s"}
-              {sup ? ` · expected in ${sup.leadDays} day${sup.leadDays === 1 ? "" : "s"}` : ""}
-            </Caps>
-            <div className="mt-1">
-              <Money cents={total} size="md" />
-            </div>
-          </div>
-          <Pill
-            tone="accent"
-            size="md"
-            className="!w-auto"
-            disabled={!sup || !chosen.length}
-            onClick={() => {
-              dispatch({ type: "poCreate", supplierId: sup!.id, items: chosen.map((x) => ({ ingredientId: x.i.id, qty: x.qty, unitCost: x.i.cost })), expectedDays: sup!.leadDays });
-              setLines({});
-              setSupplierId("");
-              onClose();
-            }}
-          >
-            Raise order
-          </Pill>
-        </div>
-      </div>
+            );
+          })}
+        </tbody>
+      </table>
     </Modal>
   );
 }
 
-function NewSupplier({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { dispatch } = useDemo();
-  const [name, setName] = useState("");
-  const [contact, setContact] = useState("");
-  const [phone, setPhone] = useState("");
-  const [terms, setTerms] = useState("Cash on delivery");
-  const [lead, setLead] = useState("1");
-  const ok = name.trim().length >= 2 && contact.trim().length >= 2;
+function InvoiceSheet({ po, onClose }: { po: PO; onClose: () => void }) {
+  const { state, api } = useStore();
+  const expected = po.lines.reduce((s, l) => s + (l.received ?? l.qty) * l.cost, 0);
+  const [no, setNo] = useState(`INV-${7800 + state.pos.length}`);
+  const [total, setTotal] = useState(num(expected));
+  const v = parseCedi(total);
+  const diff = v - expected;
   return (
-    <Modal open={open} onClose={onClose} kicker="Purchasing" title="New supplier">
-      <div className="space-y-7">
-        <Field label="Business">
-          <input autoFocus value={name} onChange={(e) => setName(e.target.value.slice(0, 40))} placeholder="Kaneshie Spice Traders" className={`${inputCls} font-serif text-[22px]`} />
-        </Field>
-        <div className="grid grid-cols-2 gap-6">
-          <Field label="Contact">
-            <input value={contact} onChange={(e) => setContact(e.target.value.slice(0, 40))} placeholder="Sister Akos" className={inputCls} />
-          </Field>
-          <Field label="Phone">
-            <input inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value.slice(0, 16))} placeholder="024 000 0000" className={`${inputCls} lining`} />
-          </Field>
-        </div>
-        <div className="grid grid-cols-2 gap-6">
-          <Field label="Terms">
-            <Select value={terms} onChange={(e) => setTerms(e.target.value)}>
-              {["Cash on delivery", "Net 7", "Net 14", "Net 30"].map((t) => (
-                <option key={t}>{t}</option>
-              ))}
-            </Select>
-          </Field>
-          <Field label="Lead time (days)">
-            <input inputMode="numeric" value={lead} onChange={(e) => setLead(e.target.value.replace(/\D/g, "").slice(0, 2))} className={`${inputCls} font-serif text-[22px] lining`} />
-          </Field>
-        </div>
-        <Pill
-          tone="accent"
-          disabled={!ok}
-          onClick={() => {
-            const supplier: Supplier = { id: `s${Date.now().toString(36)}`, name: name.trim(), contact: contact.trim(), phone: phone.trim() || "—", terms, leadDays: Number(lead) || 1 };
-            dispatch({ type: "supplierAdd", supplier });
-            setName("");
-            setContact("");
-            setPhone("");
-            onClose();
-          }}
-        >
-          Add supplier
-        </Pill>
+    <Modal title={`Supplier invoice · ${po.id}`} sub={`Expected ${cedi(expected)} from the GRN quantities at PO prices`} onClose={onClose}
+      foot={<button type="button" className="btn btn-forest grow" disabled={!no.trim() || !v} onClick={() => { api.invoicePO(po.id, no.trim(), v); onClose(); }}>Record {cedi(v)}</button>}>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Invoice number"><input className="input" value={no} onChange={(e) => setNo(e.target.value)} /></Field>
+        <Field label="Invoice total (GH₵)"><input className="input" value={total} onChange={(e) => setTotal(e.target.value)} inputMode="decimal" /></Field>
       </div>
+      {diff !== 0 && v > 0 && <div className="alert" data-tone={Math.abs(diff) > expected * 0.02 ? "terra" : "sun"}><span className="dot" /><span className="text-[13px] font-semibold">Invoice is {diff > 0 ? "higher" : "lower"} than the GRN by {cedi(Math.abs(diff))} — flagged for the accountant.</span></div>}
     </Modal>
   );
 }

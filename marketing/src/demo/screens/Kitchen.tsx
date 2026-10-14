@@ -1,109 +1,107 @@
 "use client";
 
-import { AnimatePresence, motion } from "motion/react";
-import { tableOf, useDemo, type KitchenStatus, type Ticket } from "../store";
-import { Caps, K, minsSince, Num, TextLink, timeOf } from "../ui";
+import { CircleCheck, Flame, Timer } from "lucide-react";
+import { useState } from "react";
+import type { Station, Ticket } from "../data";
+import { mmss } from "../money";
+import { useStore } from "../store";
+import { Seg, cx, useNow } from "../ui";
 
-const COLUMNS: { status: KitchenStatus; title: string; hint: string; empty: string }[] = [
-  { status: "pending", title: "New", hint: "fired from the till", empty: "Nothing waiting — send an order from the till." },
-  { status: "preparing", title: "Cooking", hint: "on the stove", empty: "Nothing cooking." },
-  { status: "ready", title: "Ready", hint: "on the pass", empty: "The pass is clear." },
-];
+type Filter = "all" | Station;
 
 export function Kitchen() {
-  const { state, now } = useDemo();
-  const live = state.tickets.filter((t) => t.status !== "completed");
-  const done = state.tickets.filter((t) => t.status === "completed");
-  const timed = done.filter((t) => t.readyAt);
-  const avg = timed.length ? timed.reduce((n, t) => n + (t.readyAt! - t.firedAt), 0) / timed.length : 0;
+  const { state, api } = useStore();
+  const now = useNow(1000);
+  const [filter, setFilter] = useState<Filter>("all");
+  const { warn, urgent } = state.settings.kds;
+
+  const lineOf = (id: string) => state.orders.flatMap((o) => o.lines).find((l) => l.id === id);
+  const visible = (t: Ticket) => filter === "all" || t.lineIds.some((id) => lineOf(id)?.station === filter);
+  const live = state.tickets.filter((t) => t.status !== "bumped" && visible(t)).sort((a, b) => a.at - b.at);
+  const cols: { id: Ticket["status"]; label: string; tone: "cobalt" | "sun" | "forest" }[] = [
+    { id: "new", label: "New", tone: "cobalt" }, { id: "cooking", label: "Cooking", tone: "sun" }, { id: "ready", label: "Ready to serve", tone: "forest" },
+  ];
+  const served = state.tickets.filter((t) => t.status === "bumped" && t.bumpedAt && t.bumpedAt > now - 3600000);
+  const avgMin = served.length ? Math.round(served.reduce((s, t) => s + ((t.bumpedAt ?? t.at) - t.at), 0) / served.length / 60000) : 0;
+
+  // All-day counts of what is still to cook
+  const allDay = new Map<string, number>();
+  for (const t of live) if (t.status !== "ready") for (const id of t.lineIds) { const l = lineOf(id); if (l && (filter === "all" || l.station === filter)) allDay.set(l.name, (allDay.get(l.name) ?? 0) + l.qty); }
 
   return (
-    <div className="px-6 pb-16 pt-8 lg:px-14">
-      <div className="flex flex-wrap items-end justify-between gap-x-10 gap-y-3">
-        <div>
-          <Caps>Main pass</Caps>
-          <h1 className="mt-1 font-serif text-[40px] italic leading-none tracking-[-.02em]">Kitchen</h1>
+    <div className="kds">
+      <header className="flex flex-wrap items-center gap-3 px-6 pt-5 pb-3">
+        <div className="mr-2">
+          <div className="kicker" style={{ color: "var(--sun)" }}>Kitchen pass · Osu</div>
+          <h1 className="d mt-1 text-[26px] font-extrabold leading-none tracking-tight">{live.length ? `${live.length} ticket${live.length === 1 ? "" : "s"} live` : "Pass is clear"}</h1>
         </div>
-        <p className={`text-sm ${K.fg2}`}>
-          <Num className="text-[20px] text-(--fg)">{live.length}</Num> live · <Num className="text-[20px] text-(--fg)">{done.length}</Num> served this shift · ticket‑to‑pass{" "}
-          <Num className="text-[20px] text-(--fg)">{avg ? Math.round(avg / 60000) : "—"}</Num> min
-          <span className={`ml-6 hidden text-xs lg:inline ${K.fg3}`}>amber after 8 min · red after 15</span>
-        </p>
-      </div>
+        <Seg onInk options={[{ id: "all", label: "All stations" }, { id: "kitchen", label: "Kitchen" }, { id: "grill", label: "Grill" }, { id: "bar", label: "Bar" }]} value={filter} onChange={setFilter} />
+        <div className="ml-auto flex flex-wrap items-center gap-2 text-[12.5px] font-semibold">
+          <span className="rounded-xl bg-white/10 px-3 py-2"><Timer size={13} className="mr-1 inline" />Warn {warn} min · Urgent {urgent} min</span>
+          <span className="rounded-xl bg-white/10 px-3 py-2"><CircleCheck size={13} className="mr-1 inline" />{served.length} served last hour{avgMin ? ` · avg ${avgMin} min` : ""}</span>
+        </div>
+      </header>
 
-      <div className={`mt-10 grid gap-10 border-t ${K.line} pt-8 md:grid-cols-3 md:gap-0 md:divide-x md:divide-(--line)`}>
-        {COLUMNS.map((col, i) => {
-          const tickets = live.filter((t) => t.status === col.status).sort((a, b) => a.firedAt - b.firedAt);
+      <div className="grid min-h-0 grid-cols-[1fr_1fr_1fr_220px] gap-4 px-6 pb-5">
+        {cols.map((c) => {
+          const items = live.filter((t) => t.status === c.id);
           return (
-            <section key={col.status} className={`min-h-[320px] ${i === 0 ? "md:pr-10" : i === 1 ? "md:px-10" : "md:pl-10"}`}>
-              <header className="flex items-baseline justify-between">
-                <h2>
-                  <Caps tone={col.status === "ready" && tickets.length ? "accent" : "fg3"}>{col.title}</Caps>
-                  <span className={`ml-2 text-xs ${K.fg3}`}>{col.hint}</span>
-                </h2>
-                <Num className={`text-[28px] font-light ${tickets.length ? K.fg : K.fg3}`}>{tickets.length}</Num>
-              </header>
-              <AnimatePresence initial={false} mode="popLayout">
-                {tickets.map((t) => (
-                  <TicketRow key={t.id} ticket={t} now={now} />
-                ))}
-              </AnimatePresence>
-              {!tickets.length && <p className={`mt-8 font-serif text-[20px] italic ${K.fg3}`}>{col.empty}</p>}
+            <section key={c.id} className="flex min-h-0 flex-col">
+              <div className="kds-col-head"><span className="flex items-center gap-2"><span className="dot" data-tone={c.tone} />{c.label}</span><span className="n">{items.length}</span></div>
+              <div className="kds-col">
+                {items.length === 0 && <div className="rounded-2xl border-2 border-dashed border-white/15 p-6 text-center text-[13px] font-semibold text-[var(--ink4)]">{c.id === "new" ? "Nothing waiting" : c.id === "cooking" ? "Nothing on the fire" : "Nothing to run"}</div>}
+                {items.map((t) => {
+                  const age = now - t.at;
+                  const m = age / 60000;
+                  const lines = t.lineIds.map(lineOf).filter((l): l is NonNullable<typeof l> => !!l && (filter === "all" || l.station === filter));
+                  const order = state.orders.find((o) => o.id === t.orderId);
+                  return (
+                    <article key={t.id} className={cx("kcard", t.status === "ready" ? "is-ready" : m >= urgent ? "is-urgent" : m >= warn ? "is-warn" : "")}>
+                      <div className="kcard-head">
+                        <div>
+                          <div className="kcard-table">{t.tableLabel}</div>
+                          <div className="text-[11.5px] font-semibold text-[var(--ink3)]">#{t.orderId} · {order?.guests ?? 0} pax · {state.staff.find((s) => s.id === order?.staffId)?.name.split(" ")[0]}</div>
+                        </div>
+                        <span className="kcard-time">{mmss(age)}</span>
+                      </div>
+                      {lines.map((l) => (
+                        <div key={l.id} className="kline">
+                          <b>{l.qty}</b>
+                          <div><div className="kline-name">{l.name}</div>{l.note && <div className="kline-note">“{l.note}”</div>}</div>
+                          <span className="kline-st">{l.station}</span>
+                        </div>
+                      ))}
+                      <div className="kcard-foot">
+                        {t.status === "new" && <button type="button" className="kbtn sun" onClick={() => api.ticket(t.id, "cooking")}><Flame size={16} className="mr-1 inline" strokeWidth={2.5} /> Start</button>}
+                        {t.status === "cooking" && <button type="button" className="kbtn forest" onClick={() => api.ticket(t.id, "ready")}>Ready</button>}
+                        {t.status === "ready" && <button type="button" className="kbtn" onClick={() => api.ticket(t.id, "bumped")}>Served · bump</button>}
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
             </section>
           );
         })}
+
+        <aside className="flex min-h-0 flex-col">
+          <div className="kds-col-head"><span>All day</span><span className="n">{[...allDay.values()].reduce((a, b) => a + b, 0)}</span></div>
+          <div className="kds-col">
+            <div className="rounded-2xl bg-white/5 p-3">
+              {allDay.size === 0 && <div className="p-3 text-center text-[13px] font-semibold text-[var(--ink4)]">Nothing to cook</div>}
+              {[...allDay.entries()].sort((a, b) => b[1] - a[1]).map(([name, qty]) => (
+                <div key={name} className="flex items-center justify-between gap-3 border-b border-white/10 py-2 last:border-0">
+                  <span className="text-[13px] font-semibold">{name}</span>
+                  <span className="d rounded-lg bg-[var(--sun)] px-2 py-0.5 text-[13px] font-extrabold text-[var(--ink)]">{qty}</span>
+                </div>
+              ))}
+            </div>
+            <div className="rounded-2xl bg-white/5 p-3 text-[12px] font-semibold text-[var(--ink4)]">
+              Tickets turn <span className="c-sun">yellow</span> at {warn} minutes and <span className="c-terra">red</span> at {urgent}. Bumping marks the lines served on the bill.
+            </div>
+          </div>
+        </aside>
       </div>
     </div>
-  );
-}
-
-function TicketRow({ ticket, now }: { ticket: Ticket; now: number }) {
-  const { state, dispatch } = useDemo();
-  const mins = minsSince(ticket.firedAt, now);
-  const urgency = ticket.status === "ready" ? "ok" : mins > 15 ? "late" : mins > 8 ? "warn" : "ok";
-  const table = tableOf(state, ticket.tableId);
-  return (
-    <motion.article
-      layout
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, x: 24 }}
-      transition={{ duration: 0.3, ease: [0.2, 0.7, 0.2, 1] }}
-      className={`border-b ${K.line2} py-6 first-of-type:mt-4`}
-    >
-      <div className="flex items-baseline justify-between">
-        <p className="flex items-baseline gap-3">
-          <Num className="text-[30px] font-light leading-none tracking-[-.01em]">{table.code}</Num>
-          <span className={`text-xs ${K.fg3}`}>
-            #{ticket.number}
-            {table.type !== "dine_in" && ` · ${table.type === "room_service" ? "room service" : "takeaway"}`}
-          </span>
-        </p>
-        <p className={`text-sm ${urgency === "late" ? K.bad : urgency === "warn" ? K.warn : K.fg2}`} title={`fired ${timeOf(ticket.firedAt)}`}>
-          <Num className="text-[22px]">{mins}</Num> min
-        </p>
-      </div>
-      <ul className="mt-3 space-y-1.5">
-        {ticket.lines.map((l, i) => (
-          <li key={i} className="text-[15px]">
-            <span className="flex gap-3">
-              <Num className={`w-5 shrink-0 text-right text-[17px] ${K.accent}`}>{l.qty}</Num>
-              <span>{l.name}</span>
-            </span>
-            {l.note && <span className={`ml-8 block font-serif text-[14px] italic ${K.fg2}`}>“{l.note}”</span>}
-          </li>
-        ))}
-      </ul>
-      <div className="mt-4 flex items-center justify-between">
-        <span className={`text-xs ${K.fg3}`}>{ticket.status === "pending" ? `fired ${timeOf(ticket.firedAt)}` : ticket.status === "preparing" ? `started ${timeOf(ticket.startedAt ?? ticket.firedAt)}` : `ready ${timeOf(ticket.readyAt ?? now)}`}</span>
-        {ticket.status === "pending" && <TextLink onClick={() => dispatch({ type: "kitchen", ticketId: ticket.id, status: "preparing" })}>Start prep</TextLink>}
-        {ticket.status === "preparing" && <TextLink onClick={() => dispatch({ type: "kitchen", ticketId: ticket.id, status: "ready" })}>Mark ready</TextLink>}
-        {ticket.status === "ready" && (
-          <TextLink tone="fg2" onClick={() => dispatch({ type: "kitchen", ticketId: ticket.id, status: "completed" })}>
-            Clear
-          </TextLink>
-        )}
-      </div>
-    </motion.article>
   );
 }

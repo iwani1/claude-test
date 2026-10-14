@@ -1,180 +1,109 @@
 "use client";
 
-import { motion } from "motion/react";
-import { useState } from "react";
-import { type RecipeLine } from "../data";
-import { ghs } from "../pricing";
-import { ingredientOf, recipeCost, useDemo } from "../store";
-import { Caps, inputCls, K, Money, Num, PageHead, Pill, Select, TextLink } from "../ui";
+import { Plus, Trash2 } from "lucide-react";
+import { useEffect, useState } from "react";
+import type { RecipeLine } from "../data";
+import { cedi, num, parseCedi, pct } from "../money";
+import { recipeCost, useStore } from "../store";
+import { Badge, Bar, Card, Field, cx } from "../ui";
+import { OfficeHead } from "./Office";
+
+const TARGET = 65;
 
 export function Recipes() {
-  const { state, dispatch } = useDemo();
-  const [sel, setSel] = useState<string>("jollof");
-  const dish = state.menu.find((m) => m.id === sel) ?? state.menu[0];
-  const [draft, setDraft] = useState<RecipeLine[] | null>(null);
-  const lines = draft ?? state.recipes[dish.id] ?? [];
-  const cost = lines.reduce((n, l) => n + (ingredientOf(state, l.ingredientId)?.cost ?? 0) * l.qty, 0);
-  const pct = dish.price ? (cost / dish.price) * 100 : 0;
-  const margin = dish.price - cost;
-  const avgPct = (() => {
-    const withR = state.menu.filter((m) => state.recipes[m.id]?.length);
-    return withR.length ? withR.reduce((n, m) => n + (recipeCost(state, m.id) / m.price) * 100, 0) / withR.length : 0;
-  })();
+  const { state, api } = useStore();
+  const [selId, setSelId] = useState(state.dishes[1]?.id ?? state.dishes[0]?.id);
+  const dish = state.dishes.find((d) => d.id === selId) ?? state.dishes[0];
+  const [lines, setLines] = useState<RecipeLine[]>(state.recipes[dish.id] ?? []);
+  const [whatIf, setWhatIf] = useState(num(dish.price));
+  const [dirty, setDirty] = useState(false);
+  useEffect(() => { setLines(state.recipes[dish.id] ?? []); setWhatIf(num(dish.price)); setDirty(false); }, [dish.id, dish.price, state.recipes]);
 
-  const pick = (id: string) => {
-    setSel(id);
-    setDraft(null);
-  };
-  const setLine = (i: number, patch: Partial<RecipeLine>) => setDraft(lines.map((l, k) => (k === i ? { ...l, ...patch } : l)));
+  const cost = recipeCost(lines, state.ingredients);
+  const margin = pct(dish.price - cost, dish.price);
+  const wi = parseCedi(whatIf);
+  const wiMargin = wi ? pct(wi - cost, wi) : 0;
+  const unused = state.ingredients.filter((i) => !lines.some((l) => l.ingId === i.id));
+  const avgMargin = Math.round(state.dishes.reduce((s, d) => s + pct(d.price - recipeCost(state.recipes[d.id], state.ingredients), d.price), 0) / state.dishes.length);
+
+  const setLine = (i: number, patch: Partial<RecipeLine>) => { setLines((ls) => ls.map((l, k) => (k === i ? { ...l, ...patch } : l))); setDirty(true); };
 
   return (
-    <div className="px-6 pb-20 pt-8 lg:px-14">
-      <PageHead kicker="Recipes & costing" title="What each plate costs." lede={`Recipes drive two things: the food-cost figure on every dish, and the stock that leaves the store when it sells. Average food cost today ${avgPct.toFixed(0)} % — the industry target is 28–35 %.`} />
+    <div className="page">
+      <OfficeHead module="recipes" title="Recipes & costing" sub={`Average gross margin ${avgMargin}% across ${state.dishes.length} dishes · target ${TARGET}% · costs from current ingredient prices`} />
+      <div className="grid gap-4 xl:grid-cols-[380px_minmax(0,1fr)]">
+        <Card pad={false} className="max-h-[72vh] overflow-auto">
+          <ul>
+            {state.dishes.map((d) => {
+              const c = recipeCost(state.recipes[d.id], state.ingredients);
+              const m = pct(d.price - c, d.price);
+              return (
+                <li key={d.id}>
+                  <button type="button" className={cx("flex w-full items-center gap-3 border-b border-[var(--line)] px-4 py-3 text-left hover:bg-[var(--cream)]", d.id === dish.id && "bg-[var(--sun-l)]")} onClick={() => setSelId(d.id)}>
+                    <span className="h-11 w-11 flex-none overflow-hidden rounded-xl" data-tone={d.cat} style={{ boxShadow: "inset 0 0 0 3px var(--c)" }}>{d.img && <img src={`/dishes/${d.img}.jpg`} alt="" className="h-full w-full object-cover p-[3px]" style={{ borderRadius: 12 }} />}</span>
+                    <span className="min-w-0 flex-1">
+                      <span className="d block truncate text-[14px] font-bold">{d.name}</span>
+                      <span className="mt-1 flex items-center gap-2 text-[11.5px] font-semibold text-[var(--ink3)]"><Bar value={m} tone={m >= TARGET ? "forest" : m >= 50 ? "sun" : "terra"} className="w-20 !h-2" />{m}% · cost {num(c)}</span>
+                    </span>
+                    <span className="d text-[14px] font-bold">{num(d.price).replace(/\.00$/, "")}</span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </Card>
 
-      <div className="mt-10 grid gap-12 lg:grid-cols-[280px_minmax(0,1fr)] lg:gap-16">
-        {/* ------------------------------------------------ dish list */}
-        <ol className={`border-t ${K.line}`}>
-          {state.menu.map((m) => {
-            const c = recipeCost(state, m.id);
-            const p = m.price ? Math.round((c / m.price) * 100) : 0;
-            const on = m.id === dish.id;
-            return (
-              <li key={m.id} className={`border-b ${K.line2}`}>
-                <button type="button" onClick={() => pick(m.id)} className={`flex w-full items-baseline justify-between gap-3 py-3 text-left transition-colors ${on ? K.fg : `${K.fg2} hover:text-(--fg)`}`}>
-                  <span className={`truncate font-serif text-[16px] ${on ? "italic" : ""}`}>{m.name}</span>
-                  <span className={`shrink-0 text-xs ${state.recipes[m.id]?.length ? (p > 35 ? K.warn : K.fg3) : K.fg3}`}>{state.recipes[m.id]?.length ? <Num>{p}%</Num> : "—"}</span>
-                </button>
-              </li>
-            );
-          })}
-        </ol>
+        <div className="flex flex-col gap-4">
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+            <div className="block stat !min-h-[100px]" data-tone="ink"><span className="stat-label">Menu price</span><span className="stat-value !text-[26px]"><small>GH₵</small>{num(dish.price)}</span></div>
+            <div className="block stat !min-h-[100px]" data-tone="sun"><span className="stat-label">Plated cost</span><span className="stat-value !text-[26px]"><small>GH₵</small>{num(cost)}</span></div>
+            <div className="block stat !min-h-[100px]" data-tone={margin >= TARGET ? "forest" : margin >= 50 ? "sun" : "terra"}><span className="stat-label">Gross margin</span><span className="stat-value !text-[26px]">{margin}%</span></div>
+            <div className="block stat !min-h-[100px]" data-tone="cobalt"><span className="stat-label">Profit per plate</span><span className="stat-value !text-[26px]"><small>GH₵</small>{num(dish.price - cost)}</span></div>
+          </div>
 
-        {/* ------------------------------------------------ recipe */}
-        <motion.section key={dish.id} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}>
-          <div className="flex flex-wrap items-end justify-between gap-6">
-            <div>
-              <Caps>
-                {dish.category} · {dish.station}
-              </Caps>
-              <h2 className="mt-1 font-serif text-[32px] italic leading-none tracking-[-.02em]">{dish.name}</h2>
+          <Card title={<>{dish.name} <span className="ml-2 text-[12px] font-semibold text-[var(--ink3)]">{lines.length} ingredients</span></>} actions={<div className="flex gap-2">{dirty && <button type="button" className="btn btn-sm btn-ghost" onClick={() => { setLines(state.recipes[dish.id] ?? []); setDirty(false); }}>Discard</button>}<button type="button" className="btn btn-sm btn-ink" disabled={!dirty} onClick={() => { api.saveRecipe(dish.id, lines.filter((l) => l.qty > 0)); setDirty(false); }}>Save recipe</button></div>} pad={false}>
+            <table className="tbl">
+              <thead><tr><th>Ingredient</th><th className="r">Qty</th><th>Unit</th><th className="r">Unit cost</th><th className="r">Line cost</th><th className="r">Share</th><th /></tr></thead>
+              <tbody>
+                {lines.map((l, i) => {
+                  const ing = state.ingredients.find((x) => x.id === l.ingId);
+                  const lc = Math.round((ing?.cost ?? 0) * l.qty);
+                  return (
+                    <tr key={l.ingId}>
+                      <td className="strong">
+                        <select className="select !h-9 !text-[13px]" value={l.ingId} onChange={(e) => setLine(i, { ingId: e.target.value })}>
+                          {[ing, ...unused].filter((x): x is NonNullable<typeof x> => !!x).map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+                        </select>
+                      </td>
+                      <td className="r"><input className="input !h-9 !w-24 !px-2 text-right" value={l.qty} inputMode="decimal" onChange={(e) => setLine(i, { qty: Math.max(0, Number.parseFloat(e.target.value) || 0) })} /></td>
+                      <td className="text-[var(--ink3)]">{ing?.unit}</td>
+                      <td className="r num">{num(ing?.cost ?? 0)}</td>
+                      <td className="r d strong">{num(lc)}</td>
+                      <td className="r"><Bar value={cost ? (lc / cost) * 100 : 0} tone="cobalt" className="ml-auto w-16 !h-2" /></td>
+                      <td className="r"><button type="button" className="btn btn-xs btn-soft" onClick={() => { setLines((ls) => ls.filter((_, k) => k !== i)); setDirty(true); }} aria-label="Remove"><Trash2 size={13} /></button></td>
+                    </tr>
+                  );
+                })}
+                <tr>
+                  <td colSpan={7}>
+                    <button type="button" className="btn btn-sm btn-ghost" disabled={!unused.length} onClick={() => { setLines((ls) => [...ls, { ingId: unused[0].id, qty: 0.1 }]); setDirty(true); }}><Plus size={14} strokeWidth={3} /> Add ingredient</button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </Card>
+
+          <Card title="What if the price were…">
+            <div className="grid items-end gap-4 md:grid-cols-[180px_1fr]">
+              <Field label="Price (GH₵)"><input className="input lg" value={whatIf} onChange={(e) => setWhatIf(e.target.value)} inputMode="decimal" /></Field>
+              <div className="flex flex-wrap items-center gap-3 pb-1">
+                <Badge tone={wiMargin >= TARGET ? "forest" : wiMargin >= 50 ? "sun" : "terra"} solid>{wiMargin}% margin</Badge>
+                <span className="text-[13px] font-semibold text-[var(--ink3)]">profit {cedi(wi - cost)} per plate · to hit {TARGET}% you need <b className="c-ink">{cedi(Math.ceil(cost / (1 - TARGET / 100) / 100) * 100)}</b></span>
+              </div>
             </div>
-            <dl className={`grid grid-cols-4 gap-8 border-l pl-8 ${K.line}`}>
-              <div>
-                <dt>
-                  <Caps>Menu price</Caps>
-                </dt>
-                <dd className="mt-2">
-                  <Money cents={Math.round(dish.price * 100)} size="md" />
-                </dd>
-              </div>
-              <div>
-                <dt>
-                  <Caps>Recipe cost</Caps>
-                </dt>
-                <dd className="mt-2">
-                  <Money cents={Math.round(cost * 100)} size="md" />
-                </dd>
-              </div>
-              <div>
-                <dt>
-                  <Caps>Food cost</Caps>
-                </dt>
-                <dd className={`mt-2 font-serif text-[28px] leading-none lining ${pct > 35 ? K.warn : pct > 0 ? K.accent : K.fg3}`}>{lines.length ? `${pct.toFixed(0)}%` : "—"}</dd>
-              </div>
-              <div>
-                <dt>
-                  <Caps>Gross margin</Caps>
-                </dt>
-                <dd className="mt-2">
-                  <Money cents={Math.round(margin * 100)} size="md" tone="fg2" />
-                </dd>
-              </div>
-            </dl>
-          </div>
-
-          <table className="mt-8 w-full text-sm">
-            <thead className={`text-left text-[11px] font-semibold uppercase tracking-[.18em] ${K.fg3}`}>
-              <tr className={`border-b ${K.line}`}>
-                <th className="py-2 pr-4 font-semibold">Ingredient</th>
-                <th className="py-2 pr-4 font-semibold">Per portion</th>
-                <th className="py-2 pr-4 font-semibold">Unit cost</th>
-                <th className="py-2 pr-4 text-right font-semibold">Cost</th>
-                <th className="py-2 text-right font-semibold" />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-(--line2)">
-              {lines.map((l, i) => {
-                const ing = ingredientOf(state, l.ingredientId);
-                return (
-                  <tr key={i}>
-                    <td className="py-2 pr-4">
-                      <Select value={l.ingredientId} onChange={(e) => setLine(i, { ingredientId: e.target.value })} className="py-1.5">
-                        {state.ingredients.map((x) => (
-                          <option key={x.id} value={x.id}>
-                            {x.name}
-                          </option>
-                        ))}
-                      </Select>
-                    </td>
-                    <td className="py-2 pr-4">
-                      <span className="flex items-baseline gap-2">
-                        <input inputMode="decimal" value={String(l.qty)} onChange={(e) => setLine(i, { qty: Number(e.target.value) || 0 })} className={`${inputCls} w-24 py-1.5 font-serif text-[18px] lining`} />
-                        <span className={`text-xs ${K.fg3}`}>{ing?.unit}</span>
-                      </span>
-                    </td>
-                    <td className={`py-2 pr-4 ${K.fg2}`}>
-                      <Num>{ghs(Math.round((ing?.cost ?? 0) * 100))}</Num>
-                      <span className={`text-xs ${K.fg3}`}> / {ing?.unit}</span>
-                    </td>
-                    <td className="py-2 pr-4 text-right">
-                      <Num className="text-[16px]">{ghs(Math.round((ing?.cost ?? 0) * l.qty * 100))}</Num>
-                    </td>
-                    <td className="py-2 text-right">
-                      <button type="button" onClick={() => setDraft(lines.filter((_, k) => k !== i))} className={`text-xs ${K.fg3} hover:text-(--bad)`}>
-                        remove
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-          {!lines.length && <p className={`mt-6 font-serif text-[20px] italic ${K.fg3}`}>No recipe yet — this dish sells without touching stock.</p>}
-
-          <div className="mt-6 flex flex-wrap items-center gap-x-8 gap-y-3">
-            <TextLink tone="fg2" onClick={() => setDraft([...lines, { ingredientId: state.ingredients.find((x) => !lines.some((l) => l.ingredientId === x.id))?.id ?? state.ingredients[0].id, qty: 0.1 }])}>
-              Add an ingredient
-            </TextLink>
-            {draft && (
-              <>
-                <Pill
-                  tone="accent"
-                  size="md"
-                  className="!w-auto"
-                  onClick={() => {
-                    dispatch({ type: "recipeSet", menuItemId: dish.id, lines: draft });
-                    setDraft(null);
-                  }}
-                >
-                  Save recipe
-                </Pill>
-                <TextLink tone="fg3" arrow={false} onClick={() => setDraft(null)}>
-                  Discard changes
-                </TextLink>
-              </>
-            )}
-            <span className={`ml-auto text-xs ${K.fg3}`}>Auto-deducts on every sale · yields 1 portion</span>
-          </div>
-
-          <div className={`mt-10 border-t pt-6 ${K.line}`}>
-            <Caps>How deduction works</Caps>
-            <p className={`mt-2 max-w-[60ch] text-sm leading-relaxed ${K.fg2}`}>
-              When {dish.name} sells, the till walks this list, aggregates ingredients shared across the ticket and writes one stock movement per ingredient referenced to the order number — so the ingredient ledger reads like a kitchen diary, not a database dump.
-            </p>
-          </div>
-        </motion.section>
+          </Card>
+        </div>
       </div>
     </div>
   );
 }
-

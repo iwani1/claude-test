@@ -1,188 +1,158 @@
 "use client";
 
-import { ghs } from "../pricing";
-import { currentUser, lowStock, price, recipeCost, shiftTotals, stockValueCents, tableOf, useDemo, type Screen } from "../store";
-import { Bars, Caps, Figure, K, Money, Num, PageHead, Split, TextLink, timeOf, whenOf } from "../ui";
-import { byCategory, hourly, topDishes } from "./Reports";
+import { AlertTriangle, ArrowRight, ChefHat, Flame, Leaf, Wallet } from "lucide-react";
+import { GROUPS, MODULES, can, type CatKey, type Module } from "../data";
+import { cedi, cediShort, hm, startOfToday } from "../money";
+import { currentUser, drawerExpected, openDrawer, totals, useStore } from "../store";
+import { Bar, Card, Money, Stat, useNow } from "../ui";
 
 export function Today() {
-  const { state, dispatch, now } = useDemo();
-  const me = currentUser(state);
-  const t = shiftTotals(state);
-  const low = lowStock(state);
-  const openPos = state.purchaseOrders.filter((p) => p.status === "ordered");
-  const latePos = openPos.filter((p) => now > p.expectedAt);
-  const kitchenLive = state.tickets.filter((k) => k.status !== "completed");
-  const late = kitchenLive.filter((k) => k.status !== "ready" && now - k.firedAt > 15 * 60000);
-  const unsent = state.orders.filter((o) => !o.paidAt && o.lines.some((l) => !l.sent));
-  const off = state.menu.filter((m) => !m.available);
-  const foodCost = (() => {
-    let cost = 0;
-    let rev = 0;
-    for (const o of t.paid) {
-      if (o.complimentary) continue;
-      for (const l of o.lines) {
-        cost += recipeCost(state, l.itemId) * l.qty;
-        rev += (l.unitCents * l.qty) / 100;
-      }
-    }
-    return rev ? (cost / rev) * 100 : 0;
-  })();
-  const hour = new Date(now).getHours();
-  const go = (screen: Screen) => dispatch({ type: "screen", screen });
-  const attention: { text: string; screen: Screen; tone?: "warn" | "bad" }[] = [];
-  if (late.length) attention.push({ text: `${late.length} kitchen ticket${late.length > 1 ? "s" : ""} past 15 minutes`, screen: "kitchen", tone: "bad" });
-  if (unsent.length) attention.push({ text: `${unsent.length} table${unsent.length > 1 ? "s" : ""} with items not yet sent to the kitchen`, screen: "till", tone: "warn" });
-  if (low.length) attention.push({ text: `${low.length} ingredient${low.length > 1 ? "s" : ""} below minimum · ${low.map((i) => i.name.split(" (")[0]).slice(0, 3).join(", ")}`, screen: "stock", tone: "warn" });
-  if (latePos.length) attention.push({ text: `${latePos.map((p) => p.number).join(", ")} overdue from ${state.suppliers.find((s) => s.id === latePos[0].supplierId)?.name}`, screen: "purchasing", tone: "warn" });
-  else if (openPos.length) attention.push({ text: `${openPos.map((p) => p.number).join(", ")} expected today — receive it when the van arrives`, screen: "purchasing" });
-  if (off.length) attention.push({ text: `${off.length} dish${off.length > 1 ? "es" : ""} off the menu · ${off.map((m) => m.name).join(", ")}`, screen: "menu" });
-  if (!state.online) attention.push({ text: "Terminal is offline — MoMo prompts are queued, cash still works", screen: "hardware", tone: "warn" });
-  if (t.queued) attention.push({ text: `${t.queued} payment${t.queued > 1 ? "s" : ""} queued while offline, syncing when back`, screen: "drawer", tone: "warn" });
-  if (state.shift.closedAt) attention.push({ text: `Shift closed at ${timeOf(state.shift.closedAt)} — open a new one to keep selling`, screen: "drawer" });
+  const { state, api } = useStore();
+  const me = currentUser(state)!;
+  const now = useNow(30000);
+  const vat = state.settings.vat;
+  const day = startOfToday(now);
+
+  const closed = state.orders.filter((o) => (o.status === "paid" || o.status === "refunded") && (o.closed ?? 0) >= day);
+  const gross = closed.reduce((s, o) => s + totals(o, vat).total, 0);
+  const refunded = closed.reduce((s, o) => s + totals(o, vat).refunded, 0);
+  const openOrders = state.orders.filter((o) => o.status === "open");
+  const openValue = openOrders.reduce((s, o) => s + totals(o, vat).total, 0);
+  const queue = state.tickets.filter((t) => t.status === "new" || t.status === "cooking");
+  const oldest = queue.reduce((m, t) => Math.min(m, t.at), now);
+  const drawer = openDrawer(state);
+  const avg = closed.length ? Math.round(gross / closed.length) : 0;
+  const covers = closed.reduce((s, o) => s + o.guests, 0);
+
+  // Sales by hour (11:00 → 23:00)
+  const hours = Array.from({ length: 13 }, (_, i) => 11 + i);
+  const byHour = hours.map((h) => closed.filter((o) => new Date(o.closed!).getHours() === h).reduce((s, o) => s + totals(o, vat).total, 0));
+  const maxHour = Math.max(1, ...byHour);
+  const nowHour = new Date(now).getHours();
+
+  // Top dishes by revenue
+  const dishMap = new Map<string, { name: string; qty: number; rev: number; cat: string }>();
+  for (const o of closed) for (const l of o.lines) {
+    const e = dishMap.get(l.dishId) ?? { name: l.name, qty: 0, rev: 0, cat: state.dishes.find((d) => d.id === l.dishId)?.cat ?? "kitchen" };
+    e.qty += l.qty; e.rev += l.qty * l.price; dishMap.set(l.dishId, e);
+  }
+  const top = [...dishMap.values()].sort((a, b) => b.rev - a.rev).slice(0, 6);
+  const topMax = top[0]?.rev ?? 1;
+
+  // Attention list
+  const low = state.ingredients.filter((i) => i.onHand < i.par);
+  const out = low.filter((i) => i.onHand <= 0);
+  const unsent = openOrders.filter((o) => o.lines.some((l) => !l.sent));
+  const late = queue.filter((t) => now - t.at > state.settings.kds.urgent * 60000);
+  const offMenu = state.dishes.filter((d) => !d.available);
+  const alerts: { tone: "terra" | "sun" | "cobalt" | "forest"; text: string; module: Module; cta: string }[] = [];
+  if (late.length) alerts.push({ tone: "terra", text: `${late.length} ticket${late.length === 1 ? "" : "s"} over ${state.settings.kds.urgent} min at the pass — ${late.map((t) => t.tableLabel).join(", ")}`, module: "kitchen", cta: "Open the pass" });
+  if (unsent.length) alerts.push({ tone: "sun", text: `${unsent.length} table${unsent.length === 1 ? " has" : "s have"} items not yet sent to the kitchen — ${unsent.map((o) => o.tableLabel).join(", ")}`, module: "till", cta: "Go to Till" });
+  if (out.length) alerts.push({ tone: "terra", text: `Out of stock: ${out.map((i) => i.name).join(", ")}`, module: "ingredients", cta: "Ingredients" });
+  else if (low.length) alerts.push({ tone: "cobalt", text: `${low.length} ingredient${low.length === 1 ? "" : "s"} below par — ${low.slice(0, 3).map((i) => i.name).join(", ")}${low.length > 3 ? "…" : ""}`, module: "purchasing", cta: "Raise a PO" });
+  if (!drawer) alerts.push({ tone: "sun", text: "No cash drawer is open — open one with a float before taking cash", module: "drawer", cta: "Open drawer" });
+  if (offMenu.length) alerts.push({ tone: "cobalt", text: `86'd tonight: ${offMenu.map((d) => d.name).join(", ")}`, module: "menu", cta: "Menu" });
+  if (!alerts.length) alerts.push({ tone: "forest", text: "All clear — kitchen is on time, stock is above par and the drawer is open.", module: "reports", cta: "Reports" });
+
+  const greet = nowHour < 12 ? "Good morning" : nowHour < 17 ? "Good afternoon" : "Good evening";
 
   return (
-    <div className="px-6 pb-20 pt-8 lg:px-14">
-      <PageHead kicker={`${new Date(now).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })} · ${state.settings.name.split(" · ")[0]}`} title={<>Good {hour < 12 ? "morning" : hour < 17 ? "afternoon" : "evening"}, {me?.name.split(" ")[0]}.</>} lede={`${ghs(t.sales)} taken so far across ${t.paid.length} bills · ${t.open.length} table${t.open.length === 1 ? "" : "s"} open · ${kitchenLive.length} ticket${kitchenLive.length === 1 ? "" : "s"} on the pass.`} />
+    <div className="page">
+      <div className="page-head">
+        <div>
+          <div className="kicker" style={{ color: "var(--sun-d)" }}>Today · {new Date(now).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })}</div>
+          <h1 className="page-title mt-2">{greet}, {me.name.split(" ")[0]}.</h1>
+          <p className="page-sub">{closed.length} orders · {covers} covers · service since 11:30</p>
+        </div>
+        <div className="flex gap-2">
+          {can(me.role, "till") && <button type="button" className="btn btn-sun" onClick={() => api.go("till")}>Open the Till <ArrowRight size={16} strokeWidth={3} /></button>}
+          <button type="button" className="btn btn-ghost" onClick={() => api.setTour(0)}>Take the tour</button>
+        </div>
+      </div>
 
-      <dl className={`mt-10 grid gap-8 border-y py-8 sm:grid-cols-2 xl:grid-cols-5 xl:gap-0 xl:divide-x xl:divide-(--line) ${K.line}`}>
-        <Figure label="Gross sales · this shift" sub={`avg bill ${ghs(t.avgTicket)}`}>
-          <Money cents={t.sales} size="lg" />
-        </Figure>
-        <Figure label="Cash in drawer" className="xl:pl-8" sub={`float ${ghs(state.shift.floatCents)} · ${t.payouts ? `${ghs(t.payouts)} paid out` : "no payouts"}`}>
-          <Money cents={t.expectedCents} size="lg" />
-        </Figure>
-        <Figure label="Food cost · sold items" className="xl:pl-8" sub={foodCost > 35 ? "above the 28–35 % band" : "inside the 28–35 % band"} warn={foodCost > 35}>
-          <Num className={`text-[52px] leading-none tracking-[-.03em] ${foodCost > 35 ? K.warn : ""}`}>{foodCost.toFixed(0)}%</Num>
-        </Figure>
-        <Figure label="Stock on hand" className="xl:pl-8" sub={low.length ? `${low.length} below minimum` : "nothing below minimum"} warn={low.length > 0}>
-          <Money cents={stockValueCents(state)} size="lg" tone="fg2" />
-        </Figure>
-        <Figure label="Kitchen pass" className="xl:pl-8" sub={late.length ? `${late.length} running late` : "nothing late"} warn={late.length > 0}>
-          <Num className={`text-[52px] leading-none tracking-[-.03em] ${late.length ? K.warn : ""}`}>
-            {Math.round(t.avgPassMs / 60000)}
-            <span className={`ml-2 text-[20px] ${K.fg3}`}>min</span>
-          </Num>
-        </Figure>
-      </dl>
+      <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+        <Stat tone="sun" label="Sales today" value={<Money v={gross} />} sub={refunded ? `${cedi(refunded)} refunded` : `${closed.length} paid orders`} onClick={can(me.role, "reports") ? () => api.go("reports") : undefined} />
+        <Stat tone="forest" label="Open tables" value={<>{openOrders.length}<small className="ml-2">/ {state.tables.length}</small></>} sub={`${cedi(openValue)} on the floor`} onClick={can(me.role, "floor") ? () => api.go("floor") : undefined} />
+        <Stat tone="terra" label="At the pass" value={queue.length} sub={queue.length ? `oldest ${Math.round((now - oldest) / 60000)} min` : "kitchen is clear"} onClick={can(me.role, "kitchen") ? () => api.go("kitchen") : undefined} />
+        <Stat tone="cobalt" label="In the drawer" value={drawer ? <Money v={drawerExpected(drawer)} /> : "Closed"} sub={drawer ? `float ${cedi(drawer.float)} · avg ticket ${cedi(avg)}` : "open with a float"} onClick={can(me.role, "drawer") ? () => api.go("drawer") : undefined} />
+      </div>
 
-      <div className="mt-12 grid gap-12 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] xl:gap-16">
-        <section className="space-y-12">
-          <div>
-            <div className="flex items-baseline justify-between">
-              <Caps>Needs a look</Caps>
-              <span className={`text-xs ${K.fg3}`}>{attention.length ? `${attention.length} item${attention.length > 1 ? "s" : ""}` : "all quiet"}</span>
-            </div>
-            <ol className={`mt-4 border-t ${K.line}`}>
-              {attention.map((a, i) => (
-                <li key={i} className={`border-b ${K.line2}`}>
-                  <button type="button" onClick={() => go(a.screen)} className="group flex w-full items-center justify-between gap-6 py-3.5 text-left">
-                    <span className="flex items-center gap-4">
-                      <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${a.tone === "bad" ? "bg-(--bad)" : a.tone === "warn" ? "bg-(--warn)" : "bg-(--accent)"}`} />
-                      <span className="text-sm">{a.text}</span>
-                    </span>
-                    <span className={`text-xs transition-transform group-hover:translate-x-0.5 ${K.fg3}`}>→</span>
-                  </button>
-                </li>
-              ))}
-              {!attention.length && <li className={`py-6 font-serif text-[22px] italic ${K.fg3}`}>Nothing is waiting on you.</li>}
-            </ol>
-          </div>
-
-          <div>
-            <div className="flex items-baseline justify-between">
-              <Caps>Takings by hour</Caps>
-              <TextLink tone="fg3" arrow onClick={() => go("reports")}>
-                Full reports
-              </TextLink>
-            </div>
-            <div className="mt-6">
-              <Bars data={hourly(state, now)} height={140} format={(v) => ghs(v)} />
-            </div>
-          </div>
-
-          <div className="grid gap-10 sm:grid-cols-2">
-            <div>
-              <Caps>Tenders</Caps>
-              <div className="mt-4">
-                <Split
-                  parts={[
-                    { label: `Cash ${ghs(t.cash)}`, value: t.cash },
-                    { label: `MoMo ${ghs(t.momo)}`, value: t.momo },
-                  ]}
-                />
+      <div className="mt-4 grid gap-4 xl:grid-cols-[1.4fr_1fr]">
+        <Card title="Sales by hour" actions={<span className="text-[12px] font-bold text-[var(--ink3)]">peak {hm(day + hours[byHour.indexOf(Math.max(...byHour))] * 3600000)} · {cediShort(Math.max(...byHour))}</span>}>
+          <div className="chart" data-tone="sun">
+            {hours.map((h, i) => (
+              <div key={h} className={h === nowHour ? "is-now" : ""} title={`${h}:00 · ${cedi(byHour[i])}`}>
+                <i style={{ height: `${(byHour[i] / maxHour) * 100}%` }} />
+                <span>{h}</span>
               </div>
-            </div>
-            <div>
-              <Caps>Revenue by category</Caps>
-              <div className="mt-4">
-                <Split parts={byCategory(state).map(([label, value], i) => ({ label: `${label} ${ghs(value)}`, value, tone: (["accent", "fg2", "fg3"] as const)[i % 3] }))} />
+            ))}
+          </div>
+        </Card>
+
+        <Card title="Needs a decision" actions={<AlertTriangle size={16} className="c-terra" />}>
+          <div className="flex flex-col gap-2.5">
+            {alerts.map((a, i) => (
+              <div key={i} className="alert" data-tone={a.tone}>
+                <span className="dot" />
+                <span className="flex-1 text-[13px] font-semibold">{a.text}</span>
+                {can(me.role, a.module) && <button type="button" className="btn btn-xs btn-ink" onClick={() => api.go(a.module)}>{a.cta}</button>}
               </div>
-            </div>
+            ))}
           </div>
-        </section>
+        </Card>
+      </div>
 
-        <section className="space-y-12">
-          <div>
-            <div className="flex items-baseline justify-between">
-              <Caps>Open tables</Caps>
-              <TextLink tone="fg3" onClick={() => go("floor")}>
-                Floor
-              </TextLink>
-            </div>
-            <ol className={`mt-4 border-t ${K.line}`}>
-              {t.open.map((o) => (
-                <li key={o.id} className={`border-b ${K.line2}`}>
-                  <button type="button" onClick={() => dispatch({ type: "selectTable", tableId: o.tableId })} className="flex w-full items-baseline justify-between gap-4 py-3 text-left hover:text-(--accent)">
-                    <span className="flex items-baseline gap-3">
-                      <Num className="text-[20px]">{tableOf(state, o.tableId).code}</Num>
-                      <span className={`text-xs ${K.fg3}`}>
-                        {Math.floor((now - o.openedAt) / 60000)} min · {o.lines.reduce((n, l) => n + l.qty, 0)} items{o.lines.some((l) => !l.sent) ? " · unsent" : ""}
-                      </span>
-                    </span>
-                    <Num className="text-[16px]">{ghs(price(state, o).totalCents)}</Num>
-                  </button>
-                </li>
-              ))}
-              {!t.open.length && <li className={`py-6 font-serif text-[22px] italic ${K.fg3}`}>Every table is settled.</li>}
-            </ol>
+      <div className="mt-4 grid gap-4 xl:grid-cols-3">
+        <Card title="Top dishes" actions={<Flame size={16} className="c-terra" />}>
+          <div className="flex flex-col gap-3">
+            {top.map((t) => (
+              <div key={t.name}>
+                <div className="flex items-baseline justify-between gap-3 text-[13px]">
+                  <span className="d font-bold">{t.name}</span>
+                  <span className="font-semibold text-[var(--ink3)]">{t.qty} × · <b className="c-ink">{cedi(t.rev)}</b></span>
+                </div>
+                <Bar value={(t.rev / topMax) * 100} tone={t.cat as CatKey} className="mt-1.5" />
+              </div>
+            ))}
           </div>
+        </Card>
 
-          <div>
-            <Caps>Best sellers</Caps>
-            <ol className={`mt-4 border-t ${K.line}`}>
-              {topDishes(state, 5).map((d, i) => (
-                <li key={d.id} className={`flex items-baseline justify-between gap-4 border-b py-3 ${K.line2}`}>
-                  <span className="flex items-baseline gap-4">
-                    <Num className={`w-5 text-[13px] ${K.fg3}`}>{i + 1}</Num>
-                    <span className="font-serif text-[17px]">{d.name}</span>
+        <Card title="On the floor now" actions={<ChefHat size={16} className="c-forest" />} pad={false}>
+          <div className="px-5 pb-3">
+            {openOrders.length === 0 && <div className="empty">No open tables</div>}
+            {openOrders.map((o) => {
+              const t = totals(o, vat);
+              const s = o.lines.filter((l) => !l.sent).length;
+              return (
+                <button key={o.id} type="button" className="list-row w-full text-left hover:bg-[var(--cream)]" onClick={() => { if (can(me.role, "till")) { api.pickTable(o.tableId); api.go("till"); } }}>
+                  <span className="d w-20 text-[15px] font-extrabold">{o.tableLabel.replace("Table ", "T·")}</span>
+                  <span className="min-w-0 flex-1 text-[12.5px] font-semibold text-[var(--ink3)]">
+                    <span className="block truncate c-ink">{o.lines.map((l) => `${l.qty}× ${l.name}`).join(", ") || "Nothing ordered yet"}</span>
+                    {o.guests} guests · {Math.round((now - o.opened) / 60000)} min{s ? <span className="c-terra"> · {s} unsent</span> : ""}
                   </span>
-                  <span className={`text-xs ${K.fg3}`}>
-                    {d.qty} sold · <Num className="text-(--fg2)">{ghs(d.cents)}</Num>
-                  </span>
-                </li>
-              ))}
-            </ol>
+                  <span className="d text-[15px] font-bold">{cedi(t.total)}</span>
+                </button>
+              );
+            })}
           </div>
+        </Card>
 
-          <div>
-            <div className="flex items-baseline justify-between">
-              <Caps>Recent activity</Caps>
-              <TextLink tone="fg3" onClick={() => go("audit")}>
-                Audit log
-              </TextLink>
-            </div>
-            <ul className={`mt-4 border-t ${K.line}`}>
-              {state.audit.slice(0, 6).map((e) => (
-                <li key={e.id} className={`border-b py-2.5 text-sm ${K.line2}`}>
-                  <span className={`mr-3 text-xs ${K.fg3}`}>{whenOf(e.at, now)}</span>
-                  <span className={K.fg2}>{e.userName.split(" ")[0]}</span> <span className={K.fg3}>·</span> {e.action}
-                  <span className={`block truncate text-xs ${K.fg3}`}>{e.details}</span>
-                </li>
-              ))}
-            </ul>
+        <Card title="Back office" actions={<Leaf size={16} className="c-forest" />}>
+          <div className="grid grid-cols-2 gap-2.5">
+            {MODULES.filter((m) => m.group !== "service").map((m) => {
+              const ok = can(me.role, m.id);
+              return (
+                <button key={m.id} type="button" disabled={!ok} className="block is-btn p-3.5 text-left disabled:opacity-40" data-tone={GROUPS[m.group].tone} onClick={() => api.go(m.id)}>
+                  <span className="d block text-[14px] font-extrabold leading-tight">{m.label}</span>
+                  <span className="mt-1 block text-[11px] font-semibold opacity-80">{m.desc}</span>
+                </button>
+              );
+            })}
           </div>
-        </section>
+          {drawer && (
+            <div className="mt-3 flex items-center gap-2 text-[12px] font-semibold text-[var(--ink3)]"><Wallet size={14} /> Drawer opened {hm(drawer.openedAt)} by {drawer.openedBy}</div>
+          )}
+        </Card>
       </div>
     </div>
   );

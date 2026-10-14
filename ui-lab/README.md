@@ -72,3 +72,5 @@ ROOT_REDIRECT=/till-v2/ node ui-lab/serve.mjs   # opens straight on the chooser
 ```
 
 The chooser (`till-v2/index.html`) shows all three as live, scaled previews.
+**Sunbird was chosen** and is now the language of the full live demo in
+`../marketing/src/demo/` (`npm run demo` in `marketing/`, port 3200).

@@ -1,129 +1,83 @@
 "use client";
 
+import { Banknote, Monitor, Printer, QrCode, Smartphone, Wifi, WifiOff, Zap } from "lucide-react";
 import { useState } from "react";
-import { type Hardware as HardwareT } from "../data";
-import { shiftTotals, useDemo } from "../store";
-import { Caps, Field, inputCls, K, Num, PageHead, Pill, Switch, Tab, TextLink } from "../ui";
+import { useStore } from "../store";
+import { Badge, Card, Field, Toggle } from "../ui";
+import { OfficeHead } from "./Office";
 
 export function Hardware() {
-  const { state, dispatch } = useDemo();
-  const h = state.hardware;
-  const [d, setD] = useState<HardwareT>(h);
-  const dirty = JSON.stringify(d) !== JSON.stringify(h);
-  const t = shiftTotals(state);
-  const tenders = Object.values(d.tenders).filter(Boolean).length;
-  const set = <K extends keyof HardwareT>(k: K, v: HardwareT[K]) => setD({ ...d, [k]: v });
+  const { state, api } = useStore();
+  const s = state.settings;
+  const [ip, setIp] = useState(s.printer.ip);
+  const [port, setPort] = useState(String(s.printer.port));
+  const setTender = (patch: Partial<typeof s.tenders>, what: string) => api.saveSettings({ ...s, tenders: { ...s.tenders, ...patch } }, what);
+  const setNet = (n: "MTN" | "Telecel" | "AT", v: boolean) => api.saveSettings({ ...s, tenders: { ...s.tenders, networks: { ...s.tenders.networks, [n]: v } } }, `MoMo ${n} ${v ? "enabled" : "disabled"}`);
+  const screens = [
+    { name: "Kitchen pass", where: "Main kitchen · 15\" tablet", online: true, tickets: state.tickets.filter((t) => t.status !== "bumped").length },
+    { name: "Grill station", where: "Outdoor grill · 10\" tablet", online: true, tickets: state.tickets.filter((t) => t.status !== "bumped" && t.lineIds.some((id) => state.orders.flatMap((o) => o.lines).find((l) => l.id === id)?.station === "grill")).length },
+    { name: "Bar", where: "Bar counter · receipt printer", online: false, tickets: 0 },
+  ];
 
   return (
-    <div className="px-6 pb-20 pt-8 lg:px-14">
-      <PageHead kicker="Hardware & tenders" title="Printers, payments, connections." lede="Receipts go to an ESC/POS printer on the network or to the browser’s print dialog. Payment methods switched off here disappear from the pay sheet on every till.">
-        {dirty && (
-          <TextLink tone="fg3" arrow={false} onClick={() => setD(h)}>
-            Discard
-          </TextLink>
-        )}
-        <Pill tone="accent" size="md" className="!w-auto" disabled={!dirty || tenders === 0} onClick={() => dispatch({ type: "hardwareSave", patch: d })}>
-          Save
-        </Pill>
-      </PageHead>
-
-      <div className="mt-10 grid gap-14 lg:grid-cols-2 lg:gap-20">
-        <section className="space-y-12">
-          <div>
-            <Caps>Receipt printer</Caps>
-            <div className="mt-5 flex gap-7">
-              <Tab name="printer" on={d.printerMode === "network"} onClick={() => set("printerMode", "network")}>
-                Network ESC/POS
-              </Tab>
-              <Tab name="printer" on={d.printerMode === "browser"} onClick={() => set("printerMode", "browser")}>
-                Browser print
-              </Tab>
-            </div>
-            {d.printerMode === "network" ? (
-              <div className="mt-6 grid grid-cols-[1fr_120px] gap-6">
-                <Field label="Printer IP" hint="Epson TM-T20 / Xprinter · same Wi-Fi as the till.">
-                  <input value={d.printerIp} onChange={(e) => set("printerIp", e.target.value.replace(/[^\d.]/g, "").slice(0, 15))} className={`${inputCls} font-serif text-[22px] lining`} />
-                </Field>
-                <Field label="Port">
-                  <input inputMode="numeric" value={String(d.printerPort)} onChange={(e) => set("printerPort", Number(e.target.value.replace(/\D/g, "").slice(0, 5)) || 9100)} className={`${inputCls} font-serif text-[22px] lining`} />
-                </Field>
+    <div className="page">
+      <OfficeHead module="hardware" title="Hardware & tenders" sub="What's plugged in and which ways guests can pay. Tender switches change the Till immediately." />
+      <div className="grid gap-4 xl:grid-cols-2">
+        <Card title="Receipt printer" actions={<Badge tone={s.printer.online ? "forest" : "terra"}>{s.printer.online ? <><Wifi size={12} /> Online</> : <><WifiOff size={12} /> Offline</>}</Badge>}>
+          <div className="flex items-start gap-4">
+            <span className="grid h-14 w-14 flex-none place-items-center rounded-2xl bg-[var(--ink)] text-[var(--sun)]"><Printer size={26} /></span>
+            <div className="min-w-0 flex-1">
+              <div className="d text-[16px] font-bold">{s.printer.name}</div>
+              <div className="text-[12.5px] font-semibold text-[var(--ink3)]">ESC/POS over the network · 80 mm thermal · opens the cash drawer</div>
+              <div className="mt-3 grid grid-cols-[1fr_110px] gap-2">
+                <Field label="IP address"><input className="input" value={ip} onChange={(e) => setIp(e.target.value)} /></Field>
+                <Field label="Port"><input className="input" value={port} onChange={(e) => setPort(e.target.value)} inputMode="numeric" /></Field>
               </div>
-            ) : (
-              <p className={`mt-6 text-sm ${K.fg2}`}>Receipts open in the browser’s print dialog — handy for a laptop till or an A4 printer in the office.</p>
-            )}
-            <div className="mt-6 flex flex-wrap items-center gap-x-8 gap-y-3">
-              <TextLink tone="fg2" onClick={() => dispatch({ type: "toast", text: d.printerMode === "network" ? `Test page sent to ${d.printerIp}:${d.printerPort} — 42 columns, cutter OK` : "Test page opened in the print dialog", tone: "ok" })}>
-                Print a test page
-              </TextLink>
-              <Switch on={d.kitchenPrinter} onChange={(v) => set("kitchenPrinter", v)} label="Also print kitchen tickets (alongside the screen)" />
-            </div>
-          </div>
-
-          <div>
-            <Caps>Connection</Caps>
-            <div className={`mt-5 flex items-center justify-between border-t py-4 ${K.line}`}>
-              <div>
-                <p className="text-sm">{state.online ? "Online · syncing live" : "Offline · sales queue on this device"}</p>
-                <p className={`mt-0.5 text-xs ${K.fg3}`}>{state.online ? `${t.queued ? `${t.queued} queued earlier, now synced · ` : ""}MoMo prompts go out immediately` : `${t.queued} sale${t.queued === 1 ? "" : "s"} waiting to sync · cash works as normal`}</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button type="button" className="btn btn-sm btn-ink" onClick={() => api.print("Test page")}>Test print</button>
+                <button type="button" className="btn btn-sm btn-ghost" onClick={() => { api.saveSettings({ ...s, printer: { ...s.printer, ip: ip.trim(), port: Number.parseInt(port, 10) || 9100 } }, `printer ${ip.trim()}:${port}`); }} disabled={ip === s.printer.ip && port === String(s.printer.port)}>Save address</button>
+                <button type="button" className="btn btn-sm btn-ghost" onClick={() => api.saveSettings({ ...s, printer: { ...s.printer, online: !s.printer.online } }, `printer marked ${s.printer.online ? "offline" : "online"}`)}>{s.printer.online ? "Simulate offline" : "Bring online"}</button>
               </div>
-              <Switch on={state.online} onChange={(v) => dispatch({ type: "online", online: v })} label={state.online ? "Online" : "Offline"} />
             </div>
-            <p className={`mt-3 text-xs ${K.fg3}`}>Toggle this to rehearse a network drop — the same switch is in the header.</p>
           </div>
-        </section>
+        </Card>
 
-        <section className="space-y-12">
-          <div>
-            <Caps>Payment methods</Caps>
-            <ul className={`mt-5 border-t ${K.line}`}>
-              {(
-                [
-                  ["cash", "Cash", "Drawer kick, change calculated, counted at close"],
-                  ["momo", "Mobile money", `MTN · Telecel · AirtelTigo · merchant ${state.settings.momoMerchant}`],
-                  ["ghqr", "GhQR", "Guest scans a code on the customer display"],
-                  ["split", "Split cash + MoMo", "One bill, two tenders, one receipt"],
-                ] as const
-              ).map(([k, label, sub]) => (
-                <li key={k} className={`flex items-center justify-between gap-6 border-b py-4 ${K.line2}`}>
-                  <div>
-                    <p className="text-sm">{label}</p>
-                    <p className={`mt-0.5 text-xs ${K.fg3}`}>{sub}</p>
-                  </div>
-                  <Switch on={d.tenders[k]} onChange={(v) => set("tenders", { ...d.tenders, [k]: v })} />
-                </li>
-              ))}
-            </ul>
-            {tenders === 0 && <p className={`mt-3 text-xs ${K.warn}`}>Keep at least one payment method on.</p>}
-          </div>
-
-          <div>
-            <Caps>Accounting export</Caps>
-            <div className="mt-5 flex gap-7">
-              {(["quickbooks", "xero", "none"] as const).map((a) => (
-                <Tab key={a} name="acct" on={d.accounting === a} onClick={() => set("accounting", a)}>
-                  {a === "quickbooks" ? "QuickBooks" : a === "xero" ? "Xero" : "None"}
-                </Tab>
-              ))}
+        <Card title="Cash drawer" actions={<Badge tone="forest">Connected via printer</Badge>}>
+          <div className="flex items-start gap-4">
+            <span className="grid h-14 w-14 flex-none place-items-center rounded-2xl bg-[var(--forest)] text-white"><Banknote size={26} /></span>
+            <div className="flex-1">
+              <div className="d text-[16px] font-bold">Drawer kick · RJ11</div>
+              <div className="text-[12.5px] font-semibold text-[var(--ink3)]">Fires on every cash sale and cash refund. Manual opens are logged to the audit trail.</div>
+              <button type="button" className="btn btn-sm btn-ink mt-3" onClick={() => api.print("Drawer kick (no sale)")}><Zap size={14} /> Open drawer (no sale)</button>
             </div>
-            <p className={`mt-4 text-sm ${K.fg2}`}>{d.accounting === "none" ? "Reports still export a plain sales CSV." : `Reports export a ${d.accounting === "xero" ? "Xero manual-journal" : "QuickBooks journal"} CSV: cash and MoMo takings, net revenue, VAT payable and tips payable.`}</p>
           </div>
+        </Card>
 
-          <div>
-            <Caps>This terminal</Caps>
-            <dl className={`mt-5 grid grid-cols-2 gap-y-3 border-t pt-4 text-sm ${K.line}`}>
-              <dt className={K.fg3}>Device</dt>
-              <dd className="lining">Till 1 · front counter</dd>
-              <dt className={K.fg3}>Build</dt>
-              <dd className="lining">
-                <Num>2026.10</Num> · demo
-              </dd>
-              <dt className={K.fg3}>Storage</dt>
-              <dd className="lining">this browser · local only</dd>
-              <dt className={K.fg3}>Last sync</dt>
-              <dd className="lining">{state.online ? "just now" : "paused"}</dd>
-            </dl>
+        <Card title="Kitchen screens" pad={false}>
+          <table className="tbl">
+            <thead><tr><th>Screen</th><th>Where</th><th>Status</th><th className="r">Live tickets</th></tr></thead>
+            <tbody>
+              {screens.map((k) => <tr key={k.name}><td className="strong"><Monitor size={14} className="mr-2 inline" />{k.name}</td><td className="text-[var(--ink2)]">{k.where}</td><td><Badge tone={k.online ? "forest" : "terra"}>{k.online ? "Online" : "Offline — printing instead"}</Badge></td><td className="r d strong">{k.tickets}</td></tr>)}
+            </tbody>
+          </table>
+        </Card>
+
+        <Card title="Tenders">
+          <div className="flex flex-col gap-2.5">
+            <div className="flex items-center justify-between rounded-2xl border-2 border-[var(--line)] bg-white px-4 py-3"><span className="flex items-center gap-3"><span className="dot" data-tone="forest" /><span><b className="d">Cash</b><span className="block text-[12px] font-semibold text-[var(--ink3)]">GH₵ notes and coins · change calculated at the till</span></span></span><Toggle on={s.tenders.cash} onChange={(v) => setTender({ cash: v }, `Cash ${v ? "enabled" : "disabled"}`)} /></div>
+            <div className="rounded-2xl border-2 border-[var(--line)] bg-white px-4 py-3">
+              <div className="flex items-center justify-between"><span className="flex items-center gap-3"><span className="dot" data-tone="sun" /><span><b className="d"><Smartphone size={14} className="mr-1 inline" />Mobile Money</b><span className="block text-[12px] font-semibold text-[var(--ink3)]">Push a payment prompt to the guest's phone</span></span></span><Toggle on={s.tenders.momo} onChange={(v) => setTender({ momo: v }, `MoMo ${v ? "enabled" : "disabled"}`)} /></div>
+              {s.tenders.momo && (
+                <div className="mt-3 grid grid-cols-3 gap-2">
+                  {(["MTN", "Telecel", "AT"] as const).map((n) => (
+                    <label key={n} className="flex items-center justify-between rounded-xl bg-[var(--cream)] px-3 py-2 text-[13px] font-bold"><span>{n === "AT" ? "AirtelTigo" : n}</span><Toggle on={s.tenders.networks[n]} onChange={(v) => setNet(n, v)} sun /></label>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="flex items-center justify-between rounded-2xl border-2 border-[var(--line)] bg-white px-4 py-3"><span className="flex items-center gap-3"><span className="dot" data-tone="terra" /><span><b className="d"><QrCode size={14} className="mr-1 inline" />GhQR</b><span className="block text-[12px] font-semibold text-[var(--ink3)]">Universal QR · any bank or wallet app · settles next day</span></span></span><Toggle on={s.tenders.ghqr} onChange={(v) => setTender({ ghqr: v }, `GhQR ${v ? "enabled" : "disabled"}`)} /></div>
           </div>
-        </section>
+        </Card>
       </div>
     </div>
   );

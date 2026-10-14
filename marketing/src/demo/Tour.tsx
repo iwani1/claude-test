@@ -1,225 +1,63 @@
 "use client";
 
-import { motion } from "motion/react";
-import { useState } from "react";
-import { can, useDemo, type Action, type State } from "./store";
-import { Caps, K, Pill, TextLink } from "./ui";
+import { ArrowLeft, ArrowRight, X } from "lucide-react";
+import { useEffect } from "react";
+import { can, type Module } from "./data";
+import { currentUser, useStore } from "./store";
 
-type Step = { id: string; chapter: string; title: string; body: string; done: (s: State) => boolean; go: (s: State) => Action[] };
+interface Step { module: Module; title: string; text: string }
 
-const userOrders = (s: State) => s.orders.filter((o) => o.number >= s.firstUserNumber);
-const asOwner = (s: State, perm: Parameters<typeof can>[1], then: Action[]): Action[] =>
-  can(s, perm) ? then : [{ type: "signOut" }, { type: "toast", text: "That part of the system needs the owner or manager — sign in as Kofi (1111) or Efua (2222)", tone: "info" }];
-
-export const STEPS: Step[] = [
-  /* ------------------------------------------------- front of house */
-  {
-    id: "signin",
-    chapter: "Front of house",
-    title: "Sign in with a PIN",
-    body: "Pick Kofi Mensah, the owner, and type 1111 on the keypad. Roles decide what the header shows — later you’ll come back as a cashier and watch the back office disappear.",
-    done: (s) => s.flags.firstUser !== null,
-    go: (s) => (s.userId ? [{ type: "signOut" }] : []),
-  },
-  {
-    id: "order",
-    chapter: "Front of house",
-    title: "Open a table and build an order",
-    body: "On the Till, tap 07 in the table strip, then add a Jollof & Chicken and a Sobolo. Try “note” under a line — the kitchen sees it verbatim.",
-    done: (s) => userOrders(s).some((o) => o.lines.reduce((n, l) => n + l.qty, 0) >= 2),
-    go: (s) => asOwner(s, "pos", [{ type: "selectTable", tableId: "t7" }]),
-  },
-  {
-    id: "send",
-    chapter: "Front of house",
-    title: "Send it to the kitchen",
-    body: "Use “Send … to the kitchen” under the total. Only kitchen items fire — the Sobolo stays on the bill but never prints in the kitchen. Stock for the Jollof leaves the store at this moment.",
-    done: (s) => s.tickets.some((t) => t.number >= s.firstUserNumber),
-    go: (s) => asOwner(s, "pos", [{ type: "selectTable", tableId: "t7" }]),
-  },
-  {
-    id: "pass",
-    chapter: "Front of house",
-    title: "Work the pass",
-    body: "In Kitchen, Start prep on your ticket, then Mark ready. Timers turn amber after 8 minutes and red after 15 — the same thresholds as the real KDS.",
-    done: (s) => s.tickets.some((t) => t.number >= s.firstUserNumber && (t.status === "ready" || t.status === "completed")),
-    go: (s) => asOwner(s, "kds", [{ type: "screen", screen: "kitchen" }]),
-  },
-  {
-    id: "momo",
-    chapter: "Front of house",
-    title: "Charge the table with Mobile Money",
-    body: "Back on the Till, open 07 and press Charge. Pick a network and send the prompt; the receipt prints when the customer approves. Try “Extras” first for a discount or a tip.",
-    done: (s) => userOrders(s).some((o) => o.payment?.method === "momo"),
-    go: (s) => asOwner(s, "pos", [{ type: "selectTable", tableId: "t7" }]),
-  },
-  {
-    id: "offline",
-    chapter: "Front of house",
-    title: "Sell through a network drop",
-    body: "Click Online in the header to go Offline, sell a Sobolo at the Bar for cash, then go back Online and watch it sync.",
-    done: (s) => s.syncedAfterOffline,
-    go: (s) => asOwner(s, "pos", [{ type: "selectTable", tableId: "bar" }, { type: "toast", text: "Now click “Online” in the header to drop the network", tone: "info" }]),
-  },
-
-  /* ----------------------------------------------------- back office */
-  {
-    id: "receive",
-    chapter: "Back office",
-    title: "Receive the chicken delivery",
-    body: "Darko Farms’ van is here. In Stock → Purchasing, open PO-0417 with “Receive goods”, type the invoice number and confirm. Watch chicken jump off the low-stock list.",
-    done: (s) => s.flags.poReceived,
-    go: (s) => asOwner(s, "stock", [{ type: "screen", screen: "purchasing" }]),
-  },
-  {
-    id: "eightysix",
-    chapter: "Back office",
-    title: "Take a dish off the menu",
-    body: "In Menu, switch any dish to Off. It greys out on every till instantly — no reprinting menus, no shouting across the pass.",
-    done: (s) => s.menu.some((m) => !m.available),
-    go: (s) => asOwner(s, "menu", [{ type: "screen", screen: "menu" }]),
-  },
-  {
-    id: "refund",
-    chapter: "Back office",
-    title: "Refund a bill",
-    body: "In Orders, open any paid bill and press Refund. Pick a line, give a reason, confirm. A cashier can start a refund, but only a manager’s PIN (Efua · 2222) completes it — and it lands in the audit log either way.",
-    done: (s) => s.flags.refunded,
-    go: (s) => asOwner(s, "orders", [{ type: "screen", screen: "orders" }]),
-  },
-  {
-    id: "settings",
-    chapter: "Back office",
-    title: "Change how the bill is built",
-    body: "In Setup → Settings, change the receipt footer or the room-service charge and Save. The preview receipt on the right updates as you type; the next bill priced uses the new figures.",
-    done: (s) => s.flags.settingsSaved,
-    go: (s) => (can(s, "settings") ? [{ type: "screen", screen: "settings" }] : [{ type: "signOut" }, { type: "toast", text: "Settings is owner-only — sign in as Kofi (1111)", tone: "info" }]),
-  },
-  {
-    id: "export",
-    chapter: "Back office",
-    title: "Export the day",
-    body: "In Money → Reports, press “Export sales CSV” — a real file downloads, one row per bill with VAT, tips, tender and reference. The accountant never re-keys a thing.",
-    done: (s) => s.flags.exported,
-    go: (s) => asOwner(s, "reports", [{ type: "screen", screen: "reports" }]),
-  },
-
-  /* ------------------------------------------------------ end of day */
-  {
-    id: "close",
-    chapter: "End of day",
-    title: "Close the shift",
-    body: "Open Drawer, settle anything still open, then End shift. Type the counted cash — try the exact figure first, then GH₵ 20 short.",
-    done: (s) => s.flags.shiftClosed,
-    go: (s) => asOwner(s, "drawer", [{ type: "screen", screen: "drawer" }]),
-  },
-  {
-    id: "switch",
-    chapter: "End of day",
-    title: "Hand over to a cashier",
-    body: "Sign out and come back as Ama (3333). The header shrinks to Till, Kitchen, Orders and Drawer; Stock, Money and Setup are simply not there.",
-    done: (s) => s.flags.switchedRole,
-    go: () => [{ type: "signOut" }],
-  },
+const STEPS: Step[] = [
+  { module: "today", title: "The shift at a glance", text: "Sales so far, open tables, what the kitchen is holding and anything that needs a decision. Every tile is a shortcut." },
+  { module: "till", title: "The Till", text: "Categories on the left, dishes in the middle, the bill on the right. Tap a dish to add it, hover a line to change quantity, add a note for the kitchen." },
+  { module: "till", title: "Send, then charge", text: "New items show in red until you send them to the pass. Charge opens the pay sheet: Cash with a keypad and change due, MoMo by network, or a split." },
+  { module: "floor", title: "The floor", text: "Tables, the bar, rooms and takeaway. Yellow is open, dashed blue is reserved, stripes need clearing. Tap a free table to seat guests." },
+  { module: "kitchen", title: "The pass", text: "Every sent ticket, oldest first, with a live timer. Yellow after 8 minutes, red after 15. Start → Ready → Served walks it off the screen." },
+  { module: "orders", title: "Every order", text: "Open, paid, refunded or void. Pick one for its lines, payments and timeline; refund in full or by item — a cashier needs a manager's PIN." },
+  { module: "drawer", title: "The drawer", text: "Opening float plus cash sales, minus payouts and cash refunds, equals what should be in the drawer. Count by denomination to close the day." },
+  { module: "menu", title: "Menu", text: "Prices, prep times and availability. Flip a dish to 86'd and it greys out on the Till within the second." },
+  { module: "recipes", title: "Recipes & costing", text: "Each dish lists what goes on the plate, so you see the plated cost and the margin — and stock moves automatically when it sells." },
+  { module: "ingredients", title: "Ingredients", text: "On hand against par levels, what tonight's sales have used, and quick adjustments for waste or a recount." },
+  { module: "purchasing", title: "Purchasing", text: "Draft an order from what's low, send it, receive it as a GRN (stock goes up) and record the supplier invoice." },
+  { module: "reports", title: "Reports", text: "Gross and net sales, VAT, tender breakdown, value forgone, top dishes and staff — all exportable as CSV for the accountant." },
+  { module: "audit", title: "Audit trail", text: "Everything with a money or stock consequence lands here with who, when and the details. Discounts, voids, refunds, price changes." },
+  { module: "staff", title: "People & permissions", text: "Roles decide which modules a PIN opens. Switch user from the avatar menu to see the system shrink to what each person needs." },
 ];
 
-const CHAPTERS = [...new Set(STEPS.map((s) => s.chapter))];
+export function Tour() {
+  const { state, api } = useStore();
+  const me = currentUser(state)!;
+  const steps = STEPS.filter((s) => can(me.role, s.module));
+  const i = Math.min(state.tour ?? 0, steps.length - 1);
+  const step = steps[i];
 
-export function useTourProgress() {
-  const { state } = useDemo();
-  const done = STEPS.map((st) => st.done(state));
-  const count = done.filter(Boolean).length;
-  const current = done.findIndex((d) => !d);
-  return { done, count, current, total: STEPS.length };
-}
+  useEffect(() => {
+    if (step && state.module !== step.module) api.go(step.module);
+    // Only when the step changes — the user may wander within a step.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [i]);
 
-export function Tour({ onClose, embedded = false }: { onClose?: () => void; embedded?: boolean }) {
-  const { state, dispatch } = useDemo();
-  const { done, count, current, total } = useTourProgress();
-  const [peek, setPeek] = useState<number | null>(null);
-  const openIndex = peek ?? current;
+  if (!step) return null;
+  const close = () => api.setTour(null);
   return (
-    <div className="flex h-full flex-col">
-      <div className="px-8 pt-7">
-        {!embedded && (
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <Caps tone="accent">Run the whole system</Caps>
-              <p className="mt-2 font-serif text-[24px] italic leading-tight tracking-[-.01em]">A night in thirteen steps.</p>
-            </div>
-            {onClose && (
-              <button type="button" onClick={onClose} aria-label="Hide guide" className={`mt-1 text-sm ${K.fg3} hover:text-(--fg)`}>
-                Hide
-              </button>
-            )}
-          </div>
-        )}
-        <div className={`${embedded ? "" : "mt-6"} flex items-baseline justify-between text-xs ${K.fg3}`}>
-          <span>
-            <span className="font-serif lining text-[16px] text-(--fg)">{count}</span> of {total}
-          </span>
-          <span>{count === total ? "the whole system" : `about ${Math.max(1, Math.round((total - count) * 1.2))} min left`}</span>
-        </div>
-        <div className="mt-2 h-px bg-(--line)">
-          <motion.div className="h-full bg-(--accent)" initial={false} animate={{ width: `${(count / total) * 100}%` }} transition={{ duration: 0.6, ease: [0.2, 0.7, 0.2, 1] }} />
+    <aside className="tour" role="dialog" aria-label="Guided tour">
+      <div className="flex items-start justify-between gap-3">
+        <div className="tour-step">Tour · {i + 1} of {steps.length}</div>
+        <button type="button" onClick={close} aria-label="Close tour" className="-mr-1 -mt-1 rounded-lg p-1 hover:bg-white/10"><X size={16} /></button>
+      </div>
+      <h3 className="tour-title">{step.title}</h3>
+      <p>{step.text}</p>
+      <div className="mt-4 flex items-center justify-between">
+        <div className="tour-dots">{steps.map((_, k) => <i key={k} className={k <= i ? "on" : ""} />)}</div>
+        <div className="flex gap-2">
+          <button type="button" className="btn btn-sm" style={{ color: "var(--cream)", border: "2px solid rgba(255,246,230,.25)" }} disabled={i === 0} onClick={() => api.setTour(i - 1)}><ArrowLeft size={14} strokeWidth={3} /></button>
+          {i < steps.length - 1 ? (
+            <button type="button" className="btn btn-sm btn-sun" onClick={() => api.setTour(i + 1)}>Next <ArrowRight size={14} strokeWidth={3} /></button>
+          ) : (
+            <button type="button" className="btn btn-sm btn-sun" onClick={close}>Done</button>
+          )}
         </div>
       </div>
-
-      <div className="no-bar mt-3 min-h-0 flex-1 overflow-y-auto px-8 pb-4">
-        {CHAPTERS.map((ch) => (
-          <section key={ch} className="mt-4 first:mt-2">
-            <Caps className="block">{ch}</Caps>
-            <ol className="mt-1">
-              {STEPS.map((st, i) => ({ st, i }))
-                .filter(({ st }) => st.chapter === ch)
-                .map(({ st, i }) => {
-                  const isDone = done[i];
-                  const isOpen = i === openIndex;
-                  return (
-                    <li key={st.id} className={`border-b ${K.line2} py-3 last:border-b-0`}>
-                      <button type="button" onClick={() => setPeek(peek === i ? null : i === current ? null : i)} className="flex w-full items-start gap-4 text-left">
-                        <span className={`mt-px w-6 shrink-0 font-serif lining text-[18px] ${isDone ? K.accent : i === current ? K.fg : K.fg3}`}>{isDone ? "✓" : String(i + 1).padStart(2, "0")}</span>
-                        <span className={`min-w-0 flex-1 text-sm ${isDone ? `${K.fg3} line-through decoration-(--line)` : i === current ? "font-semibold text-(--fg)" : K.fg2}`}>{st.title}</span>
-                      </button>
-                      {isOpen && (
-                        <div className="pl-10">
-                          <p className={`mt-1.5 text-[13px] leading-relaxed ${K.fg2}`}>{st.body}</p>
-                          <TextLink
-                            className="mt-2.5"
-                            onClick={() => {
-                              st.go(state).forEach((a) => dispatch(a));
-                              setPeek(null);
-                              onClose?.();
-                            }}
-                          >
-                            Take me there
-                          </TextLink>
-                        </div>
-                      )}
-                    </li>
-                  );
-                })}
-            </ol>
-          </section>
-        ))}
-      </div>
-
-      <div className={`border-t ${K.line} px-8 py-5`}>
-        {count === total ? (
-          <a href="/orbs/#pricing" className="block">
-            <Pill tone="accent" right="→" className="pointer-events-none">
-              That was the whole system. Get it
-            </Pill>
-          </a>
-        ) : (
-          <div className="flex items-center justify-between gap-2">
-            <p className={`text-xs ${K.fg3}`}>Nothing here is real.</p>
-            <TextLink tone="fg3" arrow={false} onClick={() => dispatch({ type: "reset" })}>
-              Reset demo
-            </TextLink>
-          </div>
-        )}
-      </div>
-    </div>
+    </aside>
   );
 }

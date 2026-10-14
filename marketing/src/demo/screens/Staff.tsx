@@ -1,189 +1,84 @@
 "use client";
 
+import { Check, UserPlus } from "lucide-react";
 import { useState } from "react";
-import { ROLE_ORDER, ROLES, type Perm, type Role, type Staff as StaffT } from "../data";
-import { ghs } from "../pricing";
-import { currentUser, useDemo } from "../store";
-import { Caps, Field, inputCls, K, Modal, Num, PageHead, Pill, Rows, Select, Switch, TextLink, whenOf } from "../ui";
+import { MODULES, ROLE_LABEL, ROLE_MODULES, type Role, type Staff as StaffT, type Tone } from "../data";
+import { stamp } from "../money";
+import { currentUser, useStore } from "../store";
+import { Avatar, Badge, Card, Field, Modal, Toggle, cx } from "../ui";
+import { OfficeHead } from "./Office";
 
-const PERMS: { id: Perm; label: string }[] = [
-  { id: "pos", label: "Till" },
-  { id: "kds", label: "Kitchen" },
-  { id: "orders", label: "Orders" },
-  { id: "drawer", label: "Drawer" },
-  { id: "refund", label: "Approve refunds" },
-  { id: "reports", label: "Reports" },
-  { id: "menu", label: "Menu & recipes" },
-  { id: "stock", label: "Stock & purchasing" },
-  { id: "staff", label: "Staff" },
-  { id: "settings", label: "Settings & hardware" },
-  { id: "audit", label: "Audit log" },
-];
+const ROLES: Role[] = ["owner", "manager", "cashier", "inventory", "accountant", "cook"];
+const TONES: Tone[] = ["sun", "forest", "terra", "cobalt", "ink"];
 
 export function Staff() {
-  const { state, dispatch, now } = useDemo();
-  const me = currentUser(state);
-  const [editing, setEditing] = useState<string | null>(null);
-  const [adding, setAdding] = useState(false);
-  const takings = (id: string) => state.orders.filter((o) => o.payment?.byId === id).reduce((n, o) => n + o.payment!.amountCents, 0);
-  const active = state.staff.filter((u) => u.active).length;
-
+  const { state } = useStore();
+  const me = currentUser(state)!;
+  const [edit, setEdit] = useState<StaffT | "new" | null>(null);
   return (
-    <div className="px-6 pb-20 pt-8 lg:px-14">
-      <PageHead kicker="Staff & permissions" title="The team." lede={`${active} active of ${state.staff.length} · six roles, one PIN each. What a role can see is fixed in the permission matrix below; nobody is granted anything one-off.`}>
-        <TextLink onClick={() => setAdding(true)}>Add a team member</TextLink>
-      </PageHead>
+    <div className="page">
+      <OfficeHead module="staff" title="Staff & roles" sub={`${state.staff.filter((s) => s.active).length} active · a PIN opens exactly the modules its role allows`}
+        actions={<button type="button" className="btn btn-ink" onClick={() => setEdit("new")}><UserPlus size={16} strokeWidth={2.5} /> Add staff</button>} />
 
-      <div className="mt-10">
-        <Rows head={["Name", "Role", "Terminal", "Last sign-in", "Phone", "Active", "Takings · shift"]}>
-          {state.staff.map((u) => (
-            <tr key={u.id} className={u.active ? "" : "opacity-50"}>
-              <td className="py-3 pr-4">
-                <button type="button" onClick={() => setEditing(u.id)} className="text-left hover:text-(--accent)">
-                  <span className="block font-serif text-[17px]">
-                    {u.name}
-                    {u.id === me?.id && <span className={`ml-2 text-[11px] font-semibold uppercase tracking-[.14em] ${K.accent}`}>you</span>}
-                  </span>
-                  <span className={`block text-xs ${K.fg3}`}>{u.email}</span>
-                </button>
-              </td>
-              <td className={`py-3 pr-4 ${K.fg2}`}>
-                {ROLES[u.role].label}
-                <span className={`block text-xs ${K.fg3}`}>{ROLES[u.role].can.length} permissions</span>
-              </td>
-              <td className={`py-3 pr-4 text-xs ${K.fg3}`}>{ROLES[u.role].terminal ? `PIN · ${u.pin.replace(/./g, "•")}` : "no terminal access"}</td>
-              <td className={`py-3 pr-4 text-xs ${K.fg3}`}>{u.lastLogin ? whenOf(u.lastLogin, now) : "never"}</td>
-              <td className={`py-3 pr-4 text-xs lining ${K.fg3}`}>{u.phone}</td>
-              <td className="py-3 pr-4">
-                <Switch on={u.active} disabled={u.id === me?.id || u.role === "owner"} onChange={(v) => dispatch({ type: "staffUpdate", id: u.id, patch: { active: v } })} />
-              </td>
-              <td className="py-3 text-right">
-                <Num className="text-[16px]">{takings(u.id) ? ghs(takings(u.id)) : "—"}</Num>
-              </td>
-            </tr>
-          ))}
-        </Rows>
+      <div className="grid grid-cols-2 gap-3.5 md:grid-cols-3 xl:grid-cols-4">
+        {state.staff.map((s) => (
+          <button key={s.id} type="button" className={cx("card p-4 text-left transition hover:-translate-y-0.5 hover:border-[var(--ink)]", !s.active && "opacity-50")} onClick={() => setEdit(s)}>
+            <div className="flex items-center gap-3">
+              <Avatar initials={s.initials} tone={s.color} size="lg" />
+              <div className="min-w-0"><div className="d truncate text-[16px] font-bold">{s.name}</div><Badge tone={s.role === "owner" ? "terra" : s.role === "manager" ? "cobalt" : s.role === "cook" ? "ink" : "forest"}>{ROLE_LABEL[s.role]}</Badge></div>
+            </div>
+            <div className="mt-3 text-[12px] font-semibold text-[var(--ink3)]">{s.active ? `${ROLE_MODULES[s.role].length} modules` : "Deactivated"}{s.lastSignIn ? ` · last in ${stamp(s.lastSignIn)}` : ""}{s.id === me.id ? " · you" : ""}</div>
+          </button>
+        ))}
       </div>
 
-      <section className="mt-14">
-        <Caps>Permission matrix</Caps>
-        <p className={`mt-2 max-w-[60ch] text-sm leading-relaxed ${K.fg2}`}>The same matrix the real terminal enforces server-side. Cooks have no terminal login at all — the kitchen display is opened by a cashier or manager.</p>
-        <div className="mt-6 overflow-x-auto no-bar">
-          <table className="w-full min-w-[720px] text-sm">
-            <thead className={`text-left text-[11px] font-semibold uppercase tracking-[.18em] ${K.fg3}`}>
-              <tr className={`border-b ${K.line}`}>
-                <th className="py-2 pr-4 font-semibold">Permission</th>
-                {ROLE_ORDER.map((r) => (
-                  <th key={r} className="py-2 pr-4 text-center font-semibold">
-                    {ROLES[r].short}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-(--line2)">
-              {PERMS.map((p) => (
-                <tr key={p.id}>
-                  <td className="py-2.5 pr-4">{p.label}</td>
-                  {ROLE_ORDER.map((r) => {
-                    const yes = ROLES[r].can.includes(p.id);
-                    return (
-                      <td key={r} className="py-2.5 pr-4 text-center">
-                        <span className={`inline-block h-2 w-2 rounded-full ${yes ? "bg-(--accent)" : "bg-(--line)"}`} aria-label={yes ? "allowed" : "not allowed"} />
-                      </td>
-                    );
-                  })}
+      <Card className="mt-5" title="Permissions matrix" actions={<span className="text-[12px] font-bold text-[var(--ink3)]">matches the live POS</span>} pad={false}>
+        <div className="tbl-wrap">
+          <table className="tbl">
+            <thead><tr><th>Module</th>{ROLES.map((r) => <th key={r} className="text-center">{ROLE_LABEL[r]}</th>)}</tr></thead>
+            <tbody>
+              {MODULES.map((m) => (
+                <tr key={m.id}>
+                  <td className="strong"><span className="dot mr-2 align-middle" data-tone={m.group === "service" ? "sun" : m.group === "stock" ? "forest" : m.group === "money" ? "terra" : "cobalt"} />{m.label}</td>
+                  {ROLES.map((r) => <td key={r} className="text-center">{ROLE_MODULES[r].includes(m.id) ? <Check size={16} strokeWidth={3} className="inline c-forest" /> : <span className="text-[var(--ink4)]">—</span>}</td>)}
                 </tr>
               ))}
+              <tr><td className="strong">Approve refunds & voids</td>{ROLES.map((r) => <td key={r} className="text-center">{r === "owner" || r === "manager" ? <Check size={16} strokeWidth={3} className="inline c-forest" /> : <span className="text-[var(--ink4)]">—</span>}</td>)}</tr>
             </tbody>
           </table>
         </div>
-      </section>
+      </Card>
 
-      <EditStaff id={editing} onClose={() => setEditing(null)} />
-      <AddStaff open={adding} onClose={() => setAdding(false)} />
+      {edit && <StaffSheet staff={edit === "new" ? null : edit} onClose={() => setEdit(null)} />}
     </div>
   );
 }
 
-function EditStaff({ id, onClose }: { id: string | null; onClose: () => void }) {
-  const { state, dispatch } = useDemo();
-  const u = state.staff.find((x) => x.id === id);
-  const me = currentUser(state);
+function StaffSheet({ staff, onClose }: { staff: StaffT | null; onClose: () => void }) {
+  const { state, api } = useStore();
+  const me = currentUser(state)!;
+  const [name, setName] = useState(staff?.name ?? "");
+  const [role, setRole] = useState<Role>(staff?.role ?? "cashier");
+  const [pin, setPin] = useState(staff?.pin ?? "");
+  const [color, setColor] = useState<Tone>(staff?.color ?? "forest");
+  const [active, setActive] = useState(staff?.active ?? true);
+  const okPin = /^\d{4}$/.test(pin) && !state.staff.some((s) => s.pin === pin && s.id !== staff?.id);
+  const initials = name.trim().split(/\s+/).map((w) => w[0]?.toUpperCase() ?? "").join("").slice(0, 2) || "?";
+  const save = () => {
+    api.saveStaff({ id: staff?.id ?? name.toLowerCase().replace(/[^a-z]+/g, "") + Date.now().toString(36).slice(-3), name: name.trim(), initials, role, pin, color, active, lastSignIn: staff?.lastSignIn ?? null });
+    onClose();
+  };
   return (
-    <Modal open={Boolean(u)} onClose={onClose} kicker={u ? ROLES[u.role].label : undefined} title={u?.name ?? ""}>
-      {u && <StaffForm key={u.id} initial={u} lockRole={u.role === "owner" || u.id === me?.id} onSave={(patch) => dispatch({ type: "staffUpdate", id: u.id, patch })} onClose={onClose} />}
+    <Modal title={staff ? staff.name : "New staff member"} sub={staff ? `${ROLE_LABEL[staff.role]} · PIN and role changes are logged` : "They can sign in as soon as you save"} onClose={onClose}
+      foot={<><button type="button" className="btn btn-ghost" onClick={onClose}>Cancel</button><button type="button" className="btn btn-ink grow" disabled={!name.trim() || !okPin} onClick={save}>{staff ? "Save" : "Add"}</button></>}>
+      <div className="flex items-center gap-3"><Avatar initials={initials} tone={color} size="xl" /><div className="flex gap-1.5">{TONES.map((t) => <button key={t} type="button" className={cx("h-8 w-8 rounded-lg border-2", color === t ? "border-[var(--ink)]" : "border-transparent")} data-tone={t} style={{ background: "var(--c)" }} onClick={() => setColor(t)} aria-label={t} />)}</div></div>
+      <Field label="Full name"><input className="input" value={name} onChange={(e) => setName(e.target.value)} autoFocus /></Field>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Role"><select className="select" value={role} onChange={(e) => setRole(e.target.value as Role)}>{ROLES.map((r) => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}</select></Field>
+        <Field label="4-digit PIN" hint={pin && !okPin ? <span className="c-terra">Must be 4 digits and unique</span> : undefined}><input className="input" value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 4))} inputMode="numeric" /></Field>
+      </div>
+      <div className="flex flex-wrap gap-1.5 text-[12px] font-semibold text-[var(--ink3)]">Opens: {ROLE_MODULES[role].map((m) => <span key={m} className="rounded-md bg-[var(--cream2)] px-1.5 py-0.5 c-ink">{MODULES.find((x) => x.id === m)?.label}</span>)}</div>
+      {staff && staff.id !== me.id && <div className="flex items-center justify-between rounded-2xl border-2 border-[var(--line)] bg-white px-4 py-3"><span className="font-bold">{active ? "Active — can sign in" : "Deactivated"}</span><Toggle on={active} onChange={setActive} /></div>}
     </Modal>
-  );
-}
-
-function AddStaff({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { dispatch } = useDemo();
-  return (
-    <Modal open={open} onClose={onClose} kicker="Staff & permissions" title="New team member">
-      <StaffForm
-        initial={{ id: "", name: "", role: "cashier", pin: "", phone: "", email: "", active: true }}
-        isNew
-        onSave={(patch) => {
-          const name = (patch.name ?? "").trim();
-          dispatch({ type: "staffAdd", staff: { id: `u${Date.now().toString(36)}`, name, role: patch.role ?? "cashier", pin: patch.pin ?? "", phone: patch.phone ?? "", email: patch.email || `${name.split(" ")[0].toLowerCase()}@lushview.gh`, active: true } });
-        }}
-        onClose={onClose}
-      />
-    </Modal>
-  );
-}
-
-function StaffForm({ initial, isNew = false, lockRole = false, onSave, onClose }: { initial: StaffT; isNew?: boolean; lockRole?: boolean; onSave: (patch: Partial<StaffT>) => void; onClose: () => void }) {
-  const { state } = useDemo();
-  const [name, setName] = useState(initial.name);
-  const [role, setRole] = useState<Role>(initial.role);
-  const [pin, setPin] = useState(isNew ? "" : initial.pin);
-  const [phone, setPhone] = useState(initial.phone);
-  const [email, setEmail] = useState(initial.email);
-  const terminal = ROLES[role].terminal;
-  const pinTaken = terminal && pin.length === 4 && state.staff.some((u) => u.id !== initial.id && u.pin === pin);
-  const ok = name.trim().length >= 3 && (!terminal || (pin.length === 4 && !pinTaken));
-  return (
-    <div className="space-y-7">
-      <Field label="Full name">
-        <input autoFocus value={name} onChange={(e) => setName(e.target.value.slice(0, 40))} placeholder="Akosua Mensah" className={`${inputCls} font-serif text-[22px]`} />
-      </Field>
-      <div className="grid grid-cols-2 gap-6">
-        <Field label="Role" hint={lockRole ? "The owner’s role can’t be changed from a terminal." : `${ROLES[role].can.length} permissions · ${terminal ? "signs in with a PIN" : "no terminal login"}`}>
-          <Select value={role} disabled={lockRole} onChange={(e) => setRole(e.target.value as Role)}>
-            {ROLE_ORDER.map((r) => (
-              <option key={r} value={r}>
-                {ROLES[r].label}
-              </option>
-            ))}
-          </Select>
-        </Field>
-        <Field label="4-digit PIN" hint={!terminal ? "Not needed for this role." : pinTaken ? "Another team member already uses that PIN." : isNew ? "They’ll use it to sign in on any terminal." : "Change it if it has been shared."}>
-          <input inputMode="numeric" disabled={!terminal} value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 4))} placeholder="••••" className={`${inputCls} font-serif text-[28px] lining disabled:opacity-40`} />
-        </Field>
-      </div>
-      <div className="grid grid-cols-2 gap-6">
-        <Field label="Phone">
-          <input inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value.slice(0, 16))} placeholder="024 000 0000" className={`${inputCls} lining`} />
-        </Field>
-        <Field label="Email">
-          <input inputMode="email" value={email} onChange={(e) => setEmail(e.target.value.slice(0, 48))} placeholder="akosua@lushview.gh" className={inputCls} />
-        </Field>
-      </div>
-      <div className={`border-t pt-5 ${K.line}`}>
-        <Caps>This role can open</Caps>
-        <p className={`mt-2 text-sm ${K.fg2}`}>{ROLES[role].can.length ? PERMS.filter((p) => ROLES[role].can.includes(p.id)).map((p) => p.label).join(" · ") : "Nothing on the terminal — kitchen staff work from the pass screen opened by a cashier."}</p>
-      </div>
-      <Pill
-        tone="accent"
-        disabled={!ok}
-        onClick={() => {
-          onSave({ name: name.trim(), role, pin: terminal ? pin : "", phone: phone.trim(), email: email.trim() });
-          onClose();
-        }}
-      >
-        {isNew ? "Add to the team" : "Save"}
-      </Pill>
-    </div>
   );
 }

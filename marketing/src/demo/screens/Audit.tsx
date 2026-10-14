@@ -1,68 +1,63 @@
 "use client";
 
-import { useState } from "react";
-import { useDemo, type AuditEvent } from "../store";
-import { inputCls, K, Num, PageHead, Rows, Tab, TextLink, whenOf } from "../ui";
-import { saveText } from "./Reports";
+import { Download, Search } from "lucide-react";
+import { useMemo, useState } from "react";
+import type { Tone } from "../data";
+import { download, stamp, toCSV } from "../money";
+import { useStore } from "../store";
+import { Badge, Card, cx } from "../ui";
+import { OfficeHead } from "./Office";
 
-type Entity = AuditEvent["entity"] | "all";
-const ENTITIES: Entity[] = ["all", "order", "payment", "shift", "stock", "menu", "staff", "settings", "system"];
+const TONE: [RegExp, Tone][] = [
+  [/refund|void|86|payout/i, "terra"], [/sale|sign in|served|restored|GRN|invoice|drawer opened|pay in/i, "forest"], [/discount|price|dish|recipe|menu/i, "sun"], [/stock|PO|purchas|ingredient|settings|staff|print/i, "cobalt"],
+];
+const toneFor = (action: string): Tone => TONE.find(([re]) => re.test(action))?.[1] ?? "ink";
 
 export function Audit() {
-  const { state, dispatch, now } = useDemo();
-  const [entity, setEntity] = useState<Entity>("all");
+  const { state, api } = useStore();
   const [q, setQ] = useState("");
-  const [limit, setLimit] = useState(60);
-  const list = state.audit.filter((e) => (entity === "all" || e.entity === entity) && (!q || `${e.userName} ${e.action} ${e.details}`.toLowerCase().includes(q.toLowerCase())));
-  const users = new Set(state.audit.map((e) => e.userName)).size;
-
-  const exportCsv = () => {
-    const rows = [["Timestamp", "User", "Action", "Entity", "Details"], ...list.map((e) => [new Date(e.at).toISOString(), e.userName, e.action, e.entity, e.details])];
-    const csv = rows.map((r) => r.map((c) => (/[",\n]/.test(c) ? `"${c.replace(/"/g, '""')}"` : c)).join(",")).join("\n");
-    saveText(`lushview-audit-${new Date(now).toISOString().slice(0, 10)}.csv`, csv);
-    dispatch({ type: "exported", what: `Audit log CSV · ${list.length} rows` });
-  };
+  const [user, setUser] = useState("all");
+  const [kind, setKind] = useState("all");
+  const users = [...new Set(state.audit.map((a) => a.user))];
+  const kinds = [...new Set(state.audit.map((a) => a.action))].sort();
+  const list = useMemo(() => {
+    const qq = q.trim().toLowerCase();
+    return state.audit.filter((a) => (user === "all" || a.user === user) && (kind === "all" || a.action === kind) && (!qq || `${a.action} ${a.entity} ${a.details}`.toLowerCase().includes(qq)));
+  }, [state.audit, q, user, kind]);
 
   return (
-    <div className="px-6 pb-20 pt-8 lg:px-14">
-      <PageHead kicker="Audit log" title="Who did what, when." lede={`${state.audit.length} events from ${users} people — every sale, void, refund, price change, stock movement and sign-in. Append-only; nothing here can be edited or deleted from the terminal.`}>
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search the log…" className={`${inputCls} w-56 text-sm`} />
-        <TextLink tone="fg2" onClick={exportCsv}>
-          Export CSV
-        </TextLink>
-      </PageHead>
+    <div className="page">
+      <OfficeHead module="audit" title="Audit trail" sub={`${state.audit.length} entries · every sale, refund, void, discount, price change, stock move and sign-in — with who and when`}
+        actions={<>
+          <select className="select !h-11 !w-auto" value={user} onChange={(e) => setUser(e.target.value)}><option value="all">Everyone</option>{users.map((u) => <option key={u}>{u}</option>)}</select>
+          <select className="select !h-11 !w-auto" value={kind} onChange={(e) => setKind(e.target.value)}><option value="all">All actions</option>{kinds.map((k) => <option key={k}>{k}</option>)}</select>
+          <label className="search w-[220px]"><Search size={16} strokeWidth={2.5} /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search details…" /></label>
+          <button type="button" className="btn btn-ink" onClick={() => { download("lushview-audit.csv", toCSV([["Timestamp", "User", "Action", "Entity", "Details"], ...list.map((a) => [new Date(a.at).toISOString(), a.user, a.action, a.entity, a.details])])); api.notify("Audit CSV downloaded", "info"); }}><Download size={16} strokeWidth={2.5} /> CSV</button>
+        </>} />
 
-      <div className="mt-10 flex flex-wrap gap-7">
-        {ENTITIES.map((e) => (
-          <Tab key={e} name="entity" on={entity === e} onClick={() => setEntity(e)}>
-            {e === "all" ? `All · ${state.audit.length}` : `${e} · ${state.audit.filter((x) => x.entity === e).length}`}
-          </Tab>
-        ))}
+      <div className="mb-4 flex flex-wrap gap-2">
+        {kinds.slice(0, 10).map((k) => <button key={k} type="button" className={cx("pill", kind === k && "is-active")} onClick={() => setKind(kind === k ? "all" : k)}><span className="dot" data-tone={toneFor(k)} />{k} · {state.audit.filter((a) => a.action === k).length}</button>)}
       </div>
 
-      <div className="mt-6">
-        <Rows head={["Timestamp", "User", "Action", "Entity", "Details"]} lastRight={false}>
-          {list.slice(0, limit).map((e) => (
-            <tr key={e.id}>
-              <td className={`whitespace-nowrap py-3 pr-6 ${K.fg3}`}>
-                <Num>{whenOf(e.at, now)}</Num>
-              </td>
-              <td className="py-3 pr-6">{e.userName}</td>
-              <td className="py-3 pr-6 font-serif text-[16px]">{e.action}</td>
-              <td className={`py-3 pr-6 text-[11px] font-semibold uppercase tracking-[.16em] ${e.entity === "payment" ? K.accent : e.entity === "settings" || e.entity === "staff" ? K.warn : K.fg3}`}>{e.entity}</td>
-              <td className={`py-3 ${K.fg2}`}>{e.details}</td>
-            </tr>
-          ))}
-        </Rows>
-        {list.length > limit && (
-          <div className="mt-6">
-            <TextLink tone="fg2" onClick={() => setLimit(limit + 60)}>
-              Show {Math.min(60, list.length - limit)} more
-            </TextLink>
-          </div>
-        )}
-        {!list.length && <p className={`py-10 font-serif text-[22px] italic ${K.fg3}`}>Nothing matches.</p>}
-      </div>
+      <Card pad={false}>
+        <div className="tbl-wrap max-h-[64vh]">
+          <table className="tbl">
+            <thead><tr><th>Timestamp</th><th>User</th><th>Action</th><th>Entity</th><th>Details</th></tr></thead>
+            <tbody>
+              {list.map((a) => (
+                <tr key={a.id}>
+                  <td className="whitespace-nowrap num">{stamp(a.at)}</td>
+                  <td className="strong whitespace-nowrap">{a.user}</td>
+                  <td><Badge tone={toneFor(a.action)}>{a.action}</Badge></td>
+                  <td className="whitespace-nowrap text-[var(--ink2)]">{a.entity}</td>
+                  <td className="text-[var(--ink2)]">{a.details}</td>
+                </tr>
+              ))}
+              {list.length === 0 && <tr><td colSpan={5}><div className="empty">No entries match</div></td></tr>}
+            </tbody>
+          </table>
+        </div>
+      </Card>
     </div>
   );
 }
