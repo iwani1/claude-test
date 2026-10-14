@@ -15,8 +15,7 @@
     "test:legacy-import": "tsx tests/legacy-import.ts",
     "test:security": "tsx tests/run-security.ts",
     "test": "npm run test:security",
-    "db:bootstrap": "tsx src/db/seed.ts",
-    "ui:lab": "node ui-lab/serve.mjs"
+    "db:bootstrap": "tsx src/db/seed.ts"
   },
   "dependencies": {
     "dotenv": "17.3.1",
