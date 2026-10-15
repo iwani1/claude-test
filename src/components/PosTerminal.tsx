@@ -1075,14 +1075,6 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
               </div>
             </div>
           </div>
-          <input
-            type="text"
-            value={orderNotes}
-            onChange={(e) => setOrderNotes(e.target.value)}
-            placeholder="Order note (prints on kitchen docket) — e.g. extra shito"
-            aria-label="Order note (prints on kitchen docket)"
-            className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-2.5 h-10 text-xs text-white placeholder:text-neutral-500 focus:outline-none focus:border-amber-500"
-          />
         </div>
 
         {/* Cart Item List — the ONLY part of the panel that scrolls. */}
