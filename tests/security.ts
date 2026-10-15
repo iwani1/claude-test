@@ -187,6 +187,8 @@ async function main() {
   check(Number((await admin.query("SELECT current_stock FROM ingredients WHERE id=1")).rows[0].current_stock) === stockBeforeTarget, "deleting the order returns its stock");
   check((await request(`/api/orders/${id}`, "GET", undefined, other)).status === 404, "cross-branch direct order lookup denied");
   check((await request(`/api/orders/${id}/pay`, "POST", { paymentMethod: "cash", amount: "10" }, other)).status === 404, "cross-branch payment denied");
+  const cashierShiftOpen = await request("/api/shifts", "POST", { action: "open_shift", openingCash: "0.00" }, cashier);
+  check(cashierShiftOpen.status === 200, "cashier opens their own shift before selling");
   const pay = await Promise.all([1,2].map(() => request(`/api/orders/${id}/pay`, "POST", { paymentMethod: "split", amount: "10", cashAmount: "4", momoAmount: "6" }, cashier)));
   check(pay.filter(r => r.status === 200).length === 1 && pay.filter(r => r.status === 409).length === 1, "concurrent payments cannot overpay");
   check(Number((await admin.query("SELECT sum(amount) AS amount FROM payments WHERE order_id=$1", [id])).rows[0].amount) === 10, "split payment ledger equals sale total");
@@ -237,7 +239,7 @@ async function main() {
   const faultOrder = await request("/api/orders", "POST", order("refund-fault-order"), cashier);
   const faultId = faultOrder.body.order.id;
   await request(`/api/orders/${faultId}/pay`, "POST", { paymentMethod: "cash", amount: "10" }, cashier);
-  const beforeFaultPayouts = (await admin.query("SELECT cash_payouts FROM shifts WHERE branch_id=1 AND status='open'")).rows[0].cash_payouts;
+  const beforeFaultPayouts = (await admin.query("SELECT cash_payouts FROM shifts WHERE branch_id=1 AND status='open' AND user_id=3")).rows[0].cash_payouts;
   const beforeFaultStock = (await admin.query("SELECT current_stock FROM ingredients WHERE id=1")).rows[0].current_stock;
   await admin.query(`CREATE FUNCTION test_refund_fault() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.action = 'order_refunded' THEN RAISE EXCEPTION 'Injected late audit failure'; END IF; RETURN NEW; END $$; CREATE TRIGGER test_refund_fault BEFORE INSERT ON audit_logs FOR EACH ROW EXECUTE FUNCTION test_refund_fault();`);
   const fault = await request(`/api/orders/${faultId}/refund`, "POST", { amount: "10", reason: "Failure injection", managerPin: "2222", returnStock: true }, cashier);
@@ -245,7 +247,7 @@ async function main() {
   check((await admin.query("SELECT id FROM refunds WHERE order_id=$1", [faultId])).rowCount === 0, "failed refund rolls back refund ledger");
   check((await admin.query("SELECT payment_status FROM orders WHERE id=$1", [faultId])).rows[0].payment_status === "paid", "failed refund rolls back order state");
   check((await admin.query("SELECT current_stock FROM ingredients WHERE id=1")).rows[0].current_stock === beforeFaultStock, "failed refund rolls back stock restoration");
-  check((await admin.query("SELECT cash_payouts FROM shifts WHERE branch_id=1 AND status='open'")).rows[0].cash_payouts === beforeFaultPayouts, "failed refund rolls back drawer aggregate");
+  check((await admin.query("SELECT cash_payouts FROM shifts WHERE branch_id=1 AND status='open' AND user_id=3")).rows[0].cash_payouts === beforeFaultPayouts, "failed refund rolls back drawer aggregate");
   check((await admin.query("SELECT dm.id FROM drawer_movements dm JOIN refunds r ON r.id=dm.refund_id WHERE r.order_id=$1", [faultId])).rowCount === 0, "failed refund leaves no drawer movement");
   await admin.query("DROP TRIGGER test_refund_fault ON audit_logs; DROP FUNCTION test_refund_fault()");
   const branchWrites = await Promise.all([
@@ -371,6 +373,24 @@ async function main() {
   const shift = (await request("/api/shifts", "GET", undefined, owner)).body.activeShift;
   const expected = Number(shift.openingCash) + Number(shift.totalCashSales) - Number(shift.cashPayouts);
   check((await request("/api/shifts", "POST", { action: "close_shift", shiftId: shift.id, actualClosingCash: expected.toFixed(2) }, owner)).status === 200, "security fixture closes register");
+  // Per-staff shifts: colleagues hold shifts simultaneously, drawer state is
+  // per caller, and only a shift's cashier — or a manager — can close it.
+  // (Fixture user 3 was deliberately deactivated above, so hire a fresh one.)
+  const hire = await request("/api/staff", "POST", { action: "create_employee", name: "Shift Colleague", email: "shiftmate@test.invalid", role: "cashier", password: "Shiftmate-password-123!", pin: "9911" }, owner);
+  check(hire.status === 200, "owner creates a second cashier for the shift checks");
+  const mate = (await request("/api/auth/login", "POST", { email: "shiftmate@test.invalid", password: "Shiftmate-password-123!" })).cookie;
+  const mateOpen = await request("/api/shifts", "POST", { action: "open_shift", openingCash: "30.00" }, mate);
+  check(mateOpen.status === 200, "a colleague opens a shift while another staff shift is open");
+  const mateShift = mateOpen.body.shift;
+  check((await request("/api/shifts", "GET", undefined, mate)).body.activeShift.id === mateShift.id, "drawer state shows each cashier their own shift");
+  const ownerShift2 = await request("/api/shifts", "POST", { action: "open_shift", openingCash: "20.00" }, owner);
+  check(ownerShift2.status === 200 && ownerShift2.body.shift.id !== mateShift.id, "a second staff member opens a shift while a colleague's is open");
+  check(((await request("/api/shifts", "GET", undefined, owner)).body.openShifts || []).length >= 2, "till roles can list every open shift");
+  check((await request("/api/shifts", "POST", { action: "open_shift", openingCash: "5.00" }, mate)).status === 400, "one open shift per staff member");
+  check((await request("/api/shifts", "POST", { action: "close_shift", shiftId: ownerShift2.body.shift.id, actualClosingCash: "20.00" }, mate)).status === 403, "cashier cannot close a colleague's shift");
+  const managerFresh = await login(2);
+  check((await request("/api/shifts", "POST", { action: "close_shift", shiftId: mateShift.id, actualClosingCash: "30.00" }, managerFresh)).status === 200, "manager can close a cashier's shift");
+  await request("/api/shifts", "POST", { action: "close_shift", shiftId: ownerShift2.body.shift.id, actualClosingCash: "20.00" }, owner);
   console.log(`\n${checks} security checks passed against disposable PostgreSQL.`);
 }
 main().catch(error => { console.error(error); process.exitCode = 1; }).finally(() => admin.end());

@@ -29,6 +29,9 @@ import type { CurrentUser } from "@/lib/api-types";
  * or pops the till stays with the till roles.
  */
 export const ShiftCashDrawer: React.FC<{ currentUser: CurrentUser; readOnly?: boolean }> = ({ currentUser, readOnly = false }) => {
+  /** Shifts belong to individual staff now; managers/owners also supervise
+   *  (and may close) colleagues' shifts from this screen. */
+  const canManageShifts = ["manager", "super_admin"].includes(currentUser?.role || "");
   const [activeShift, setActiveShift] = useState<any | null>(null);
   const [shiftHistory, setShiftHistory] = useState<any[]>([]);
 
@@ -36,6 +39,9 @@ export const ShiftCashDrawer: React.FC<{ currentUser: CurrentUser; readOnly?: bo
   const [showOpenModal, setShowOpenModal] = useState(false);
   const [showCloseModal, setShowCloseModal] = useState(false);
   const [showPayoutModal, setShowPayoutModal] = useState(false);
+  const [openShifts, setOpenShifts] = useState<any[]>([]);
+  /** Whose shift the Close modal reconciles — mine, or (managers) a colleague's. */
+  const [closeTarget, setCloseTarget] = useState<any | null>(null);
 
   // Form states
   const [openingCashInput, setOpeningCashInput] = useState("1200.00");
@@ -53,6 +59,7 @@ export const ShiftCashDrawer: React.FC<{ currentUser: CurrentUser; readOnly?: bo
     .then(data => {
     setLoadError(null);
       setActiveShift(data.activeShift);
+      setOpenShifts(data.openShifts || []);
       setShiftHistory(data.history || []);
 
     }).catch(() => setLoadError("Drawer and shifts could not be loaded. What is shown may be out of date.")), []);
@@ -137,14 +144,15 @@ export const ShiftCashDrawer: React.FC<{ currentUser: CurrentUser; readOnly?: bo
 
   const handleCloseShift = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!activeShift) return;
+    const target = closeTarget || activeShift;
+    if (!target) return;
     try {
       const data = await apiFetch("/api/shifts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "close_shift",
-          shiftId: activeShift.id,
+          shiftId: target.id,
           actualClosingCash: countedCashInput,
           notes: closeNotes,
           reconciledBy: currentUser?.id || 1,
@@ -153,6 +161,7 @@ export const ShiftCashDrawer: React.FC<{ currentUser: CurrentUser; readOnly?: bo
       if (data.success) {
         notify(`Shift closed and reconciled! Variance: GH₵${data.difference}`, "ok");
         setShowCloseModal(false);
+        setCloseTarget(null);
         setCountedCashInput("");
         setCloseNotes("");
         fetchShifts();
@@ -171,6 +180,16 @@ export const ShiftCashDrawer: React.FC<{ currentUser: CurrentUser; readOnly?: bo
   const expectedInDrawer = openingFloat + cashSales - payouts;
   const counted = Number(countedCashInput || 0);
   const variance = counted - expectedInDrawer;
+
+  // Colleagues currently on duty, and the numbers of whichever shift the
+  // Close modal is reconciling (mine by default, a colleague's for managers).
+  const otherOpenShifts = openShifts.filter((o) => o.userId !== currentUser?.id);
+  const closeShiftFor = closeTarget || activeShift;
+  const cOpening = Number(closeShiftFor?.openingCash || 0);
+  const cCashSales = Number(closeShiftFor?.totalCashSales || 0);
+  const cPayouts = Number(closeShiftFor?.cashPayouts || 0);
+  const cExpected = cOpening + cCashSales - cPayouts;
+  const cVariance = counted - cExpected;
 
   return (
     <div className="flex-1 flex flex-col h-full bg-neutral-950 overflow-hidden">
@@ -211,6 +230,7 @@ export const ShiftCashDrawer: React.FC<{ currentUser: CurrentUser; readOnly?: bo
             </button>
             <button
               onClick={() => {
+                setCloseTarget(activeShift);
                 setCountedCashInput(expectedInDrawer.toFixed(2));
                 setShowCloseModal(true);
               }}
@@ -226,7 +246,7 @@ export const ShiftCashDrawer: React.FC<{ currentUser: CurrentUser; readOnly?: bo
             className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-black font-semibold rounded-xl text-xs shadow-md shadow-amber-500/20 flex items-center gap-1.5 transition"
           >
             <Unlock className="w-4 h-4" />
-            <span>Open Register Shift</span>
+            <span>Open My Shift</span>
           </button>
         )}
       </div>
@@ -245,10 +265,10 @@ export const ShiftCashDrawer: React.FC<{ currentUser: CurrentUser; readOnly?: bo
             <div className="flex justify-between items-start">
               <div>
                 <span className="px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 text-[0.625rem] font-bold uppercase tracking-wider border border-emerald-500/40">
-                  Register #1 Currently Open
+                  Your Shift Is Open
                 </span>
                 <h3 className="text-base font-bold text-white mt-1.5">
-                  Shift #{activeShift.id} - Cashier: {activeShift.userName || "Akosua Serwaa"}
+                  Shift #{activeShift.id} - Cashier: {activeShift.userName || currentUser?.name || "You"}
                 </h3>
                 <p className="text-xs text-neutral-400">
                   Opened: {new Date(activeShift.openedAt).toLocaleString()}
@@ -308,10 +328,50 @@ export const ShiftCashDrawer: React.FC<{ currentUser: CurrentUser; readOnly?: bo
         ) : (
           <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6 text-center text-neutral-400 space-y-2">
             <Lock className="w-10 h-10 mx-auto text-amber-500/60" />
-            <h3 className="text-base font-bold text-white">Register Drawer Is Closed</h3>
+            <h3 className="text-base font-bold text-white">Your Shift Is Closed</h3>
             <p className="text-xs text-neutral-500">
-              Open a shift float to begin taking transactions and tracking cash reconciliation.
+              {otherOpenShifts.length > 0
+                ? `${otherOpenShifts.map((o) => o.userName).join(", ")} ${otherOpenShifts.length === 1 ? "has" : "have"} a shift open. Sales you ring land on your own shift, so open yours before selling.`
+                : "Open a shift float to begin taking transactions and tracking cash reconciliation."}
             </p>
+          </div>
+        )}
+
+        {/* Colleagues on duty — managers/owners can close any of these */}
+        {canManageShifts && otherOpenShifts.length > 0 && (
+          <div className="bg-neutral-900 border border-neutral-800 rounded-2xl overflow-hidden shadow-xl">
+            <div className="p-4 bg-neutral-850 border-b border-neutral-800">
+              <h4 className="font-bold text-white text-xs">Also On Shift Now</h4>
+            </div>
+            <div className="divide-y divide-neutral-800/70">
+              {otherOpenShifts.map((o) => {
+                const expected = Number(o.openingCash || 0) + Number(o.totalCashSales || 0) - Number(o.cashPayouts || 0);
+                return (
+                  <div key={o.id} className="p-4 flex flex-wrap items-center gap-3 justify-between">
+                    <div className="min-w-0">
+                      <div className="font-bold text-white text-sm">
+                        {o.userName} <span className="text-neutral-500 font-normal">· Shift #{o.id}</span>
+                      </div>
+                      <div className="text-[0.6875rem] text-neutral-400">
+                        Opened {new Date(o.openedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} · Sales GH₵{Number(o.totalSales || 0).toFixed(2)} · Expected cash{" "}
+                        <span className="text-amber-400 font-mono font-bold">GH₵{expected.toFixed(2)}</span>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => {
+                        setCloseTarget(o);
+                        setCountedCashInput(expected.toFixed(2));
+                        setShowCloseModal(true);
+                      }}
+                      className="h-11 px-4 bg-rose-600 hover:bg-rose-500 text-white font-semibold rounded-xl text-xs flex items-center gap-1.5 transition active:scale-[0.97]"
+                    >
+                      <Lock className="w-4 h-4" />
+                      <span>Close Shift</span>
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         )}
 
@@ -466,7 +526,7 @@ export const ShiftCashDrawer: React.FC<{ currentUser: CurrentUser; readOnly?: bo
           >
             <h3 className="text-base font-bold text-white flex items-center gap-2">
               <Unlock className="w-5 h-5 text-amber-400" />
-              <span>Open Cash Register Shift</span>
+              <span>Open My Shift</span>
             </h3>
 
             <div className="space-y-3 text-xs">
@@ -507,7 +567,7 @@ export const ShiftCashDrawer: React.FC<{ currentUser: CurrentUser; readOnly?: bo
                 type="submit"
                 className="px-4 py-1.5 text-xs font-semibold bg-amber-500 text-black rounded-lg"
               >
-                Open Register
+                Open Shift
               </button>
             </div>
           </form>
@@ -584,23 +644,28 @@ export const ShiftCashDrawer: React.FC<{ currentUser: CurrentUser; readOnly?: bo
               <Lock className="w-5 h-5 text-rose-400" />
               <span>End Shift & Cash Drawer Audit</span>
             </h3>
+            {closeTarget && closeTarget.userId !== currentUser?.id && (
+              <p className="text-xs text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-xl px-3 py-2">
+                Closing <strong>{closeTarget.userName}</strong>&apos;s shift — count the cash they hand over and enter it below.
+              </p>
+            )}
 
             <div className="p-3 bg-neutral-850 border border-neutral-800 rounded-xl space-y-1.5 text-xs">
               <div className="flex justify-between text-neutral-400">
                 <span>Opening Cash Float:</span>
-                <span className="font-mono">GH₵{openingFloat.toFixed(2)}</span>
+                <span className="font-mono">GH₵{cOpening.toFixed(2)}</span>
               </div>
               <div className="flex justify-between text-neutral-400">
                 <span>Total Cash Sales:</span>
-                <span className="font-mono text-emerald-400">+GH₵{cashSales.toFixed(2)}</span>
+                <span className="font-mono text-emerald-400">+GH₵{cCashSales.toFixed(2)}</span>
               </div>
               <div className="flex justify-between text-neutral-400">
                 <span>Total Cash Outflows (incl. refunds):</span>
-                <span className="font-mono text-rose-400">-GH₵{payouts.toFixed(2)}</span>
+                <span className="font-mono text-rose-400">-GH₵{cPayouts.toFixed(2)}</span>
               </div>
               <div className="pt-2 border-t border-neutral-750 flex justify-between font-bold text-white text-sm">
                 <span>Expected Drawer Total:</span>
-                <span className="font-mono text-amber-400">GH₵{expectedInDrawer.toFixed(2)}</span>
+                <span className="font-mono text-amber-400">GH₵{cExpected.toFixed(2)}</span>
               </div>
             </div>
 
@@ -623,16 +688,16 @@ export const ShiftCashDrawer: React.FC<{ currentUser: CurrentUser; readOnly?: bo
               {/* Difference feedback */}
               <div
                 className={`p-2.5 rounded-xl text-xs font-semibold flex items-center justify-between ${
-                  Math.abs(variance) < 0.01
+                  Math.abs(cVariance) < 0.01
                     ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30"
-                    : variance > 0
+                    : cVariance > 0
                     ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
                     : "bg-rose-500/20 text-rose-300 border border-rose-500/40"
                 }`}
               >
                 <span>Reconciliation Discrepancy:</span>
                 <span className="font-mono text-sm">
-                  {variance > 0 ? `+GH₵${variance.toFixed(2)} (Surplus)` : variance < 0 ? `-GH₵${Math.abs(variance).toFixed(2)} (Shortage)` : "GH₵0.00 (Balanced)"}
+                  {cVariance > 0 ? `+GH₵${cVariance.toFixed(2)} (Surplus)` : cVariance < 0 ? `-GH₵${Math.abs(cVariance).toFixed(2)} (Shortage)` : "GH₵0.00 (Balanced)"}
                 </span>
               </div>
 
