@@ -269,99 +269,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
         )}
       </div>
 
-      {/* Primary action — the single most-used control on a POS terminal.
-          Oversized so it can be hit without looking away from the customer. */}
-      {showNewOrder && (
-        <div className="p-3 pb-1">
-          <button
-            onClick={() => {
-              onNewOrder?.();
-              onCloseMobile?.();
-            }}
-            className={`w-full h-14 rounded-2xl bg-amber-500 hover:bg-amber-400 active:bg-amber-600 text-black font-bold shadow-lg shadow-amber-500/25 flex items-center justify-center gap-2.5 transition active:scale-[0.98] ${
-              collapsed ? "px-0" : "px-4"
-            }`}
-            title="Start a new order"
-          >
-            <Plus className="w-6 h-6 shrink-0" strokeWidth={3} />
-            {!collapsed && <span className="text-[0.9375rem]">New Order</span>}
-          </button>
-        </div>
-      )}
-
-      <nav
-        className={`flex-1 overflow-y-auto custom-scrollbar ${
-          showNewOrder ? "pt-2 pb-3 px-2.5" : "py-4 px-2.5"
-        } space-y-4`}
-      >
-        {navSections.map((sec, sIdx) => (
-          <div key={sIdx} className="space-y-1.5">
-            {!collapsed && (
-              <div className="px-3 text-[0.625rem] font-bold tracking-[0.12em] text-neutral-500 uppercase">
-                {sec.title}
-              </div>
-            )}
-            {collapsed && sIdx > 0 && <div className="mx-3 border-t border-neutral-800" />}
-
-            {sec.items.map((it) => {
-              const Icon = it.icon;
-              const isActive = activeTab === it.id;
-              return (
-                <button
-                  key={it.id}
-                  onClick={() => {
-                    onTabChange(it.id as NavTab);
-                    onCloseMobile?.();
-                  }}
-                  // 52px row height keeps every target comfortably above the
-                  // ~44px minimum for reliable finger taps.
-                  className={`relative w-full flex items-center gap-3.5 rounded-xl transition-all group ${
-                    collapsed ? "h-14 justify-center px-0" : "h-[52px] px-3.5"
-                  } ${
-                    isActive
-                      ? "bg-amber-500 text-black font-bold shadow-lg shadow-amber-500/20"
-                      : "text-neutral-300 hover:bg-neutral-800 hover:text-white active:bg-neutral-750"
-                  }`}
-                  title={it.label}
-                  aria-current={isActive ? "page" : undefined}
-                >
-                  <Icon
-                    className={`w-[22px] h-[22px] shrink-0 transition ${
-                      isActive ? "text-black" : "text-neutral-400 group-hover:text-amber-400"
-                    }`}
-                  />
-                  {!collapsed && (
-                    <div className="flex-1 flex items-center justify-between text-left min-w-0">
-                      <span className="truncate text-[0.84375rem] font-semibold">{it.label}</span>
-                      {it.badge !== undefined && it.badge !== "" && (
-                        <span
-                          className={`ml-2 shrink-0 text-[0.6875rem] px-2 py-0.5 rounded-full font-bold ${
-                            isActive
-                              ? "bg-black/20 text-black"
-                              : "bg-amber-500/10 text-amber-400 border border-amber-500/30"
-                          }`}
-                        >
-                          {it.badge}
-                        </span>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Active indicator edge for quick peripheral scanning */}
-                  {isActive && (
-                    <span className="absolute left-0 top-1/2 -translate-y-1/2 -ml-2.5 h-8 w-1.5 rounded-r-full bg-amber-400" />
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        ))}
-      </nav>
-
-      {/* Signed-in user + terminal controls (md+; moved from the top bar so
-          the bar could come off and give its height to the work area). */}
+      {/* Signed-in user + terminal controls (md+). Moved from the top bar, and
+          repositioned to the top of the rail at staff request (Oct 2026)
+          so who is signed in and the terminal state are visible at a
+          glance without looking to the bottom of the screen. */}
       {currentUser && (
-        <div className="max-md:hidden border-t border-neutral-800 p-3 space-y-2.5">
+        <div className="max-md:hidden border-b border-neutral-800 p-3 space-y-2.5">
           {collapsed ? (
             <div className="flex flex-col items-center gap-2">
               <button
@@ -491,6 +404,95 @@ export const Sidebar: React.FC<SidebarProps> = ({
           )}
         </div>
       )}
+
+      {/* Primary action — the single most-used control on a POS terminal.
+          Oversized so it can be hit without looking away from the customer. */}
+      {showNewOrder && (
+        <div className="p-3 pb-1">
+          <button
+            onClick={() => {
+              onNewOrder?.();
+              onCloseMobile?.();
+            }}
+            className={`w-full h-14 rounded-2xl bg-amber-500 hover:bg-amber-400 active:bg-amber-600 text-black font-bold shadow-lg shadow-amber-500/25 flex items-center justify-center gap-2.5 transition active:scale-[0.98] ${
+              collapsed ? "px-0" : "px-4"
+            }`}
+            title="Start a new order"
+          >
+            <Plus className="w-6 h-6 shrink-0" strokeWidth={3} />
+            {!collapsed && <span className="text-[0.9375rem]">New Order</span>}
+          </button>
+        </div>
+      )}
+
+      <nav
+        className={`flex-1 overflow-y-auto custom-scrollbar ${
+          showNewOrder ? "pt-2 pb-3 px-2.5" : "py-4 px-2.5"
+        } space-y-4`}
+      >
+        {navSections.map((sec, sIdx) => (
+          <div key={sIdx} className="space-y-1.5">
+            {!collapsed && (
+              <div className="px-3 text-[0.625rem] font-bold tracking-[0.12em] text-neutral-500 uppercase">
+                {sec.title}
+              </div>
+            )}
+            {collapsed && sIdx > 0 && <div className="mx-3 border-t border-neutral-800" />}
+
+            {sec.items.map((it) => {
+              const Icon = it.icon;
+              const isActive = activeTab === it.id;
+              return (
+                <button
+                  key={it.id}
+                  onClick={() => {
+                    onTabChange(it.id as NavTab);
+                    onCloseMobile?.();
+                  }}
+                  // 52px row height keeps every target comfortably above the
+                  // ~44px minimum for reliable finger taps.
+                  className={`relative w-full flex items-center gap-3.5 rounded-xl transition-all group ${
+                    collapsed ? "h-14 justify-center px-0" : "h-[52px] px-3.5"
+                  } ${
+                    isActive
+                      ? "bg-amber-500 text-black font-bold shadow-lg shadow-amber-500/20"
+                      : "text-neutral-300 hover:bg-neutral-800 hover:text-white active:bg-neutral-750"
+                  }`}
+                  title={it.label}
+                  aria-current={isActive ? "page" : undefined}
+                >
+                  <Icon
+                    className={`w-[22px] h-[22px] shrink-0 transition ${
+                      isActive ? "text-black" : "text-neutral-400 group-hover:text-amber-400"
+                    }`}
+                  />
+                  {!collapsed && (
+                    <div className="flex-1 flex items-center justify-between text-left min-w-0">
+                      <span className="truncate text-[0.84375rem] font-semibold">{it.label}</span>
+                      {it.badge !== undefined && it.badge !== "" && (
+                        <span
+                          className={`ml-2 shrink-0 text-[0.6875rem] px-2 py-0.5 rounded-full font-bold ${
+                            isActive
+                              ? "bg-black/20 text-black"
+                              : "bg-amber-500/10 text-amber-400 border border-amber-500/30"
+                          }`}
+                        >
+                          {it.badge}
+                        </span>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Active indicator edge for quick peripheral scanning */}
+                  {isActive && (
+                    <span className="absolute left-0 top-1/2 -translate-y-1/2 -ml-2.5 h-8 w-1.5 rounded-r-full bg-amber-400" />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        ))}
+      </nav>
 
       {/* Footer Info */}
       {!collapsed ? (
