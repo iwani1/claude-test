@@ -91,6 +91,8 @@ async function main() {
   check(cashierOrder.status === 200 && cashierOrder.body.order.items.length > 0 && !hasCost(cashierOrder.body.order.items), "cashier's order history carries no cost price");
   check(hasCost((await request(`/api/orders/${financeOrderId}`, "GET", undefined, owner)).body.order.items), "owner's order carries cost price");
   check(!hasCost((await request("/api/orders?limit=5", "GET", undefined, cashier)).body.orders.flatMap((o: any) => o.items)), "cashier's order list carries no cost price");
+  check(typeof cashierOrder.body.order.userName === "string" && cashierOrder.body.order.userName.length > 0, "an opened order names the staff member who created it");
+  check((await request("/api/orders?limit=5", "GET", undefined, cashier)).body.orders.every((o: any) => typeof o.userName === "string" && o.userName.length > 0), "order history names who created each order");
   const costProbe = await request("/api/orders", "POST", order("cost-probe"), cashier);
   check(costProbe.status === 200 && costProbe.body.order.items.length > 0 && !hasCost(costProbe.body.order.items), "the sale a cashier rings up returns no cost price");
   check((await request(`/api/orders/${costProbe.body.order.id}`, "DELETE", {}, owner)).status === 200, "the cost probe sale erases cleanly");

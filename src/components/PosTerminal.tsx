@@ -572,6 +572,8 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
     const table = tables.find((t) => t.id === (order.tableId ?? selectedTableId));
     return {
       ...order,
+      // Who rang it, so the kitchen knows whose name to call.
+      userName: order.userName || currentUser.name,
       tableNumber: table?.tableNumber,
       roomNumber: order.roomNumber || (orderType === "room_service" ? roomNumber : null),
       items,
@@ -835,6 +837,7 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
     const finishPayment = (settledOrder: any, changeGiven: string) => {
       const receiptOrder = {
         ...settledOrder,
+        cashierName: currentUser.name,
         items: cart,
         paidAmount: settledOrder?.totalAmount != null ? String(settledOrder.totalAmount) : totalAmount.toFixed(2),
         paymentMethod:

@@ -288,6 +288,11 @@ export const OrdersHistory: React.FC<{
                         <div className="text-[0.6875rem] text-neutral-400">
                           {new Date(ord.createdAt).toLocaleString()}
                         </div>
+                        {ord.userName && (
+                          <div className="text-[0.6875rem] text-neutral-500">
+                            Created by <span className="text-neutral-300 font-medium">{ord.userName}</span>
+                          </div>
+                        )}
                       </div>
                       <div className="text-right shrink-0">
                         <div className="font-mono font-bold text-white text-base">
@@ -447,6 +452,11 @@ export const OrdersHistory: React.FC<{
                     <tr key={ord.id} className="hover:bg-neutral-850/50">
                       <td className="px-4 py-3 font-mono font-bold text-white">
                         {ord.orderNumber}
+                        {ord.userName && (
+                          <div className="font-sans font-medium text-[0.6875rem] text-neutral-500">
+                            by {ord.userName}
+                          </div>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-neutral-400 text-[0.6875rem]">
                         {new Date(ord.createdAt).toLocaleString()}

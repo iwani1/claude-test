@@ -10,6 +10,7 @@ import {
   auditLogs,
   menuItems,
   modifierOptions,
+  users,
 } from "@/db/schema";
 import { eq, desc, inArray, and, gte, lte, count } from "drizzle-orm";
 import { deductStockForOrder } from "@/lib/inventory-deduction";
@@ -44,8 +45,17 @@ async function handleGET(req: Request) {
     const showCost = maySeeCost(await getSessionUser());
     const items = allOrderIds.length > 0 ? await db.select().from(orderItems) : [];
 
+    // Who rang each order, by name: the list is the tracking surface, and
+    // "user #7" is useless when a manager is reconciling a shift.
+    const creatorIds = [...new Set(orderList.map((o) => o.userId).filter((id): id is number => typeof id === "number"))];
+    const creators = creatorIds.length
+      ? await db.select({ id: users.id, name: users.name }).from(users).where(inArray(users.id, creatorIds))
+      : [];
+    const creatorName = new Map(creators.map((u) => [u.id, u.name]));
+
     const populatedOrders = orderList.map((ord) => ({
       ...ord,
+      userName: creatorName.get(ord.userId) || "Unknown",
       items: items.filter((it) => it.orderId === ord.id).map((it) => hideCost(it, showCost)),
     }));
 

@@ -1,7 +1,7 @@
 import { secureRoute, ApiError, isDatabaseFailure } from "@/lib/api";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
-import { orders, orderItems, diningTables, auditLogs, stockMovements, ingredients, refunds, payments, kitchenTickets, shifts, drawerMovements, orderDeletionTombstones } from "@/db/schema";
+import { orders, orderItems, diningTables, auditLogs, stockMovements, ingredients, refunds, payments, kitchenTickets, shifts, drawerMovements, orderDeletionTombstones, users } from "@/db/schema";
 import { and, eq, inArray, or } from "drizzle-orm";
 import { toCents, fromCents } from "@/lib/pricing-core";
 import { reverseStockForOrder } from "@/lib/inventory-deduction";
@@ -26,7 +26,9 @@ async function handleGET(req: Request, { params }: { params: Promise<{ id: strin
     const refundRows = await db.select().from(refunds).where(eq(refunds.orderId, orderId));
     const refundedCents = refundRows.reduce((sum, row) => sum + Math.round(Number(row.amount) * 100), 0);
 
-    return NextResponse.json({ order: { ...order, items, refundedAmount: fromCents(refundedCents) } });
+    const [creator] = await db.select({ name: users.name }).from(users).where(eq(users.id, order.userId)).limit(1);
+
+    return NextResponse.json({ order: { ...order, userName: creator?.name || "Unknown", items, refundedAmount: fromCents(refundedCents) } });
   } catch (err: any) {
     if (isDatabaseFailure(err)) throw err;
     return NextResponse.json({ error: err.message }, { status: 500 });
