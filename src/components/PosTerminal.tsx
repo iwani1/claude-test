@@ -22,6 +22,7 @@ import {
   ShoppingCart,
   ChevronDown,
   ChevronUp,
+  Unlock,
 } from "lucide-react";
 import { ReceiptModal } from "./ReceiptModal";
 import { KitchenTicketModal } from "./KitchenTicketModal";
@@ -91,6 +92,33 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
   /** Quantities as the kitchen already has them, per cart line, so a
    *  reprint only sends what is new instead of recooking the whole bill. */
   const loadedBaselineRef = useRef<Map<string, number>>(new Map());
+  /**
+   * My own open shift: undefined while unknown (still loading, or the
+   * answer never arrived), null when I definitely have none. Sales land on
+   * the seller's own shift, so a known "none" prompts me to open one
+   * before my first sale; unknown never blocks the till (the server still
+   * refuses payment without a shift, and offline orders queue unpaid).
+   */
+  const [myOpenShift, setMyOpenShift] = useState<any | null | undefined>(undefined);
+  const [showShiftGate, setShowShiftGate] = useState(false);
+  const [gateFloat, setGateFloat] = useState("");
+  const [gateBusy, setGateBusy] = useState(false);
+  const gateContinuationRef = useRef<(() => void) | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/shifts")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (alive && data) setMyOpenShift(data.activeShift ?? null);
+      })
+      .catch(() => {
+        /* audit-ok: shift state unknown — do not block selling on a guess */
+      });
+    return () => {
+      alive = false;
+    };
+  }, [currentUser?.id]);
   /**
    * Phones and small tablets show the open order as a slide-up sheet — the
    * pattern chosen for this app — so the menu keeps the full screen and the
@@ -692,6 +720,57 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  /**
+   * Runs a sale action (kitchen docket / settle) once the seller's shift
+   * situation is known-good. With several staff on duty, the first sale of
+   * a cashier's day opens their own shift — float first, then the sale
+   * continues exactly where it left off.
+   */
+  const requireShift = (continuation: () => void) => {
+    if (myOpenShift === null && navigator.onLine) {
+      gateContinuationRef.current = continuation;
+      setShowShiftGate(true);
+      return;
+    }
+    continuation();
+  };
+
+  const proceedToSettle = () => {
+    setCashTendered(totalAmount.toFixed(2));
+    const half = (Math.round((totalAmount / 2) * 100) / 100).toFixed(2);
+    setSplitCashAmount(half);
+    setSplitMomoAmount((totalAmount - Number(half)).toFixed(2));
+    setSplitCashTendered(half);
+    setMomoRef("");
+    setCartOpen(false);
+    setShowPayModal(true);
+  };
+
+  const handleGateOpenShift = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setGateBusy(true);
+    try {
+      const data = await apiFetch("/api/shifts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "open_shift", openingCash: gateFloat || "0" }),
+      });
+      if (data.success) {
+        setMyOpenShift(data.shift);
+        setShowShiftGate(false);
+        notify(`Your shift is open — float GH₵${Number(gateFloat || 0).toFixed(2)}. Your sales now land on your own shift.`, "ok");
+        const go = gateContinuationRef.current;
+        gateContinuationRef.current = null;
+        go?.();
+      } else {
+        notify(data.error || "Could not open your shift", "error");
+      }
+    } catch (err) {
+      notify(apiErrorMessage(err, "Could not open your shift"), "error");
+    }
+    setGateBusy(false);
   };
 
   // Handle Pay and Settle Bill (Cash, MoMo, or Split)
@@ -1547,7 +1626,7 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
               /* A comp order has nothing to collect, so it is sent straight
                  through — no payment modal, no tender step. */
               <button
-                onClick={handleProcessPayment}
+                onClick={() => requireShift(() => void handleProcessPayment())}
                 disabled={cart.length === 0 || isSubmitting}
                 className="w-full h-14 px-4 bg-sky-600 hover:bg-sky-500 active:bg-sky-700 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-2xl text-[0.9375rem] font-bold flex items-center justify-center gap-2.5 shadow-lg shadow-sky-600/25 transition active:scale-[0.98]"
               >
@@ -1556,16 +1635,7 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
               </button>
             ) : (
               <button
-                onClick={() => {
-                  setCashTendered(totalAmount.toFixed(2));
-                  const half = (Math.round((totalAmount / 2) * 100) / 100).toFixed(2);
-                  setSplitCashAmount(half);
-                  setSplitMomoAmount((totalAmount - Number(half)).toFixed(2));
-                  setSplitCashTendered(half);
-                  setMomoRef("");
-                  setCartOpen(false);
-                  setShowPayModal(true);
-                }}
+                onClick={() => requireShift(proceedToSettle)}
                 disabled={cart.length === 0 || isSubmitting}
                 className="w-full h-14 px-4 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-2xl text-[0.9375rem] font-bold flex items-center justify-center gap-2.5 shadow-lg shadow-emerald-600/25 transition active:scale-[0.98]"
               >
@@ -1576,7 +1646,7 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
 
             <div className="grid grid-cols-2 gap-2">
               <button
-                onClick={handleSendToKitchen}
+                onClick={() => requireShift(() => void handleSendToKitchen())}
                 disabled={cart.length === 0 || isSubmitting}
                 className="h-12 px-3 bg-neutral-800 hover:bg-neutral-750 active:bg-neutral-700 disabled:opacity-40 disabled:cursor-not-allowed border border-neutral-700 text-white rounded-2xl text-[0.75rem] font-bold flex items-center justify-center gap-2 transition active:scale-[0.98]"
                 title="Print the kitchen docket without taking payment"
@@ -1597,6 +1667,58 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Shift gate: a cashier's first sale of the day opens their own shift. */}
+      {showShiftGate && (
+        <div className="fixed inset-0 z-[120] flex items-start justify-center bg-black/75 backdrop-blur-sm p-4 overflow-y-auto" role="dialog" aria-modal="true" aria-label="Open your shift">
+          <form
+            onSubmit={handleGateOpenShift}
+            className="bg-neutral-900 border border-neutral-700 rounded-3xl w-full max-w-sm p-6 shadow-2xl space-y-4 max-h-[92dvh] overflow-y-auto my-auto"
+          >
+            <h3 className="text-base font-bold text-white flex items-center gap-2">
+              <Unlock className="w-5 h-5 text-amber-400" />
+              <span>Open your shift first</span>
+            </h3>
+            <p className="text-xs text-neutral-400 leading-relaxed">
+              {currentUser?.name}, every sale you ring lands on <strong className="text-neutral-200">your own shift</strong> — your
+              float, your cash sales, your count at closing. How much float are you starting with?
+            </p>
+            <div>
+              <label className="text-neutral-300 block mb-1 text-xs" htmlFor="gate-float">
+                Opening float (GH₵)
+              </label>
+              <input
+                id="gate-float"
+                type="number"
+                inputMode="decimal"
+                step="10.00"
+                min="0"
+                autoFocus
+                value={gateFloat}
+                onChange={(e) => setGateFloat(e.target.value)}
+                placeholder="0.00"
+                className="w-full bg-neutral-800 border border-neutral-700 rounded-xl px-3 py-2.5 text-white font-mono font-bold text-lg focus:outline-none focus:border-amber-500"
+              />
+            </div>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setShowShiftGate(false)}
+                className="flex-1 h-12 rounded-xl bg-neutral-800 border border-neutral-700 text-neutral-300 font-bold text-sm transition active:scale-[0.98]"
+              >
+                Not yet
+              </button>
+              <button
+                type="submit"
+                disabled={gateBusy}
+                className="flex-1 h-12 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-40 text-black font-bold text-sm transition active:scale-[0.98]"
+              >
+                {gateBusy ? "Opening…" : "Open Shift & Sell"}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
 
       {/* MODAL 1: Modifier & Add-on Selection */}
       {selectedItemForMod && (

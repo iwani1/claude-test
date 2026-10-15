@@ -194,15 +194,17 @@ async function handlePOST(req: Request, { params }: { params: Promise<{ id: stri
         lines.push({ method: "momo", cents: payCents, reference: ref || "MOMO", tenderedCents: null, changeCents: 0 });
       }
 
+      // The money lands on the *operator's own* shift: with several staff
+      // on duty, a sale must never swell a colleague's expected drawer cash.
       const shiftRows = await tx
         .select()
         .from(shifts)
-        .where(eq(shifts.status, "open"))
+        .where(and(eq(shifts.status, "open"), eq(shifts.userId, userId)))
         .orderBy(desc(shifts.openedAt))
         .limit(1)
         .for("update");
       const shift = shiftRows[0];
-      if (!shift) return { error: "Open a shift before recording payment", status: 409 };
+      if (!shift) return { error: "Open your shift before recording payment", status: 409 };
 
       const records = await tx
         .insert(payments)

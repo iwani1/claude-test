@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 import { db, requestContext } from "@/db";
 import { shifts, users, auditLogs, drawerMovements } from "@/db/schema";
 import { requireSession } from "@/lib/guard";
-import { eq, desc, inArray } from "drizzle-orm";
+import { eq, desc, inArray, and } from "drizzle-orm";
 
 async function handleGET() {
   try {
@@ -18,7 +18,13 @@ async function handleGET() {
       : [];
     const allUsers = userIds.length ? await db.select().from(users).where(inArray(users.id, userIds)) : [];
 
-    const activeShift = allShifts.find((s) => s.status === "open") || null;
+    // Shifts are per staff member now: several can be open at once, one per
+    // cashier. "activeShift" keeps meaning *the caller's own* open shift so
+    // the till and the drawer screen keep working, and managers additionally
+    // get every open shift to supervise and close.
+    const actorId = requestContext.getStore()?.user?.id;
+    const openShiftsRaw = allShifts.filter((s) => s.status === "open");
+    const activeShift = openShiftsRaw.find((s) => s.userId === actorId) || null;
 
     const enrichedShifts = allShifts.map((s) => {
       const u = allUsers.find((usr) => usr.id === s.userId);
@@ -31,13 +37,16 @@ async function handleGET() {
       };
     });
 
+    const myShift = activeShift
+      ? {
+          ...enrichedShifts.find(s => s.id === activeShift.id),
+          userName: allUsers.find((u) => u.id === activeShift.userId)?.name,
+        }
+      : null;
     return NextResponse.json({
-      activeShift: activeShift
-        ? {
-            ...enrichedShifts.find(s => s.id === activeShift.id),
-            userName: allUsers.find((u) => u.id === activeShift.userId)?.name,
-          }
-        : null,
+      activeShift: myShift,
+      myShift,
+      openShifts: openShiftsRaw.map((o) => enrichedShifts.find((e) => e.id === o.id)),
       history: enrichedShifts,
       drawerMovements: movements,
     });
@@ -62,10 +71,12 @@ async function handlePOST(req: Request) {
       const { branchId, openingCash, notes } = body;
       const userId = sessionUserId;
 
-      // Check if open shift already exists
-      const [existing] = await db.select().from(shifts).where(eq(shifts.status, "open")).limit(1);
+      // One open shift per staff member (several colleagues may be on duty
+      // at once, each accountable for their own float and cash sales).
+      const [existing] = await db.select().from(shifts)
+        .where(and(eq(shifts.status, "open"), eq(shifts.userId, Number(userId)))).limit(1);
       if (existing) {
-        return NextResponse.json({ error: "There is already an active open shift on this register" }, { status: 400 });
+        return NextResponse.json({ error: "You already have an open shift. Close it before opening another." }, { status: 400 });
       }
 
       const [newShift] = await db
@@ -103,6 +114,9 @@ async function handlePOST(req: Request) {
       }
 
       if (shift.status !== "open") throw new ApiError(409, "Shift is closed");
+      if (shift.userId !== sessionUserId && !["manager", "super_admin"].includes(guard.user.role)) {
+        throw new ApiError(403, "You can only record payouts on your own shift");
+      }
       if (body.refundId !== undefined || body.kind === "refund") throw new ApiError(400, "Use the refund endpoint; linked cash outflows are recorded automatically");
       const payout = moneyCents(amount);
       if (typeof reason !== "string" || !reason.trim() || reason.length > 500) throw new ApiError(400, "Payout reason required");
@@ -134,6 +148,10 @@ async function handlePOST(req: Request) {
       }
 
       if (shift.status !== "open") throw new ApiError(409, "Shift is already closed");
+      const closingForSelf = shift.userId === sessionUserId;
+      if (!closingForSelf && !["manager", "super_admin"].includes(guard.user.role)) {
+        throw new ApiError(403, "Only the cashier who opened a shift, or a manager, can close it");
+      }
       const opening = moneyCents(shift.openingCash, true);
       const cashSales = moneyCents(shift.totalCashSales || "0", true);
       const payouts = moneyCents(shift.cashPayouts || "0", true);
@@ -161,7 +179,7 @@ async function handlePOST(req: Request) {
         action: "shift_closed",
         entityType: "shift",
         entityId: String(shift.id),
-        details: `Closed shift. Counted: GH₵${(counted / 100).toFixed(2)}, Expected: GH₵${(expectedCash / 100).toFixed(2)}, Diff: ${diff >= 0 ? "+" : ""}GH₵${(diff / 100).toFixed(2)}`,
+        details: `${closingForSelf ? "Closed shift" : `Closed shift for cashier #${shift.userId}`}. Counted: GH₵${(counted / 100).toFixed(2)}, Expected: GH₵${(expectedCash / 100).toFixed(2)}, Diff: ${diff >= 0 ? "+" : ""}GH₵${(diff / 100).toFixed(2)}`,
       });
 
       return NextResponse.json({ success: true, shift: closedShift, difference: (diff / 100).toFixed(2) });
@@ -171,9 +189,9 @@ async function handlePOST(req: Request) {
       const { shiftId, reason } = body;
       const [shift] = shiftId
         ? await db.select().from(shifts).where(eq(shifts.id, Number(shiftId))).limit(1)
-        : await db.select().from(shifts).where(eq(shifts.status, "open")).limit(1);
+        : await db.select().from(shifts).where(and(eq(shifts.status, "open"), eq(shifts.userId, sessionUserId))).limit(1);
       if (!shift || shift.status !== "open") {
-        return NextResponse.json({ error: "No open shift — open the register first" }, { status: 400 });
+        return NextResponse.json({ error: "No open shift — open your shift first" }, { status: 400 });
       }
 
       await db.insert(auditLogs).values({

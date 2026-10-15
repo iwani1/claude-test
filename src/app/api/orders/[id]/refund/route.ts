@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createHash } from "node:crypto";
 import { refundBalance } from "@/lib/refund-balance";
-import { eq, sql } from "drizzle-orm";
+import { eq, sql, and } from "drizzle-orm";
 import { db, requestContext } from "@/db";
 import { orders, refunds, auditLogs, users, diningTables, shifts, drawerMovements } from "@/db/schema";
 import { pinDigest, verifyPassword } from "@/lib/auth";
@@ -50,9 +50,10 @@ export const POST = secureRoute(async (req, { params }) => {
   if (cash > balance.cash || momo > balance.momo) throw new ApiError(409, "Refund exceeds remaining original cash/MoMo tender");
   const full = refunded + cents === paid;
   if (returnStock && !full) throw new ApiError(400, "Stock can only be returned when all collected funds have been refunded");
-  // Lock the current branch's open drawer, not the historical sale's shift.
-  const [shift] = await db.select().from(shifts).where(eq(shifts.status, "open")).for("update");
-  if (cash > 0 && !shift) throw new ApiError(409, "Open a shift before recording a cash refund");
+  // Lock the operator's own open shift, not the historical sale's shift and
+  // not a colleague's: cash handed back comes out of this operator's float.
+  const [shift] = await db.select().from(shifts).where(and(eq(shifts.status, "open"), eq(shifts.userId, actor.id))).for("update");
+  if (cash > 0 && !shift) throw new ApiError(409, "Open your shift before recording a cash refund");
   const [refund] = await db.insert(refunds).values({ orderId, amount: (cents / 100).toFixed(2), cashAmount: (cash / 100).toFixed(2), momoAmount: (momo / 100).toFixed(2),
     shiftId: shift?.id ?? null, idempotencyKey, requestFingerprint: fingerprint, reason: reason.trim(), authorizedBy: manager.id, stockReturned: !!returnStock }).returning();
   if (cash > 0 && shift) {
