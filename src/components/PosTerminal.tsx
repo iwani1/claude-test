@@ -1311,6 +1311,23 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
               </div>
             </div>
           </div>
+
+          {/* Order note — saved with the order and printed on the kitchen
+              docket ("TICKET NOTE: ..."). Brought back Oct 2026 after staff
+              asked for a way to flag whole-order instructions (extra shito,
+              allergies) that per-item notes don't cover. */}
+          <div>
+            <label className="sr-only">
+              Order note (prints on kitchen docket)
+            </label>
+            <input
+              type="text"
+              value={orderNotes}
+              onChange={(e) => setOrderNotes(e.target.value)}
+              placeholder="Order note (prints on kitchen docket) — e.g. extra shito"
+              className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 h-11 text-xs text-white placeholder:text-neutral-500 focus:outline-none focus:border-amber-500"
+            />
+          </div>
         </div>
 
         {/* Cart Item List — the ONLY part of the panel that scrolls. */}
