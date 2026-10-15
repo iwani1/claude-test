@@ -15,10 +15,6 @@ import {
   Clock,
   KeyRound,
   LogOut,
-  Plus,
-  Coins,
-  Grid,
-  Receipt,
 } from "lucide-react";
 import { ROLE_PERMISSIONS, UserRole, hasTerminalAccess } from "@/lib/permissions";
 import { getOfflineQueue, syncOfflineQueueToServer } from "@/lib/offline-storage";
@@ -33,11 +29,6 @@ interface NavbarProps {
   lowStockCount?: number;
   openShift?: any;
   onLogout?: () => void;
-  onNewOrder?: () => void;
-  onOpenDrawer?: () => void;
-  onGoTables?: () => void;
-  onGoOrders?: () => void;
-  currentTab?: string;
   /** Phones only: opens the slide-in navigation drawer. */
   onOpenMenu?: () => void;
 }
@@ -48,11 +39,6 @@ export const Navbar: React.FC<NavbarProps> = ({
   lowStockCount = 0,
   openShift,
   onLogout,
-  onNewOrder,
-  onOpenDrawer,
-  onGoTables,
-  onGoOrders,
-  currentTab,
   onOpenMenu,
 }) => {
   const isOnline = useOnlineStatus();
@@ -159,75 +145,6 @@ export const Navbar: React.FC<NavbarProps> = ({
         <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
           {/* Per-terminal text & touch size — each screen can differ. */}
           <DisplaySizeControl />
-          {/* POS quick jumps — New Order / Tables / Orders / Drawer always visible */}
-          {(onNewOrder || onGoTables || onGoOrders || onOpenDrawer) && (
-            <div className="hidden xl:flex items-center gap-2 mr-1">
-              {onNewOrder && (
-                <button
-                  onClick={onNewOrder}
-                  className={`h-11 px-4 font-bold rounded-xl flex items-center gap-2 shadow-lg transition active:scale-[0.97] text-[0.8125rem] ${
-                    currentTab === "pos"
-                      ? "bg-amber-400 text-black shadow-amber-500/20 ring-2 ring-amber-200"
-                      : "bg-amber-500 hover:bg-amber-400 active:bg-amber-600 text-black shadow-amber-500/20"
-                  }`}
-                  title="Start a new order (clears the ticket)"
-                >
-                  <Plus className="w-5 h-5" strokeWidth={3} />
-                  <span>New Order</span>
-                </button>
-              )}
-              {onGoTables && (
-                <button
-                  onClick={onGoTables}
-                  className={`h-11 px-3.5 font-bold rounded-xl flex items-center gap-2 border transition active:scale-[0.97] text-[0.8125rem] ${
-                    currentTab === "tables"
-                      ? "bg-neutral-100 text-black border-neutral-100"
-                      : "bg-neutral-800 hover:bg-neutral-750 text-white border-neutral-700"
-                  }`}
-                  title="Go to tables & floor plan"
-                >
-                  <Grid className="w-5 h-5" />
-                  <span className="hidden lg:inline">Tables</span>
-                </button>
-              )}
-              {onGoOrders && (
-                <button
-                  onClick={onGoOrders}
-                  className={`h-11 px-3.5 font-bold rounded-xl flex items-center gap-2 border transition active:scale-[0.97] text-[0.8125rem] ${
-                    currentTab === "orders"
-                      ? "bg-neutral-100 text-black border-neutral-100"
-                      : "bg-neutral-800 hover:bg-neutral-750 text-white border-neutral-700"
-                  }`}
-                  title="Go to past orders"
-                >
-                  <Receipt className="w-5 h-5" />
-                  <span className="hidden lg:inline">Orders</span>
-                </button>
-              )}
-              {onOpenDrawer && (
-                <button
-                  onClick={onOpenDrawer}
-                  className={`h-11 px-3.5 font-bold rounded-xl flex items-center gap-2 border transition active:scale-[0.97] text-[0.8125rem] ${
-                    currentTab === "shifts"
-                      ? "bg-emerald-400 text-black border-emerald-400"
-                      : "bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border-emerald-500/50"
-                  }`}
-                  title={openShift ? "Cash drawer is open — manage shift" : "Cash drawer is closed — open shift"}
-                >
-                  <span className="relative flex">
-                    <Coins className="w-5 h-5" />
-                    <span
-                      className={`absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border border-neutral-900 ${
-                        openShift ? "bg-emerald-400" : "bg-rose-500"
-                      }`}
-                    />
-                  </span>
-                  <span className="hidden lg:inline">Drawer</span>
-                </button>
-              )}
-            </div>
-          )}
-
           {/* Register state — the brand block that carries it is hidden on
               phones, and whether the drawer is open is the one thing a cashier
               must never have to guess. */}

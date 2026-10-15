@@ -45,9 +45,6 @@ interface PosTerminalProps {
   currentUser: CurrentUser;
   onOrderCreated?: () => void;
   activeTableId?: number | null;
-  onOpenDrawer?: () => void;
-  onGoTables?: () => void;
-  onGoOrders?: () => void;
 }
 
 export const PosTerminal: React.FC<PosTerminalProps> = ({
@@ -57,9 +54,6 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
   currentUser,
   onOrderCreated,
   activeTableId = null,
-  onOpenDrawer,
-  onGoTables,
-  onGoOrders,
 }) => {
   // State
   const [selectedCategory, setSelectedCategory] = useState<number | "all">("all");
@@ -764,55 +758,6 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
 
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden bg-neutral-950">
-      {/* POS COMPUTER QUICK NAV — one-tap jumps between the 5 till screens.
-          Hidden on phones: the bottom tab bar does this job there without
-          spending 72px of a small screen, and New Ticket / Clear stay on the
-          order panel itself. */}
-      <div className="hidden md:flex shrink-0 bg-neutral-900 border-b border-neutral-800 px-3 py-2 items-center gap-2 overflow-x-auto custom-scrollbar">
-        <button
-          onClick={requestNewTicket}
-          className="h-14 px-5 shrink-0 rounded-2xl bg-amber-500 hover:bg-amber-400 active:bg-amber-600 text-black font-bold text-sm flex items-center gap-2 shadow-md transition active:scale-[0.97]"
-          title="Start a new order (asks before discarding a loaded ticket)"
-        >
-          <Plus className="w-5 h-5" strokeWidth={3} />
-          <span>New Ticket</span>
-        </button>
-        {onGoTables && (
-          <button
-            onClick={onGoTables}
-            className="h-14 px-5 shrink-0 rounded-2xl bg-neutral-800 hover:bg-neutral-750 border border-neutral-700 text-white font-bold text-sm flex items-center gap-2 transition active:scale-[0.97]"
-            title="Go to tables & floor plan"
-          >
-            <span className="text-lg leading-none">▦</span>
-            <span>Tables</span>
-          </button>
-        )}
-        {onGoOrders && (
-          <button
-            onClick={onGoOrders}
-            className="h-14 px-5 shrink-0 rounded-2xl bg-neutral-800 hover:bg-neutral-750 border border-neutral-700 text-white font-bold text-sm flex items-center gap-2 transition active:scale-[0.97]"
-            title="Go to past orders"
-          >
-            <Receipt className="w-5 h-5 text-neutral-300" />
-            <span>Orders</span>
-          </button>
-        )}
-        {onOpenDrawer && (
-          <button
-            onClick={onOpenDrawer}
-            className="h-14 px-5 shrink-0 rounded-2xl bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/50 text-emerald-300 font-bold text-sm flex items-center gap-2 transition active:scale-[0.97]"
-            title="Open the cash drawer screen"
-          >
-            <Coins className="w-5 h-5" />
-            <span>Cash Drawer</span>
-          </button>
-        )}
-        <div className="ml-auto hidden md:flex items-center gap-2 text-xs text-neutral-400 shrink-0 pr-1">
-          <span className="font-mono font-bold text-amber-400 text-base">GH₵{totalAmount.toFixed(2)}</span>
-          <span>· {cart.reduce((n, it) => n + it.quantity, 0)} items</span>
-        </div>
-      </div>
-
       <div className="flex-1 flex flex-col md:flex-row min-h-0 overflow-hidden relative">
       {/* LEFT/CENTER: Ghanaian Menu Items & Categories */}
       <div className="flex-1 flex flex-col h-full border-r border-neutral-800 overflow-hidden">
@@ -1028,11 +973,14 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
           </div>
           <div className="mt-1.5 h-1.5 w-12 mx-auto rounded-full bg-neutral-700" />
         </div>
-        {/* Order Meta Header */}
-        <div className="p-4 border-b border-neutral-800 space-y-3">
+        {/* Order Meta Header — deliberately compact (field report, Oct 2026):
+            the old labelled fields ate ~230px and squeezed the ticket items
+            into a sliver staff had to scroll to. Labels are sr-only now; the
+            placeholders carry the meaning. Items + checkout get the height. */}
+        <div className="p-3 border-b border-neutral-800 space-y-2 shrink-0">
           {/* Order Type Selector — Room Service is distinct from restaurant
               table dining because the GH₵ room charge applies only there. */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 bg-neutral-950 p-1.5 rounded-xl border border-neutral-800 text-xs font-bold">
+          <div className="flex gap-1 bg-neutral-950 p-1 rounded-xl border border-neutral-800 text-[0.6875rem] font-bold">
             {([
               ["dine_in", "Table"],
               ["room_service", "Room Service"],
@@ -1047,7 +995,7 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
                   if (type !== "room_service") setIsComplimentary(false);
                   if (type !== "room_service") setRoomNumber("");
                 }}
-                className={`h-12 px-1 rounded-lg transition active:scale-[0.97] ${
+                className={`flex-1 h-11 px-0.5 rounded-lg transition active:scale-[0.97] ${
                   orderType === type
                     ? type === "room_service"
                       ? "bg-sky-400 text-black shadow-xs"
@@ -1064,7 +1012,7 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
           <div className="grid grid-cols-2 gap-2 text-xs">
             {orderType === "dine_in" ? (
               <div>
-                <label className="text-[0.625rem] text-neutral-400 font-medium block mb-1">
+                <label className="sr-only">
                   Table Number
                 </label>
                 <select
@@ -1082,20 +1030,20 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
               </div>
             ) : orderType === "room_service" ? (
               <div>
-                <label className="text-[0.625rem] text-sky-300 font-semibold block mb-1">
+                <label className="sr-only">
                   Hotel Room Number *
                 </label>
                 <input
                   type="text"
                   value={roomNumber}
                   onChange={(e) => setRoomNumber(e.target.value)}
-                  placeholder="e.g. 204"
+                  placeholder="Room · e.g. 204 *"
                   className="w-full bg-neutral-800 border border-sky-500/40 rounded-lg px-3 h-11 text-white font-bold placeholder:text-neutral-500 focus:outline-none focus:border-sky-400"
                 />
               </div>
             ) : (
               <div>
-                <label className="text-[0.625rem] text-neutral-400 font-medium block mb-1">
+                <label className="sr-only">
                   Guest Phone (optional)
                 </label>
                 <div className="relative">
@@ -1112,7 +1060,7 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
             )}
 
             <div>
-              <label className="text-[0.625rem] text-neutral-400 font-medium block mb-1">
+              <label className="sr-only">
                 Guest Name
               </label>
               <div className="relative">
@@ -1122,27 +1070,23 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
                   value={customerName}
                   onChange={(e) => setCustomerName(e.target.value)}
                   placeholder="Walk-in Guest"
-                  className="w-full bg-neutral-800 border border-neutral-700 rounded-lg pl-6 pr-2 py-1.5 text-white focus:outline-none focus:border-amber-500"
+                  className="w-full bg-neutral-800 border border-neutral-700 rounded-lg pl-6 pr-2 h-11 text-white placeholder:text-neutral-500 focus:outline-none focus:border-amber-500"
                 />
               </div>
             </div>
           </div>
-          <div>
-            <label className="text-[0.625rem] text-neutral-400 font-medium block mb-1">
-              Order Note (prints on kitchen docket)
-            </label>
-            <input
-              type="text"
-              value={orderNotes}
-              onChange={(e) => setOrderNotes(e.target.value)}
-              placeholder="e.g. Birthday — extra shito on side"
-              className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-2.5 py-2 text-xs text-white placeholder:text-neutral-500 focus:outline-none focus:border-amber-500"
-            />
-          </div>
+          <input
+            type="text"
+            value={orderNotes}
+            onChange={(e) => setOrderNotes(e.target.value)}
+            placeholder="Order note (prints on kitchen docket) — e.g. extra shito"
+            aria-label="Order note (prints on kitchen docket)"
+            className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-2.5 h-10 text-xs text-white placeholder:text-neutral-500 focus:outline-none focus:border-amber-500"
+          />
         </div>
 
-        {/* Cart Item List */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-2.5 custom-scrollbar">
+        {/* Cart Item List — the ONLY part of the panel that scrolls. */}
+        <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-2.5 custom-scrollbar">
           {cart.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-center text-neutral-500 p-6">
               <Receipt className="w-12 h-12 mb-2 opacity-30 text-amber-500" />
@@ -1224,8 +1168,9 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
           )}
         </div>
 
-        {/* Order Calculations & Checkout Bar */}
-        <div className="p-4 bg-neutral-900 border-t border-neutral-800 space-y-3">
+        {/* Order Calculations & Checkout Bar — shrink-0: totals and Settle
+            are always on screen; the panel never scrolls to reach them. */}
+        <div className="p-3 bg-neutral-900 border-t border-neutral-800 space-y-2.5 shrink-0">
           {/* Quick Discount & Tip Triggers */}
           <div className="flex gap-2 text-xs">
             <button
@@ -1384,36 +1329,16 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
                 <Printer className="w-5 h-5 text-amber-400 shrink-0" />
                 <span>Kitchen Docket</span>
               </button>
-              {onOpenDrawer ? (
-                <button
-                  onClick={onOpenDrawer}
-                  className="h-12 px-3 bg-emerald-600/15 hover:bg-emerald-600/25 border border-emerald-500/50 text-emerald-300 rounded-2xl text-[0.75rem] font-bold flex items-center justify-center gap-2 transition active:scale-[0.98]"
-                  title="Jump to the cash drawer screen"
-                >
-                  <Coins className="w-5 h-5 shrink-0" />
-                  <span>Cash Drawer</span>
-                </button>
-              ) : (
-                <button
-                  onClick={requestNewTicket}
-                  disabled={cart.length === 0 || isSubmitting}
-                  className="h-12 px-3 bg-neutral-800 hover:bg-neutral-750 border border-neutral-700 text-neutral-300 rounded-2xl text-[0.75rem] font-bold flex items-center justify-center gap-2 transition active:scale-[0.98] disabled:opacity-40"
-                  title="Clear the current ticket (asks first)"
-                >
-                  <Trash2 className="w-5 h-5 shrink-0" />
-                  <span>Clear</span>
-                </button>
-              )}
-            </div>
-            {onOpenDrawer && (
               <button
-                onClick={handleNewTicketLocal}
+                onClick={requestNewTicket}
                 disabled={cart.length === 0 || isSubmitting}
-                className="w-full h-10 text-[0.75rem] font-semibold text-neutral-400 hover:text-rose-300 hover:bg-rose-500/10 rounded-xl transition disabled:opacity-40"
+                className="h-12 px-3 bg-neutral-800 hover:bg-neutral-750 border border-neutral-700 text-neutral-300 rounded-2xl text-[0.75rem] font-bold flex items-center justify-center gap-2 transition active:scale-[0.98] disabled:opacity-40"
+                title="Clear the current ticket (asks first)"
               >
-                Clear ticket
+                <Trash2 className="w-5 h-5 shrink-0" />
+                <span>Clear Ticket</span>
               </button>
-            )}
+            </div>
           </div>
         </div>
       </div>
