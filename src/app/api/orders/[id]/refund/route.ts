@@ -8,8 +8,14 @@ import { pinDigest, verifyPassword } from "@/lib/auth";
 import { reverseStockForOrder } from "@/lib/inventory-deduction";
 import { ApiError, assertNotThrottled, recordFailedAttempt, secureRoute } from "@/lib/api";
 import { moneyCents } from "@/lib/money";
+import { ROLE_PERMISSIONS } from "@/lib/permissions";
 export const POST = secureRoute(async (req, { params }) => {
   const actor = requestContext.getStore()!.user!;
+  // Only managers, the owner and accountants may request a refund (owner
+  // directive, Oct 2026). The manager PIN below remains the authorisation;
+  // this gate decides who may ask at all. Cashiers no longer reach this
+  // handler, so the check runs before any money validation or throttling.
+  if (!ROLE_PERMISSIONS[actor.role]?.canIssueRefunds) throw new ApiError(403, "Your role cannot request refunds");
   const orderId = Number((await params).id);
   if (!Number.isSafeInteger(orderId) || orderId <= 0) throw new ApiError(400, "Invalid order ID");
   const { amount, reason, managerPin, returnStock, cashAmount, momoAmount, idempotencyKey } = await req.json();
@@ -67,9 +73,11 @@ export const POST = secureRoute(async (req, { params }) => {
     details: `Refund GH₵${refund.amount}; manager ${manager.id}; full=${full}; stockReturned=${!!returnStock}; ${reason.trim()}` });
   // paidAmount remains the gross collected amount; refunds are a separate ledger.
   return NextResponse.json({ success: true, refund });
-}, "canAccessPos");
+}, "canViewOrderHistory");
 
 export const GET = secureRoute(async (_req, { params }) => {
+  const actor = requestContext.getStore()!.user!;
+  if (!ROLE_PERMISSIONS[actor.role]?.canIssueRefunds) throw new ApiError(403, "Your role cannot request refunds");
   const orderId = Number((await params).id);
   if (!Number.isSafeInteger(orderId) || orderId <= 0) throw new ApiError(400, "Invalid order ID");
   const [order] = await db.select().from(orders).where(eq(orders.id, orderId));
@@ -80,4 +88,4 @@ export const GET = secureRoute(async (_req, { params }) => {
     refundableAmount: ((moneyCents(order.paidAmount, true) - balance.refunded) / 100).toFixed(2),
     requiresReconciliation: balance.unallocated || balance.cashPaid + balance.momoPaid !== moneyCents(order.paidAmount, true),
   });
-}, "canAccessPos");
+}, "canViewOrderHistory");

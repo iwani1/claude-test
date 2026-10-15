@@ -67,7 +67,9 @@ async function main() {
   check((await request(`/api/orders/${financeOrderId}`, "PATCH", { notes: "adjusted" }, accountant)).status === 403, "accountant cannot modify an order");
   check((await request(`/api/orders/${financeOrderId}/edit`, "PATCH", {}, accountant)).status === 403, "accountant cannot re-price an order");
   check((await request(`/api/orders/${financeOrderId}/pay`, "POST", { amount: "1.00", method: "cash" }, accountant)).status === 403, "accountant cannot take a payment");
-  check((await request(`/api/orders/${financeOrderId}/refund`, "POST", { amount: "1.00", reason: "no" }, accountant)).status === 403, "accountant cannot refund");
+  check((await request(`/api/orders/${financeOrderId}/refund`, "GET", undefined, accountant)).status === 200, "accountant can load refundable balances");
+  check((await request(`/api/orders/${financeOrderId}/refund`, "GET", undefined, cashier)).status === 403, "cashier cannot load refundable balances");
+  check((await request(`/api/orders/${financeOrderId}/refund`, "POST", { amount: "1.00", reason: "no", managerPin: "2222" }, cashier)).status === 403, "cashier cannot request refunds");
   check((await request(`/api/orders/${financeOrderId}`, "DELETE", {}, accountant)).status === 403, "accountant cannot erase an order");
   const financeDrawer = await request("/api/shifts", "GET", undefined, accountant);
   check(financeDrawer.status === 200 && "activeShift" in financeDrawer.body, "accountant reads the drawer ledger");
@@ -191,24 +193,26 @@ async function main() {
   check((await request(`/api/orders/${id}/pay`, "POST", { paymentMethod: "cash", amount: "10" }, other)).status === 404, "cross-branch payment denied");
   const cashierShiftOpen = await request("/api/shifts", "POST", { action: "open_shift", openingCash: "0.00" }, cashier);
   check(cashierShiftOpen.status === 200, "cashier opens their own shift before selling");
+  const managerShiftOpen = await request("/api/shifts", "POST", { action: "open_shift", openingCash: "0.00" }, manager);
+  check(managerShiftOpen.status === 200, "manager opens their own shift before refunding");
   const pay = await Promise.all([1,2].map(() => request(`/api/orders/${id}/pay`, "POST", { paymentMethod: "split", amount: "10", cashAmount: "4", momoAmount: "6" }, cashier)));
   check(pay.filter(r => r.status === 200).length === 1 && pay.filter(r => r.status === 409).length === 1, "concurrent payments cannot overpay");
   check(Number((await admin.query("SELECT sum(amount) AS amount FROM payments WHERE order_id=$1", [id])).rows[0].amount) === 10, "split payment ledger equals sale total");
-  for (const amount of ["-1", "0", "NaN", "0.001", "1e2"]) check((await request(`/api/orders/${id}/refund`, "POST", { amount, reason: "Test", managerPin: "2222" }, cashier)).status === 400, `refund rejects ${amount}`);
+  for (const amount of ["-1", "0", "NaN", "0.001", "1e2"]) check((await request(`/api/orders/${id}/refund`, "POST", { amount, reason: "Test", managerPin: "2222" }, manager)).status === 400, `refund rejects ${amount}`);
   await admin.query("DELETE FROM auth_attempts WHERE key='refund:branch:1'");
-  check((await request(`/api/orders/${id}/refund`, "POST", { amount: "1", reason: "Test", managerPin: "8888" }, cashier)).status === 403, "other-branch manager cannot authorize refund");
+  check((await request(`/api/orders/${id}/refund`, "POST", { amount: "1", reason: "Test", managerPin: "8888" }, manager)).status === 403, "other-branch manager cannot authorize refund");
   check((await counter("refund:branch:1")) === 1, "a wrong manager PIN counts once against the refund key");
-  check((await request(`/api/orders/${id}/refund`, "POST", { amount: "4", reason: "Partial", managerPin: "2222", returnStock: true }, cashier)).status === 400, "partial refund cannot restore all stock");
-  const partial = await request(`/api/orders/${id}/refund`, "POST", { amount: "4", reason: "Partial", managerPin: "2222" }, cashier);
+  check((await request(`/api/orders/${id}/refund`, "POST", { amount: "4", reason: "Partial", managerPin: "2222", returnStock: true }, manager)).status === 400, "partial refund cannot restore all stock");
+  const partial = await request(`/api/orders/${id}/refund`, "POST", { amount: "4", reason: "Partial", managerPin: "2222" }, manager);
   check(partial.status === 200, "partial refund succeeds");
   check((await counter("refund:branch:1")) === 1, "an approved refund is not counted against the refund key");
   await admin.query("UPDATE auth_attempts SET count=10, reset_at=now()+interval '15 minutes' WHERE key='refund:branch:1'");
-  check((await request(`/api/orders/${id}/refund`, "POST", { amount: "1", reason: "Test", managerPin: "2222" }, cashier)).status === 429, "a locked refund key refuses even a valid manager approval");
+  check((await request(`/api/orders/${id}/refund`, "POST", { amount: "1", reason: "Test", managerPin: "2222" }, manager)).status === 429, "a locked refund key refuses even a valid manager approval");
   await admin.query("DELETE FROM auth_attempts WHERE key='refund:branch:1'");
   check((await admin.query("SELECT payment_status FROM orders WHERE id=$1", [id])).rows[0].payment_status === "partially_refunded", "partial refund preserves distinct state");
   // Change recipe after sale: restoration must use original ledger.
   await admin.query("UPDATE recipe_ingredients SET quantity=9 WHERE recipe_id=1");
-  const refund = await Promise.all([1,2].map(() => request(`/api/orders/${id}/refund`, "POST", { amount: "6", cashAmount: "0.00", momoAmount: "6.00", reason: "Remaining", managerPin: "2222", returnStock: true }, cashier)));
+  const refund = await Promise.all([1,2].map(() => request(`/api/orders/${id}/refund`, "POST", { amount: "6", cashAmount: "0.00", momoAmount: "6.00", reason: "Remaining", managerPin: "2222", returnStock: true }, manager)));
   check(refund.filter(r => r.status === 200).length === 1 && refund.filter(r => r.status === 409).length === 1, "concurrent final refunds cannot over-refund");
   check(Number((await admin.query("SELECT current_stock FROM ingredients WHERE id=1")).rows[0].current_stock) === 100, "stock restored once using original deduction, not changed recipe");
 
@@ -241,15 +245,15 @@ async function main() {
   const faultOrder = await request("/api/orders", "POST", order("refund-fault-order"), cashier);
   const faultId = faultOrder.body.order.id;
   await request(`/api/orders/${faultId}/pay`, "POST", { paymentMethod: "cash", amount: "10" }, cashier);
-  const beforeFaultPayouts = (await admin.query("SELECT cash_payouts FROM shifts WHERE branch_id=1 AND status='open' AND user_id=3")).rows[0].cash_payouts;
+  const beforeFaultPayouts = (await admin.query("SELECT cash_payouts FROM shifts WHERE branch_id=1 AND status='open' AND user_id=2")).rows[0].cash_payouts;
   const beforeFaultStock = (await admin.query("SELECT current_stock FROM ingredients WHERE id=1")).rows[0].current_stock;
   await admin.query(`CREATE FUNCTION test_refund_fault() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.action = 'order_refunded' THEN RAISE EXCEPTION 'Injected late audit failure'; END IF; RETURN NEW; END $$; CREATE TRIGGER test_refund_fault BEFORE INSERT ON audit_logs FOR EACH ROW EXECUTE FUNCTION test_refund_fault();`);
-  const fault = await request(`/api/orders/${faultId}/refund`, "POST", { amount: "10", reason: "Failure injection", managerPin: "2222", returnStock: true }, cashier);
+  const fault = await request(`/api/orders/${faultId}/refund`, "POST", { amount: "10", reason: "Failure injection", managerPin: "2222", returnStock: true }, manager);
   check(fault.status === 500 && !JSON.stringify(fault.body).includes("Injected"), "late refund failure returns no database internals");
   check((await admin.query("SELECT id FROM refunds WHERE order_id=$1", [faultId])).rowCount === 0, "failed refund rolls back refund ledger");
   check((await admin.query("SELECT payment_status FROM orders WHERE id=$1", [faultId])).rows[0].payment_status === "paid", "failed refund rolls back order state");
   check((await admin.query("SELECT current_stock FROM ingredients WHERE id=1")).rows[0].current_stock === beforeFaultStock, "failed refund rolls back stock restoration");
-  check((await admin.query("SELECT cash_payouts FROM shifts WHERE branch_id=1 AND status='open' AND user_id=3")).rows[0].cash_payouts === beforeFaultPayouts, "failed refund rolls back drawer aggregate");
+  check((await admin.query("SELECT cash_payouts FROM shifts WHERE branch_id=1 AND status='open' AND user_id=2")).rows[0].cash_payouts === beforeFaultPayouts, "failed refund rolls back drawer aggregate");
   check((await admin.query("SELECT dm.id FROM drawer_movements dm JOIN refunds r ON r.id=dm.refund_id WHERE r.order_id=$1", [faultId])).rowCount === 0, "failed refund leaves no drawer movement");
   await admin.query("DROP TRIGGER test_refund_fault ON audit_logs; DROP FUNCTION test_refund_fault()");
   const branchWrites = await Promise.all([
