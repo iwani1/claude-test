@@ -161,7 +161,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           <DisplaySizeControl />
           {/* POS quick jumps — New Order / Tables / Orders / Drawer always visible */}
           {(onNewOrder || onGoTables || onGoOrders || onOpenDrawer) && (
-            <div className="hidden md:flex items-center gap-2 mr-1">
+            <div className="hidden xl:flex items-center gap-2 mr-1">
               {onNewOrder && (
                 <button
                   onClick={onNewOrder}

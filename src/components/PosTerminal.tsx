@@ -879,8 +879,12 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
         </div>
 
         {/* Item Cards Grid */}
-        <div className="flex-1 overflow-y-auto p-4 pb-44 md:pb-4 custom-scrollbar">
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5 gap-4">
+        <div className="flex-1 overflow-y-auto p-4 pb-44 xl:pb-4 custom-scrollbar">
+          {/* Cards never shrink below ~9.75rem: on a 10–13" till the old
+              fixed column counts squeezed dishes to ~110px slivers with
+              clipped names (field report, Oct 2026). auto-fill trades
+              column count for a guaranteed tappable card size instead. */}
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(9.75rem,1fr))] gap-4">
             {filteredItems.map((item) => (
               <div
                 key={item.id}
@@ -956,7 +960,7 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
           panel lives in a sheet. */}
       <button
         onClick={() => setCartOpen(true)}
-        className={`md:hidden fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom,0px))] z-20 min-h-16 px-4 flex items-center gap-3 bg-neutral-900/95 backdrop-blur border-t border-neutral-700 shadow-[0_-8px_24px_rgba(0,0,0,0.55)] transition-transform ${
+        className={`xl:hidden fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom,0px))] md:bottom-0 z-20 min-h-16 px-4 flex items-center gap-3 bg-neutral-900/95 backdrop-blur border-t border-neutral-700 shadow-[0_-8px_24px_rgba(0,0,0,0.55)] transition-transform ${
           cartOpen ? "translate-y-full" : "translate-y-0"
         }`}
         aria-label={`Open the order: ${cartCount} items, GH₵${totalAmount.toFixed(2)}`}
@@ -986,7 +990,7 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
       {/* Backdrop for the phone sheet. Sits under the sheet, over the bar. */}
       {cartOpen && (
         <div
-          className="md:hidden fixed inset-0 z-30 bg-black/60 backdrop-blur-[2px]"
+          className="xl:hidden fixed inset-0 z-30 bg-black/60 backdrop-blur-[2px]"
           onClick={() => setCartOpen(false)}
           aria-hidden="true"
         />
@@ -996,12 +1000,14 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
           md and up: the in-flow right-hand column. Below md: a slide-up sheet
           with its own grab handle and close button. Same element either way. */}
       <div
-        className={`bg-neutral-900 flex flex-col shrink-0 transition-all duration-200 md:h-full md:w-96 md:border-l md:border-neutral-800 max-md:fixed max-md:inset-x-0 max-md:bottom-[calc(4rem+env(safe-area-inset-bottom,0px))] max-md:z-30 max-md:rounded-t-3xl max-md:border-t max-md:border-neutral-700 max-md:max-h-[85dvh] max-md:shadow-2xl ${
-          cartOpen ? "max-md:translate-y-0 max-md:visible" : "max-md:translate-y-full max-md:invisible max-md:pointer-events-none"
+        className={`bg-neutral-900 flex flex-col shrink-0 transition-all duration-200 xl:h-full xl:w-96 xl:border-l xl:border-neutral-800 max-xl:fixed max-xl:z-30 max-xl:shadow-2xl max-xl:border-neutral-700 max-md:inset-x-0 max-md:bottom-[calc(4rem+env(safe-area-inset-bottom,0px))] max-md:rounded-t-3xl max-md:border-t max-md:max-h-[85dvh] md:max-xl:top-0 md:max-xl:bottom-0 md:max-xl:right-0 md:max-xl:w-[min(26rem,94vw)] md:max-xl:border-l ${
+          cartOpen
+            ? "max-xl:visible max-md:translate-y-0 md:max-xl:translate-x-0"
+            : "max-xl:invisible max-xl:pointer-events-none max-md:translate-y-full md:max-xl:translate-x-full"
         }`}
       >
-        {/* Sheet header — phones only. */}
-        <div className="md:hidden shrink-0 px-4 pt-2.5 pb-2 border-b border-neutral-800">
+        {/* Sheet header — phones and tablets, wherever the panel overlays. */}
+        <div className="xl:hidden shrink-0 px-4 pt-2.5 pb-2 border-b border-neutral-800">
           <div className="flex items-center gap-2">
             <button
               onClick={() => setCartOpen(false)}

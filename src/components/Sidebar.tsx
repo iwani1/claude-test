@@ -74,6 +74,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
 }) => {
   const perms = ROLE_PERMISSIONS[userRole] ?? ROLE_PERMISSIONS.cashier;
 
+  // Till screens are usually 10–13" tablets in landscape: a 264px labelled
+  // rail plus the order panel leaves the dish grid too narrow to tap
+  // (field report, Oct 2026). Below xl the rail therefore collapses to
+  // icons whatever the caller asked for; xl and up honours isCollapsed.
+  const [wideScreen, setWideScreen] = React.useState(false);
+  React.useEffect(() => {
+    const mq = window.matchMedia("(min-width: 80rem)");
+    const update = () => setWideScreen(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
+  const collapsed = isCollapsed || !wideScreen;
+
   // Each entry declares the permission gate it sits behind. Modules the
   // signed-in role cannot use are removed from navigation entirely, and the
   // matching API routes are independently guarded server-side.
@@ -145,7 +159,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           ? "max-md:translate-x-0 max-md:visible"
           : "max-md:-translate-x-full max-md:invisible max-md:pointer-events-none"
       } max-md:fixed max-md:inset-y-0 max-md:left-0 max-md:z-50 max-md:w-[280px] max-md:max-w-[85vw] max-md:shadow-2xl ${
-        isCollapsed ? "md:w-[76px]" : "md:w-[264px]"
+        collapsed ? "md:w-[76px]" : "md:w-[264px]"
       }`}
     >
       {/* Drawer header — phones only. The drawer covers the screen, so it needs
@@ -173,12 +187,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
               onCloseMobile?.();
             }}
             className={`w-full h-14 rounded-2xl bg-amber-500 hover:bg-amber-400 active:bg-amber-600 text-black font-bold shadow-lg shadow-amber-500/25 flex items-center justify-center gap-2.5 transition active:scale-[0.98] ${
-              isCollapsed ? "px-0" : "px-4"
+              collapsed ? "px-0" : "px-4"
             }`}
             title="Start a new order"
           >
             <Plus className="w-6 h-6 shrink-0" strokeWidth={3} />
-            {!isCollapsed && <span className="text-[0.9375rem]">New Order</span>}
+            {!collapsed && <span className="text-[0.9375rem]">New Order</span>}
           </button>
         </div>
       )}
@@ -190,12 +204,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
       >
         {navSections.map((sec, sIdx) => (
           <div key={sIdx} className="space-y-1.5">
-            {!isCollapsed && (
+            {!collapsed && (
               <div className="px-3 text-[0.625rem] font-bold tracking-[0.12em] text-neutral-500 uppercase">
                 {sec.title}
               </div>
             )}
-            {isCollapsed && sIdx > 0 && <div className="mx-3 border-t border-neutral-800" />}
+            {collapsed && sIdx > 0 && <div className="mx-3 border-t border-neutral-800" />}
 
             {sec.items.map((it) => {
               const Icon = it.icon;
@@ -210,7 +224,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   // 52px row height keeps every target comfortably above the
                   // ~44px minimum for reliable finger taps.
                   className={`relative w-full flex items-center gap-3.5 rounded-xl transition-all group ${
-                    isCollapsed ? "h-14 justify-center px-0" : "h-[52px] px-3.5"
+                    collapsed ? "h-14 justify-center px-0" : "h-[52px] px-3.5"
                   } ${
                     isActive
                       ? "bg-amber-500 text-black font-bold shadow-lg shadow-amber-500/20"
@@ -224,7 +238,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       isActive ? "text-black" : "text-neutral-400 group-hover:text-amber-400"
                     }`}
                   />
-                  {!isCollapsed && (
+                  {!collapsed && (
                     <div className="flex-1 flex items-center justify-between text-left min-w-0">
                       <span className="truncate text-[0.84375rem] font-semibold">{it.label}</span>
                       {it.badge !== undefined && it.badge !== "" && (
@@ -253,7 +267,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </nav>
 
       {/* Footer Info */}
-      {!isCollapsed ? (
+      {!collapsed ? (
         <div className="p-3.5 border-t border-neutral-800 bg-neutral-950/60 space-y-1">
           <div className="flex items-center justify-between text-[0.6875rem]">
             <span className="font-medium text-neutral-400">Lush View POS</span>
