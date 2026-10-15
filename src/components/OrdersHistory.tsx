@@ -200,9 +200,11 @@ export const OrdersHistory: React.FC<{
           )}
         </div>
 
-        {/* Search & Filter */}
-        <div className="flex items-center gap-2 w-full sm:w-auto">
-          <div className="relative flex-1 sm:w-64">
+        {/* Search & Filter — wraps on phones: search takes its own row and
+            the dates share the next, instead of the row overflowing the
+            screen and the "to" date being cut off unreachable. */}
+        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto sm:flex-nowrap">
+          <div className="relative flex-1 min-w-[9rem] sm:w-64 sm:flex-none">
             <Search className="w-3.5 h-3.5 text-neutral-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
@@ -231,14 +233,14 @@ export const OrdersHistory: React.FC<{
             value={from}
             onChange={(e) => setFrom(e.target.value)}
             title="From date"
-            className="bg-neutral-800 border border-neutral-700 rounded-xl px-2 py-1.5 text-xs text-white focus:outline-none"
+            className="flex-1 min-w-[8rem] min-[480px]:flex-none bg-neutral-800 border border-neutral-700 rounded-xl px-2 py-1.5 text-xs text-white focus:outline-none"
           />
           <input
             type="date"
             value={to}
             onChange={(e) => setTo(e.target.value)}
             title="To date"
-            className="bg-neutral-800 border border-neutral-700 rounded-xl px-2 py-1.5 text-xs text-white focus:outline-none"
+            className="flex-1 min-w-[8rem] min-[480px]:flex-none bg-neutral-800 border border-neutral-700 rounded-xl px-2 py-1.5 text-xs text-white focus:outline-none"
           />
           {(from || to) && (
             <button
