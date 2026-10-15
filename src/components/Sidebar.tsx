@@ -20,8 +20,22 @@ import {
   Cable,
   Plus,
   X,
+  Store,
+  KeyRound,
+  LogOut,
+  Maximize,
+  Wifi,
+  WifiOff,
+  ShieldAlert,
+  RefreshCw,
 } from "lucide-react";
 import { UserRole, ROLE_PERMISSIONS } from "@/lib/permissions";
+import { useOnlineStatus, useOfflineQueueCount } from "@/lib/use-terminal-status";
+import { syncOfflineQueueToServer } from "@/lib/offline-storage";
+import { DisplaySizeControl } from "@/components/DisplaySizeControl";
+import { PinSwitchModal } from "@/components/PinSwitchModal";
+import { notify } from "@/lib/notify";
+import type { CurrentUser } from "@/lib/api-types";
 
 export type NavTab =
   | "dashboard"
@@ -59,6 +73,17 @@ interface SidebarProps {
    */
   mobileOpen?: boolean;
   onCloseMobile?: () => void;
+  /**
+   * Desktop/tablet rail only: the signed-in user and terminal controls that
+   * used to live in the top bar (display size, online state, fullscreen,
+   * Switch Staff, sign out). They moved here so the bar could come off the
+   * top of md+ screens and give that height to the work area — most
+   * importantly the POS bill panel's items list. Phones keep the top bar.
+   */
+  currentUser?: CurrentUser | null;
+  lowStockCount?: number;
+  onUserChange?: (user: any) => void;
+  onLogout?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -71,6 +96,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
   isCollapsed = false,
   mobileOpen = false,
   onCloseMobile,
+  currentUser = null,
+  lowStockCount = 0,
+  onUserChange,
+  onLogout,
 }) => {
   const perms = ROLE_PERMISSIONS[userRole] ?? ROLE_PERMISSIONS.cashier;
 
@@ -87,6 +116,36 @@ export const Sidebar: React.FC<SidebarProps> = ({
     return () => mq.removeEventListener("change", update);
   }, []);
   const collapsed = isCollapsed || !wideScreen;
+
+  // Terminal controls that moved in from the top bar (md+ only; the phone
+  // top bar keeps its own copies). Hooks run unconditionally either way.
+  const isOnline = useOnlineStatus();
+  const offlineCount = useOfflineQueueCount(currentUser?.branchId ?? 0);
+  const [isSyncing, setIsSyncing] = React.useState(false);
+  const [showPinModal, setShowPinModal] = React.useState(false);
+  const roleLabel = ROLE_PERMISSIONS[userRole]?.label || userRole;
+
+  const handleManualSync = async () => {
+    if (!currentUser) return;
+    setIsSyncing(true);
+    const res = await syncOfflineQueueToServer(currentUser.branchId);
+    setIsSyncing(false);
+    if (res.success && res.count > 0) {
+      notify(`Sent ${res.count} offline order${res.count === 1 ? "" : "s"} to the server. Collect any payments that were taken on paper.`, "ok");
+    } else if (!res.success) {
+      notify("Could not reach the server — the offline orders are still on this device.", "error");
+    } else {
+      notify("Nothing waiting to sync.", "ok");
+    }
+  };
+
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().catch(() => {});
+    } else {
+      document.exitFullscreen().catch(() => {});
+    }
+  };
 
   // Each entry declares the permission gate it sits behind. Modules the
   // signed-in role cannot use are removed from navigation entirely, and the
@@ -175,6 +234,39 @@ export const Sidebar: React.FC<SidebarProps> = ({
         >
           <X className="w-5 h-5" />
         </button>
+      </div>
+
+      {/* Brand + register state (md+). This sat in the top bar until the bar
+          came off md+ screens; the register state is the one thing a cashier
+          must never have to guess, so it lives at the top of the rail. */}
+      <div className={`max-md:hidden pt-3.5 pb-1 ${collapsed ? "px-2.5 flex justify-center" : "px-3.5"}`}>
+        {collapsed ? (
+          <div
+            className="w-11 h-11 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center shadow-lg shadow-orange-500/20"
+            title={`Lush View Hotel — ${shiftOpen ? "Register Open" : "Register Closed"}`}
+          >
+            <Store className="w-6 h-6 text-white" />
+          </div>
+        ) : (
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center shadow-lg shadow-orange-500/20 shrink-0">
+              <Store className="w-6 h-6 text-white" />
+            </div>
+            <div className="min-w-0">
+              <div className="font-bold text-[0.9375rem] tracking-tight text-neutral-100 truncate">
+                Lush View Hotel
+              </div>
+              <div className="flex items-center gap-1.5 text-[0.75rem]">
+                <span className={`w-2 h-2 rounded-full shrink-0 ${shiftOpen ? "bg-emerald-400" : "bg-amber-400"}`} />
+                {shiftOpen ? (
+                  <span className="text-emerald-400 font-medium">Register Open</span>
+                ) : (
+                  <span className="text-amber-400 font-medium">Register Closed</span>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Primary action — the single most-used control on a POS terminal.
@@ -266,6 +358,140 @@ export const Sidebar: React.FC<SidebarProps> = ({
         ))}
       </nav>
 
+      {/* Signed-in user + terminal controls (md+; moved from the top bar so
+          the bar could come off and give its height to the work area). */}
+      {currentUser && (
+        <div className="max-md:hidden border-t border-neutral-800 p-3 space-y-2.5">
+          {collapsed ? (
+            <div className="flex flex-col items-center gap-2">
+              <button
+                onClick={() => setShowPinModal(true)}
+                className="w-10 h-10 rounded-lg bg-gradient-to-tr from-amber-600 to-orange-500 flex items-center justify-center text-sm font-bold text-white shadow-xs"
+                title={`${currentUser.name} · ${roleLabel} — tap to switch staff`}
+                aria-label={`Signed in as ${currentUser.name}. Switch staff.`}
+              >
+                {currentUser.name ? currentUser.name.charAt(0) : "U"}
+              </button>
+              <DisplaySizeControl />
+              <div
+                className={`w-11 h-11 rounded-xl border flex items-center justify-center ${
+                  isOnline
+                    ? "bg-neutral-800/80 border-neutral-700/60 text-emerald-400"
+                    : "bg-amber-500/10 border-amber-500/30 text-amber-400"
+                }`}
+                title={isOnline ? "Online" : "Offline — orders queue on this device"}
+              >
+                {isOnline ? <Wifi className="w-5 h-5" /> : <WifiOff className="w-5 h-5" />}
+              </div>
+              {offlineCount > 0 && (
+                <button
+                  onClick={handleManualSync}
+                  disabled={isSyncing}
+                  className="w-11 h-11 rounded-xl bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center justify-center"
+                  title={`Sync ${offlineCount} offline order(s) now`}
+                  aria-label={`Sync ${offlineCount} offline orders`}
+                >
+                  <RefreshCw className={`w-5 h-5 ${isSyncing ? "animate-spin" : ""}`} />
+                </button>
+              )}
+              <button
+                onClick={toggleFullscreen}
+                className="w-11 h-11 text-neutral-400 hover:text-white hover:bg-neutral-800 rounded-xl transition flex items-center justify-center"
+                title="Toggle fullscreen terminal mode"
+                aria-label="Toggle fullscreen"
+              >
+                <Maximize className="w-5 h-5" />
+              </button>
+              <button
+                onClick={onLogout}
+                className="w-11 h-11 text-rose-400 hover:bg-rose-500/10 rounded-xl transition flex items-center justify-center"
+                title="Sign out of terminal"
+                aria-label="Sign out of terminal"
+              >
+                <LogOut className="w-5 h-5" />
+              </button>
+            </div>
+          ) : (
+            <>
+              <div className="flex items-center gap-2.5 min-w-0 px-0.5">
+                <div className="w-9 h-9 rounded-lg bg-gradient-to-tr from-amber-600 to-orange-500 flex items-center justify-center text-sm font-bold text-white shadow-xs shrink-0">
+                  {currentUser.name ? currentUser.name.charAt(0) : "U"}
+                </div>
+                <div className="text-left min-w-0">
+                  <div className="text-[0.8125rem] font-semibold leading-tight text-neutral-100 truncate">
+                    {currentUser.name || "Staff"}
+                  </div>
+                  <div className="text-[0.65625rem] text-amber-400 font-medium truncate">
+                    {roleLabel}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setShowPinModal(true)}
+                  className="flex-1 h-11 px-3 text-neutral-200 hover:text-white hover:bg-neutral-800 rounded-xl border border-neutral-700/60 flex items-center justify-center gap-2 text-[0.75rem] font-semibold transition active:bg-neutral-750"
+                  title="Switch employee with PIN"
+                >
+                  <KeyRound className="w-4 h-4 text-amber-400 shrink-0" />
+                  <span>Switch Staff</span>
+                </button>
+                <button
+                  onClick={onLogout}
+                  className="h-11 w-11 text-rose-400 hover:bg-rose-500/10 rounded-xl border border-neutral-700/60 flex items-center justify-center transition"
+                  title="Sign out of terminal"
+                  aria-label="Sign out of terminal"
+                >
+                  <LogOut className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <DisplaySizeControl />
+                <div
+                  className={`flex items-center gap-1.5 px-2.5 h-11 rounded-xl border text-[0.75rem] ${
+                    isOnline
+                      ? "bg-neutral-800/80 border-neutral-700/60 text-emerald-400"
+                      : "bg-amber-500/10 border-amber-500/30 text-amber-400"
+                  }`}
+                  title={isOnline ? "Online" : "Offline — orders queue on this device"}
+                >
+                  <span className={`w-2 h-2 rounded-full shrink-0 ${isOnline ? "bg-emerald-400 animate-pulse" : "bg-amber-400"}`} />
+                  {isOnline ? <Wifi className="w-4 h-4" /> : <WifiOff className="w-4 h-4" />}
+                  <span className="font-medium">{isOnline ? "Online" : "Offline"}</span>
+                  {offlineCount > 0 && (
+                    <button
+                      onClick={handleManualSync}
+                      disabled={isSyncing}
+                      className="ml-0.5 px-2 h-7 bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 border border-amber-500/40 rounded-lg text-[0.6875rem] font-bold flex items-center gap-1 transition"
+                      title="Sync offline queue"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? "animate-spin" : ""}`} />
+                      <span>{offlineCount}</span>
+                    </button>
+                  )}
+                </div>
+                <button
+                  onClick={toggleFullscreen}
+                  className="h-11 w-11 shrink-0 text-neutral-400 hover:text-white hover:bg-neutral-800 rounded-xl border border-neutral-700/60 transition flex items-center justify-center"
+                  title="Toggle fullscreen terminal mode"
+                  aria-label="Toggle fullscreen"
+                >
+                  <Maximize className="w-5 h-5" />
+                </button>
+              </div>
+
+              {lowStockCount > 0 && (
+                <div className="flex items-center gap-1.5 px-3 h-10 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 text-[0.75rem] font-semibold">
+                  <ShieldAlert className="w-4 h-4 shrink-0" />
+                  <span>{lowStockCount} low stock</span>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
       {/* Footer Info */}
       {!collapsed ? (
         <div className="p-3.5 border-t border-neutral-800 bg-neutral-950/60 space-y-1">
@@ -280,6 +506,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <span className="text-[0.625rem] font-bold text-neutral-600">v2.5</span>
         </div>
       )}
+
+      <PinSwitchModal
+        open={showPinModal}
+        onClose={() => setShowPinModal(false)}
+        onUserChange={(user) => {
+          onUserChange?.(user);
+          onCloseMobile?.();
+        }}
+      />
     </aside>
   );
 };
