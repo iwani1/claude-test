@@ -74,6 +74,8 @@ export default function App() {
   const [activeTableId, setActiveTableId] = useState<number | null>(null);
   // Bumped every time "New Order" is tapped so the till clears its ticket.
   const [posResetKey, setPosResetKey] = useState(0);
+  /** An open order (from Tables or Order History) to reopen on the till. */
+  const [posLoadOrderId, setPosLoadOrderId] = useState<number | null>(null);
 
   const currentBranchId = currentUser?.branchId;
 
@@ -198,6 +200,18 @@ export default function App() {
 
   const handleOpenPosForTable = (tableId: number) => {
     setActiveTableId(tableId);
+    // An occupied table reopens its kitchen order on the bill panel, so
+    // staff add to that bill and settle it instead of starting a rival one.
+    const table = tables.find((t: any) => t.id === tableId);
+    setPosLoadOrderId((table as any)?.activeOrder?.id ?? null);
+    setPosResetKey((k) => k + 1);
+    setActiveTab("pos");
+  };
+
+  /** Reopens an open order from Order History on the bill panel. */
+  const handleOpenOrderInPos = (order: any) => {
+    setActiveTableId(order.tableId ?? null);
+    setPosLoadOrderId(order.id);
     setPosResetKey((k) => k + 1);
     setActiveTab("pos");
   };
@@ -399,6 +413,7 @@ export default function App() {
             activeTableId={activeTableId}
             onOrderCreated={fetchOperationalData}
             headerControls={terminalControls}
+            loadOrderId={posLoadOrderId}
           />
         );
       case "tables":
@@ -413,7 +428,7 @@ export default function App() {
       case "kds":
         return <KitchenDisplaySystem />;
       case "orders":
-        return <OrdersHistory currentUser={currentUser} />;
+        return <OrdersHistory currentUser={currentUser} onOpenInPos={handleOpenOrderInPos} />;
       case "menu":
         return (
           <MenuManager

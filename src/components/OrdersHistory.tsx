@@ -16,6 +16,7 @@ import {
   ChefHat,
   Trash2,
   Pencil,
+  Wallet,
 } from "lucide-react";
 import { ReceiptModal } from "./ReceiptModal";
 import { KitchenTicketModal } from "./KitchenTicketModal";
@@ -26,7 +27,11 @@ import { apiErrorMessage, apiFetch } from "@/lib/api-client";
 import { notify } from "@/lib/notify";
 import type { CurrentUser } from "@/lib/api-types";
 
-export const OrdersHistory: React.FC<{ currentUser: CurrentUser }> = ({ currentUser }) => {
+export const OrdersHistory: React.FC<{
+  currentUser: CurrentUser;
+  /** Reopens an open order on the till's bill panel to add items / settle. */
+  onOpenInPos?: (order: any) => void;
+}> = ({ currentUser, onOpenInPos }) => {
   const perms = ROLE_PERMISSIONS[currentUser?.role as UserRole] ?? ROLE_PERMISSIONS.cashier;
   /** Finance and stock roles read this screen; only till roles can act on it.
    *  A visible button that always answers 403 is worse than no button. */
@@ -338,6 +343,14 @@ export const OrdersHistory: React.FC<{ currentUser: CurrentUser }> = ({ currentU
                       >
                         <ChefHat className="w-4 h-4" /> Docket
                       </button>
+                      {canWorkTill && onOpenInPos && ["unpaid", "partially_paid"].includes(ord.paymentStatus) && !["cancelled", "refunded"].includes(ord.status) && (
+                        <button
+                          onClick={() => onOpenInPos(ord)}
+                          className="h-12 px-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs flex items-center gap-1.5 transition active:scale-[0.97]"
+                        >
+                          <Wallet className="w-4 h-4" /> Open / Pay
+                        </button>
+                      )}
                       <button
                         onClick={() => {
                           setReceiptOrder(ord);
@@ -489,6 +502,17 @@ export const OrdersHistory: React.FC<{ currentUser: CurrentUser }> = ({ currentU
                           >
                             <ChefHat className="w-3.5 h-3.5" />
                           </button>
+
+                          {canWorkTill && onOpenInPos && ["unpaid", "partially_paid"].includes(ord.paymentStatus) && !["cancelled", "refunded"].includes(ord.status) && (
+                            <button
+                              onClick={() => onOpenInPos(ord)}
+                              className="px-2 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-[0.6875rem] font-bold transition flex items-center gap-1"
+                              title="Reopen on the bill panel to add items or take payment"
+                            >
+                              <Wallet className="w-3 h-3" />
+                              <span>Open / Pay</span>
+                            </button>
+                          )}
 
                           <button
                             onClick={() => {

@@ -26,7 +26,7 @@ import {
 import { ReceiptModal } from "./ReceiptModal";
 import { KitchenTicketModal } from "./KitchenTicketModal";
 import { ConfirmDialog } from "./ConfirmDialog";
-import { saveTicketDraft, readTicketDraft } from "@/lib/active-ticket";
+import { saveTicketDraft, readTicketDraft, readTicketDraftOrderId, clearTicketDraft } from "@/lib/active-ticket";
 import {
   queueOfflineOrder,
   saveBillingConfigToCache,
@@ -51,6 +51,12 @@ interface PosTerminalProps {
    * the bill panel extends to the very top of the screen.
    */
   headerControls?: React.ReactNode;
+  /**
+   * An existing open order to reopen on the bill panel (chosen from Tables
+   * or Order History): its lines load as the ticket, and Settle / Kitchen
+   * Docket update that order instead of creating a new one.
+   */
+  loadOrderId?: number | null;
 }
 
 export const PosTerminal: React.FC<PosTerminalProps> = ({
@@ -61,6 +67,7 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
   onOrderCreated,
   activeTableId = null,
   headerControls,
+  loadOrderId = null,
 }) => {
   // State
   const [selectedCategory, setSelectedCategory] = useState<number | "all">("all");
@@ -69,6 +76,21 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
      Tables/Orders/Drawer (or a crash/restart) no longer destroys a
      half-taken order. */
   const [cart, setCart] = useState<any[]>(() => readTicketDraft(currentUser?.id ?? "anon"));
+  /**
+   * The server order this ticket belongs to, when it is one that was
+   * already sent to the kitchen and later reopened. While set, Settle and
+   * Kitchen Docket update THAT order instead of creating a new one.
+   */
+  const [loadedOrder, setLoadedOrder] = useState<{
+    id: number;
+    orderNumber: string;
+    paymentStatus: string;
+    paidAmount: string;
+    totalAmount: string;
+  } | null>(null);
+  /** Quantities as the kitchen already has them, per cart line, so a
+   *  reprint only sends what is new instead of recooking the whole bill. */
+  const loadedBaselineRef = useRef<Map<string, number>>(new Map());
   /**
    * Phones and small tablets show the open order as a slide-up sheet — the
    * pattern chosen for this app — so the menu keeps the full screen and the
@@ -128,8 +150,8 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
   /* Keep the draft in step with the cart; the global "New Order" buttons
      read it to warn before discarding a loaded ticket. */
   useEffect(() => {
-    saveTicketDraft(currentUser?.id ?? "anon", cart);
-  }, [cart, currentUser?.id]);
+    saveTicketDraft(currentUser?.id ?? "anon", cart, loadedOrder?.id ?? null);
+  }, [cart, currentUser?.id, loadedOrder?.id]);
   const [orderType, setOrderType] = useState<"dine_in" | "room_service" | "takeaway" | "delivery">("dine_in");
   const [selectedTableId, setSelectedTableId] = useState<number | null>(activeTableId);
   const [roomNumber, setRoomNumber] = useState("");
@@ -312,6 +334,8 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
 
   const clearCart = () => {
     orderIdentityRef.current = null;
+    setLoadedOrder(null);
+    loadedBaselineRef.current = new Map();
     setCart([]);
     setDiscountPercent(0);
     setDiscountAmount(0);
@@ -319,6 +343,8 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
   };
 
   const handleNewTicketLocal = () => {
+    setLoadedOrder(null);
+    loadedBaselineRef.current = new Map();
     setCart([]);
     setDiscountPercent(0);
     setDiscountAmount(0);
@@ -388,6 +414,131 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
     return () => window.removeEventListener("keydown", onKey);
   }, [cartOpen]);
 
+  /** The edit-endpoint payload that pushes the panel's lines onto an order
+   *  the server already holds. The server re-prices from the menu, so this
+   *  carries item identity and quantities, never prices. */
+  const buildEditSyncPayload = () => ({
+    items: cart.map((ci) => ({
+      menuItemId: ci.menuItemId,
+      quantity: ci.quantity,
+      modifiers: (ci.modifiers || []).map((m: any) => ({ id: m?.id })).filter((m: any) => m.id !== undefined),
+      specialInstructions: ci.specialInstructions || "",
+    })),
+    customerName,
+    customerPhone: customerPhone || null,
+    orderType,
+    tableId: orderType === "dine_in" ? selectedTableId : null,
+    roomNumber: orderType === "room_service" ? roomNumber.trim() : null,
+    notes: orderNotes,
+    discountPercent: 0,
+    discountAmount: calculatedDiscount,
+    discountReason,
+    tipAmount: Number(tipAmount || 0),
+  });
+
+  /** Lines the kitchen has not seen yet: brand-new lines, plus only the
+   *  extra quantity on lines that grew. Empty when nothing changed. */
+  const newKitchenItems = () =>
+    cart
+      .map((ci) => {
+        const seen = loadedBaselineRef.current.get(ci.cartItemId) ?? 0;
+        return ci.quantity > seen ? { ...ci, quantity: ci.quantity - seen } : null;
+      })
+      .filter(Boolean) as any[];
+
+  /**
+   * Puts an existing open order on the bill panel. The lines the server
+   * holds become the ticket (unless the parked draft of this same order is
+   * being resumed, in which case the draft — including unsent additions —
+   * stays), and every money field is restored so Settle charges exactly
+   * what that bill still owes.
+   */
+  const attachLoadedOrder = async (orderId: number, keepCart: boolean) => {
+    try {
+      const data = await apiFetch(`/api/orders/${orderId}`);
+      const order = data?.order;
+      if (!order) return;
+      const stillOpen =
+        ["unpaid", "partially_paid"].includes(order.paymentStatus) &&
+        !["cancelled", "refunded"].includes(order.status);
+      if (!stillOpen) {
+        if (keepCart) {
+          clearTicketDraft(currentUser?.id ?? "anon");
+          setCart([]);
+          notify(`Order ${order.orderNumber} was settled or cancelled elsewhere, so the parked ticket was cleared.`, "warn");
+        } else if (cart.length > 0) {
+          notify(`Order ${order.orderNumber} is no longer open.`, "warn");
+        }
+        return;
+      }
+      if (!keepCart && cart.length > 0) {
+        notify("Finish or clear the current ticket first, then open that order again.", "warn");
+        return;
+      }
+      const lines = (order.items || []).map((it: any) => {
+        const mods = Array.isArray(it.modifiers) ? it.modifiers : [];
+        const notes = it.specialInstructions || "";
+        const menuRow = menuItems.find((m) => m.id === it.menuItemId);
+        return {
+          cartItemId: `${it.menuItemId}-${JSON.stringify(mods)}-${notes}`,
+          menuItemId: it.menuItemId,
+          itemName: it.itemName,
+          quantity: it.quantity,
+          basePrice: Number(menuRow?.price ?? it.unitPrice),
+          unitPrice: Number(it.unitPrice),
+          totalPrice: (Number(it.unitPrice) * it.quantity).toFixed(2),
+          costPrice: it.costPrice || "0.00",
+          modifiers: mods,
+          specialInstructions: notes,
+          station: it.station || "kitchen",
+        };
+      });
+      loadedBaselineRef.current = new Map(lines.map((l: any) => [l.cartItemId, l.quantity]));
+      setLoadedOrder({
+        id: order.id,
+        orderNumber: order.orderNumber,
+        paymentStatus: order.paymentStatus,
+        paidAmount: String(order.paidAmount ?? "0.00"),
+        totalAmount: String(order.totalAmount ?? "0.00"),
+      });
+      setOrderType((order.orderType || "dine_in") as "dine_in" | "room_service" | "takeaway" | "delivery");
+      setSelectedTableId(order.tableId ?? null);
+      setRoomNumber(order.roomNumber || "");
+      setCustomerName(order.customerName || "Walk-in Guest");
+      setCustomerPhone(order.customerPhone || "");
+      setOrderNotes(order.notes || "");
+      setDiscountPercent(0);
+      setDiscountAmount(Number(order.discountAmount || 0));
+      setDiscountReason(order.discountReason || "");
+      setTipAmount(Number(order.tipAmount || 0));
+      if (!keepCart || cart.length === 0) setCart(lines);
+      notify(`Order ${order.orderNumber} is on the bill panel — add items, or Settle Bill to take payment.`, "ok");
+    } catch (e: any) {
+      notify(e?.message || "Could not open that order.", "error");
+    }
+  };
+  const attachLoadedOrderRef = useRef(attachLoadedOrder);
+  useEffect(() => {
+    attachLoadedOrderRef.current = attachLoadedOrder;
+  });
+
+  /* An order chosen on Tables / Order History lands on the panel. */
+  useEffect(() => {
+    if (!loadOrderId) return;
+    const draftOrderId = readTicketDraftOrderId(currentUser?.id ?? "anon");
+    void attachLoadedOrderRef.current(loadOrderId, draftOrderId === loadOrderId);
+  }, [loadOrderId, currentUser?.id]);
+
+  /* A parked ticket that belongs to a kitchen order re-attaches to that
+     order after a screen change or restart, instead of starting over. */
+  useEffect(() => {
+    if (loadOrderId) return;
+    const draftOrderId = readTicketDraftOrderId(currentUser?.id ?? "anon");
+    if (draftOrderId) void attachLoadedOrderRef.current(draftOrderId, true);
+    // Mount only.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   /** Builds the printable kitchen docket from whatever we know locally. */
   const buildKitchenTicket = (order: any, items: any[]) => {
     const table = tables.find((t) => t.id === (order.tableId ?? selectedTableId));
@@ -407,6 +558,37 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
       return;
     }
     setIsSubmitting(true);
+
+    if (loadedOrder) {
+      // This ticket already IS a kitchen order: push any changes onto it
+      // (the server re-prices and refreshes the kitchen's docket) and print
+      // what the kitchen has not seen yet — never a second order.
+      if (!navigator.onLine) {
+        notify("No connection. An order already with the kitchen can only be updated online — the ticket stays on screen.", "error");
+        setIsSubmitting(false);
+        return;
+      }
+      try {
+        const res = await fetch(`/api/orders/${loadedOrder.id}/edit`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(buildEditSyncPayload()),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data?.error || `Update failed (${res.status})`);
+        const updated = data.order || loadedOrder;
+        const fresh = newKitchenItems();
+        if (onOrderCreated) onOrderCreated();
+        setKitchenTicketOrder(buildKitchenTicket(updated, fresh.length > 0 ? fresh : cart));
+        setCartOpen(false);
+        setShowKitchenTicket(true);
+        clearCart();
+      } catch (e: any) {
+        notify(e?.message || "Could not update that order — the ticket stays on screen.", "error");
+      }
+      setIsSubmitting(false);
+      return;
+    }
 
     // Totals here are a preview only; the server re-prices the bill from the
     // menu database and the live settings, so these fields are informational.
@@ -575,7 +757,7 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
       const receiptOrder = {
         ...settledOrder,
         items: cart,
-        paidAmount: totalAmount.toFixed(2),
+        paidAmount: settledOrder?.totalAmount != null ? String(settledOrder.totalAmount) : totalAmount.toFixed(2),
         paymentMethod:
           payMethod === "split"
             ? "Split (Cash + MoMo)"
@@ -594,12 +776,16 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
             : undefined,
       };
 
+      // Reopening an order must not recook it: only lines the kitchen has
+      // not seen (added just now) earn a docket; the rest is receipt-only.
+      const docketItems = loadedOrder ? newKitchenItems() : cart;
+
       setShowPayModal(false);
       clearCart();
       if (onOrderCreated) onOrderCreated();
 
-      if (cart.length > 0) {
-        setKitchenTicketOrder(buildKitchenTicket(settledOrder, cart));
+      if (docketItems.length > 0) {
+        setKitchenTicketOrder(buildKitchenTicket(settledOrder, docketItems));
         setPendingReceipt(receiptOrder);
         setCartOpen(false);
         setShowKitchenTicket(true);
@@ -616,19 +802,52 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
      */
     let createdOrder: any = null;
 
-    try {
-      const orderData = await apiFetch("/api/orders", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(orderPayload),
-      });
-      if (!orderData.success) {
-        notify(orderData.error || "Failed to create order", "error");
+    if (loadedOrder) {
+      // The bill already exists: push any added lines onto it first (the
+      // server re-prices and refreshes the kitchen docket), then take the
+      // money against it below. Nothing here may fall through to creating
+      // a second order for the same food.
+      if (isComplimentary) {
+        notify("This order is already with the kitchen, so it cannot be made complimentary here — the owner can change that from Edit in Order History.", "error");
         setIsSubmitting(false);
         return;
       }
+      if (!navigator.onLine) {
+        notify("No connection. Payment for an order already with the kitchen can only be recorded online — no money was recorded.", "error");
+        setIsSubmitting(false);
+        return;
+      }
+      try {
+        const res = await fetch(`/api/orders/${loadedOrder.id}/edit`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(buildEditSyncPayload()),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data?.error || `Update failed (${res.status})`);
+        createdOrder = data.order;
+      } catch (e: any) {
+        notify(e?.message || "Could not update that order — no money was recorded.", "error");
+        setIsSubmitting(false);
+        return;
+      }
+    }
 
-      createdOrder = orderData.order;
+    try {
+      if (!createdOrder) {
+        const orderData = await apiFetch("/api/orders", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(orderPayload),
+        });
+        if (!orderData.success) {
+          notify(orderData.error || "Failed to create order", "error");
+          setIsSubmitting(false);
+          return;
+        }
+
+        createdOrder = orderData.order;
+      }
 
       // A complimentary order is already settled by the server at GH₵0.00 —
       // there is no tender to record, so skip the payment call entirely and
@@ -655,11 +874,17 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
       }
 
       // Now process payment
+      // A reopened bill is settled for what is still owed on the server's
+      // numbers, which may be less than the panel total after a part payment.
+      const payAmount = loadedOrder
+        ? Math.max(0, Number(createdOrder.totalAmount || 0) - Number(createdOrder.paidAmount || 0))
+        : totalAmount;
+
       const payData = await apiFetch(`/api/orders/${createdOrder.id}/pay`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          amount: totalAmount.toFixed(2),
+          amount: payAmount.toFixed(2),
           paymentMethod: payMethod,
           cashTendered: payloadCashTendered,
           referenceNumber: payloadReference,
@@ -1089,6 +1314,15 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
         </div>
 
         {/* Cart Item List — the ONLY part of the panel that scrolls. */}
+        {loadedOrder && (
+          <div className="mx-2 mt-2 shrink-0 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-[0.6875rem] leading-snug text-amber-200">
+            <span className="font-bold">Open order {loadedOrder.orderNumber}</span>
+            {loadedOrder.paymentStatus === "partially_paid"
+              ? ` · GH₵${Number(loadedOrder.paidAmount).toFixed(2)} already paid`
+              : " · sent to kitchen, not yet paid"}
+            {" — add items, then Settle Bill to take payment."}
+          </div>
+        )}
         <div className="flex-1 min-h-0 overflow-y-auto p-2 space-y-2 custom-scrollbar">
           {cart.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-center text-neutral-500 p-6">
