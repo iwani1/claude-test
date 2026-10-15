@@ -435,14 +435,20 @@ export default function App() {
 
   return (
     <div className="flex flex-col h-dvh w-full pt-safe overflow-hidden bg-neutral-950 text-white font-sans">
-      <Navbar
-        onOpenMenu={() => setMenuOpen(true)}
-        currentUser={currentUser}
-        onUserChange={handleUserChange}
-        onLogout={handleLogout}
-        lowStockCount={lowStockCount}
-        openShift={openShift}
-      />
+      {/* Top bar is phone-only now: on md+ its brand, register state, display
+          size, online state, fullscreen, Switch Staff and user controls live
+          in the rail (Sidebar), which frees the bar's 72px for the work area
+          — most importantly the POS bill panel's items list. */}
+      <div className="md:hidden">
+        <Navbar
+          onOpenMenu={() => setMenuOpen(true)}
+          currentUser={currentUser}
+          onUserChange={handleUserChange}
+          onLogout={handleLogout}
+          lowStockCount={lowStockCount}
+          openShift={openShift}
+        />
+      </div>
 
       {/* Connection state, always visible while it matters. Offline is not an
           error here: the till keeps working, so the strip says what still works
@@ -507,6 +513,10 @@ export default function App() {
           openTableCount={openTableCount}
           shiftOpen={!!openShift}
           userRole={currentUser?.role}
+          currentUser={currentUser}
+          lowStockCount={lowStockCount}
+          onUserChange={handleUserChange}
+          onLogout={handleLogout}
         />
 
         <main className="flex-1 flex flex-col overflow-hidden bg-neutral-950">
