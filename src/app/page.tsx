@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { Loader2, Store, ShieldAlert } from "lucide-react";
 import { Navbar } from "@/components/Navbar";
 import { Sidebar, NavTab } from "@/components/Sidebar";
+import { TerminalControls } from "@/components/TerminalControls";
 import { MobileTabBar } from "@/components/MobileTabBar";
 import { LoginScreen } from "@/components/LoginScreen";
 import { PosTerminal } from "@/components/PosTerminal";
@@ -513,15 +514,23 @@ export default function App() {
           openTableCount={openTableCount}
           shiftOpen={!!openShift}
           userRole={currentUser?.role}
-          currentUser={currentUser}
-          lowStockCount={lowStockCount}
-          onUserChange={handleUserChange}
-          onLogout={handleLogout}
         />
 
-        <main className="flex-1 flex flex-col overflow-hidden bg-neutral-950">
-          {renderTab()}
-        </main>
+        <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+          {/* Slim top strip (md+): user, Switch Staff, display size, online
+              state, fullscreen. Staff asked for these across the top of the
+              work area rather than in the rail (Oct 2026). Phones use the
+              Navbar above instead. */}
+          <TerminalControls
+            currentUser={currentUser}
+            lowStockCount={lowStockCount}
+            onUserChange={handleUserChange}
+            onLogout={handleLogout}
+          />
+          <main className="flex-1 flex flex-col min-h-0 overflow-hidden bg-neutral-950">
+            {renderTab()}
+          </main>
+        </div>
       </div>
 
       {/* Phones: the five screens a shift lives in, within thumb reach. */}
