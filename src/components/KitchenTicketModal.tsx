@@ -155,6 +155,12 @@ export const KitchenTicketModal: React.FC<KitchenTicketModalProps> = ({
                 <span>{order.customerName}</span>
               </div>
             )}
+            {(order.userName || order.cashierName) && (
+              <div className="flex justify-between">
+                <span>SERVER:</span>
+                <span className="font-bold">{order.userName || order.cashierName}</span>
+              </div>
+            )}
             {order.notes && (
               <div className="pt-1 text-[0.6875rem] font-bold uppercase">
                 TICKET NOTE: {order.notes}
