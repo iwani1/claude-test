@@ -1086,7 +1086,7 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
         </div>
 
         {/* Cart Item List — the ONLY part of the panel that scrolls. */}
-        <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-2.5 custom-scrollbar">
+        <div className="flex-1 min-h-0 overflow-y-auto p-2 space-y-2 custom-scrollbar">
           {cart.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-center text-neutral-500 p-6">
               <Receipt className="w-12 h-12 mb-2 opacity-30 text-amber-500" />
@@ -1097,54 +1097,55 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
             cart.map((it, idx) => (
               <div
                 key={it.cartItemId || idx}
-                className="bg-neutral-855 border border-neutral-750 rounded-xl p-3.5 text-sm space-y-2.5 group"
+                className="bg-neutral-855 border border-neutral-750 rounded-lg px-2.5 py-2 text-sm"
               >
-                <div className="flex justify-between items-start gap-2">
-                  <div className="flex-1">
-                    <span className="font-semibold text-neutral-100">{it.itemName}</span>
-                    {it.modifiers && it.modifiers.length > 0 && (
-                      <div className="text-[0.6875rem] text-amber-400/90 mt-0.5">
-                        {it.modifiers.map((m: any, mIdx: number) => (
-                          <span key={mIdx} className="mr-2">
-                            + {m.name || m.optionName}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                    {it.specialInstructions && (
-                      <div className="text-[0.625rem] text-neutral-400 italic mt-0.5">
-                        * {it.specialInstructions}
-                      </div>
-                    )}
-                  </div>
-                  <div className="text-right font-mono font-bold text-neutral-200">
+                <div className="flex items-baseline justify-between gap-2">
+                  <span className="flex-1 font-semibold text-neutral-100 text-[0.8125rem] leading-tight">
+                    {it.itemName}
+                  </span>
+                  <span className="font-mono font-bold text-neutral-200 text-[0.8125rem] whitespace-nowrap">
                     GH₵{Number(it.totalPrice).toFixed(2)}
-                  </div>
+                  </span>
                 </div>
+                {it.modifiers && it.modifiers.length > 0 && (
+                  <div className="text-[0.6875rem] text-amber-400/90 mt-0.5">
+                    {it.modifiers.map((m: any, mIdx: number) => (
+                      <span key={mIdx} className="mr-2">
+                        + {m.name || m.optionName}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {it.specialInstructions && (
+                  <div className="text-[0.625rem] text-neutral-400 italic mt-0.5">
+                    * {it.specialInstructions}
+                  </div>
+                )}
 
-                <div className="flex items-center justify-between pt-2 border-t border-neutral-800">
-                  <span className="text-[0.6875rem] text-neutral-500">
+                <div className="flex items-center justify-between mt-1.5">
+                  <span className="text-[0.625rem] text-neutral-500">
                     GH₵{Number(it.unitPrice).toFixed(2)} ea
                   </span>
-                  {/* Oversized steppers: cashiers adjust quantities constantly
-                      while looking at the guest, not the screen. */}
-                  <div className="flex items-center gap-1.5">
+                  {/* Steppers stay finger-sized (the large display sizes floor
+                      tappables at 40px via globals.css); compactness comes
+                      from the single-row layout, not from shrinking targets. */}
+                  <div className="flex items-center gap-1">
                     <button
                       onClick={() => updateQuantity(idx, -1)}
                       aria-label="Decrease quantity"
-                      className="w-10 h-10 rounded-xl bg-neutral-800 hover:bg-neutral-700 active:bg-neutral-600 text-neutral-200 flex items-center justify-center transition active:scale-95"
+                      className="w-8 h-8 rounded-lg bg-neutral-800 hover:bg-neutral-700 active:bg-neutral-600 text-neutral-200 flex items-center justify-center transition active:scale-95"
                     >
-                      <Minus className="w-5 h-5" strokeWidth={3} />
+                      <Minus className="w-4 h-4" strokeWidth={3} />
                     </button>
-                    <span className="w-9 text-center font-bold text-white font-mono text-base">
+                    <span className="w-6 text-center font-bold text-white font-mono text-sm">
                       {it.quantity}
                     </span>
                     <button
                       onClick={() => updateQuantity(idx, 1)}
                       aria-label="Increase quantity"
-                      className="w-10 h-10 rounded-xl bg-neutral-800 hover:bg-neutral-700 active:bg-amber-500 active:text-black text-neutral-200 flex items-center justify-center transition active:scale-95"
+                      className="w-8 h-8 rounded-lg bg-neutral-800 hover:bg-neutral-700 active:bg-amber-500 active:text-black text-neutral-200 flex items-center justify-center transition active:scale-95"
                     >
-                      <Plus className="w-5 h-5" strokeWidth={3} />
+                      <Plus className="w-4 h-4" strokeWidth={3} />
                     </button>
                     <button
                       onClick={() =>
@@ -1156,10 +1157,10 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
                         })
                       }
                       aria-label="Remove item"
-                      className="ml-2 w-10 h-10 rounded-xl text-neutral-500 hover:text-rose-400 hover:bg-rose-500/10 flex items-center justify-center transition"
+                      className="ml-1 w-8 h-8 rounded-lg text-neutral-500 hover:text-rose-400 hover:bg-rose-500/10 flex items-center justify-center transition"
                       title="Remove item (asks first)"
                     >
-                      <Trash2 className="w-[18px] h-[18px]" />
+                      <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
                 </div>
