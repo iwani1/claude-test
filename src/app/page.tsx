@@ -371,6 +371,18 @@ export default function App() {
     </div>
   );
 
+  // One controls strip, two homes: across the top of the work area on
+  // most screens, but on the POS it sits above the menu column only
+  // (passed into PosTerminal) so the bill panel extends to the very top.
+  const terminalControls = (
+    <TerminalControls
+      currentUser={currentUser}
+      lowStockCount={lowStockCount}
+      onUserChange={handleUserChange}
+      onLogout={handleLogout}
+    />
+  );
+
   const renderTab = () => {
     if (!tabAllowed[activeTab]) return renderDenied();
 
@@ -386,6 +398,7 @@ export default function App() {
             currentUser={currentUser}
             activeTableId={activeTableId}
             onOrderCreated={fetchOperationalData}
+            headerControls={terminalControls}
           />
         );
       case "tables":
@@ -518,15 +531,11 @@ export default function App() {
 
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
           {/* Slim top strip (md+): user, Switch Staff, display size, online
-              state, fullscreen. Staff asked for these across the top of the
-              work area rather than in the rail (Oct 2026). Phones use the
-              Navbar above instead. */}
-          <TerminalControls
-            currentUser={currentUser}
-            lowStockCount={lowStockCount}
-            onUserChange={handleUserChange}
-            onLogout={handleLogout}
-          />
+              state, fullscreen — across the top of the work area on most
+              screens. On the POS it is NOT rendered here: PosTerminal
+              shows it above the menu column instead, so the bill panel
+              extends to the very top (Oct 2026). Phones use the Navbar. */}
+          {activeTab !== "pos" && terminalControls}
           <main className="flex-1 flex flex-col min-h-0 overflow-hidden bg-neutral-950">
             {renderTab()}
           </main>

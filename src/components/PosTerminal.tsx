@@ -45,6 +45,12 @@ interface PosTerminalProps {
   currentUser: CurrentUser;
   onOrderCreated?: () => void;
   activeTableId?: number | null;
+  /**
+   * Shell controls strip (user, Switch Staff, display size, online…),
+   * rendered above the menu column only — never above this panel — so
+   * the bill panel extends to the very top of the screen.
+   */
+  headerControls?: React.ReactNode;
 }
 
 export const PosTerminal: React.FC<PosTerminalProps> = ({
@@ -54,6 +60,7 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
   currentUser,
   onOrderCreated,
   activeTableId = null,
+  headerControls,
 }) => {
   // State
   const [selectedCategory, setSelectedCategory] = useState<number | "all">("all");
@@ -761,6 +768,10 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
       <div className="flex-1 flex flex-col md:flex-row min-h-0 overflow-hidden relative">
       {/* LEFT/CENTER: Ghanaian Menu Items & Categories */}
       <div className="flex-1 flex flex-col h-full border-r border-neutral-800 overflow-hidden">
+        {/* Shell controls strip lives over THIS column only (staff request,
+            Oct 2026): everything grouped on its left, and the bill panel
+            beside it extends to the very top of the screen. */}
+        {headerControls}
         {/* Top search & Filter bar */}
         <div className="p-4 bg-neutral-900 border-b border-neutral-800 flex flex-col sm:flex-row gap-3 items-center justify-between">
           <div className="relative w-full sm:w-80">
