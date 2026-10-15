@@ -290,12 +290,17 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
         !searchQuery ||
         item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         item.sku?.toLowerCase().includes(searchQuery.toLowerCase());
-      return matchCat && matchSearch && item.isAvailable;
+      // Unavailable dishes are NOT filtered out here: the card renders them
+      // greyed-out on phones (mobile redesign rec, Oct 2026) so staff can see
+      // a dish is off instead of wondering where it went. On md+ the card root
+      // keeps the old behaviour (`hidden max-md:flex`: never rendered there).
+      return matchCat && matchSearch;
     });
   }, [menuItems, selectedCategory, searchQuery]);
 
   // Click menu item -> open modifier modal if item has modifiers, or add directly to cart
   const handleItemClick = (item: any) => {
+    if (!item.isAvailable) return; // off-menu: visible on phones, never addable
     if (item.modifiers && item.modifiers.length > 0) {
       setSelectedItemForMod(item);
       setItemModSelections({});
@@ -431,6 +436,13 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
   const serviceCharge = 0;
   const totalAmount = pricing.totalCents / 100;
   const cartCount = cart.reduce((n, it) => n + it.quantity, 0);
+  // Per-dish quantities already on the bill, for the phone cards' "×N" badge.
+  const cartQtyByItem = new Map<number, number>();
+  cart.forEach((ci) => {
+    if (ci.menuItemId != null) {
+      cartQtyByItem.set(ci.menuItemId, (cartQtyByItem.get(ci.menuItemId) ?? 0) + ci.quantity);
+    }
+  });
 
   // Back closes the cart sheet, matching the drawer on tablet/phone widths.
   useEffect(() => {
@@ -1080,7 +1092,7 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
             beside it extends to the very top of the screen. */}
         {headerControls}
         {/* Top search & Filter bar */}
-        <div className="p-4 bg-neutral-900 border-b border-neutral-800 flex flex-col sm:flex-row gap-3 items-center justify-between">
+        <div className="p-4 max-md:p-3 bg-neutral-900 border-b border-neutral-800 flex flex-col sm:flex-row gap-3 items-center justify-between">
           <div className="relative w-full sm:w-80">
             <Search className="w-4 h-4 text-neutral-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
@@ -1088,7 +1100,7 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
               placeholder="Search menu items, dishes, drinks..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 bg-neutral-800 border border-neutral-700 rounded-xl text-sm text-white placeholder-neutral-400 focus:outline-none focus:border-amber-500"
+              className="w-full pl-9 pr-4 py-2 max-md:h-12 max-md:rounded-2xl max-md:text-base bg-neutral-800 border border-neutral-700 rounded-xl text-sm text-white placeholder-neutral-400 focus:outline-none focus:border-amber-500"
             />
             {searchQuery && (
               <button
@@ -1115,10 +1127,10 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
         </div>
 
         {/* Category Pills */}
-        <div className="px-4 py-3 bg-neutral-900/50 border-b border-neutral-800 flex items-center gap-2 overflow-x-auto custom-scrollbar shrink-0">
+        <div className="px-4 py-3 max-md:px-3 max-md:py-2.5 bg-neutral-900/50 border-b border-neutral-800 flex items-center gap-2 overflow-x-auto custom-scrollbar shrink-0">
           <button
             onClick={() => setSelectedCategory("all")}
-            className={`px-5 h-12 rounded-xl text-sm font-bold whitespace-nowrap transition-all active:scale-95 ${
+            className={`px-5 h-12 max-md:h-11 max-md:px-4 max-md:rounded-full max-md:text-[0.8125rem] rounded-xl text-sm font-bold whitespace-nowrap transition-all active:scale-95 ${
               selectedCategory === "all"
                 ? "bg-amber-500 text-black shadow-md shadow-amber-500/20"
                 : "bg-neutral-800 text-neutral-300 hover:bg-neutral-750 hover:text-white"
@@ -1130,29 +1142,32 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
             <button
               key={cat.id}
               onClick={() => setSelectedCategory(cat.id)}
-              className={`px-5 h-12 rounded-xl text-sm font-bold whitespace-nowrap transition-all active:scale-95 ${
+              className={`px-5 h-12 max-md:h-11 max-md:px-4 max-md:rounded-full max-md:text-[0.8125rem] rounded-xl text-sm font-bold whitespace-nowrap transition-all active:scale-95 ${
                 selectedCategory === cat.id
                   ? "bg-amber-500 text-black shadow-md shadow-amber-500/20"
                   : "bg-neutral-800 text-neutral-300 hover:bg-neutral-750 hover:text-white"
               }`}
             >
               {cat.name}
+              <span className="md:hidden font-semibold opacity-75">
+                {" "}· {menuItems.filter((i) => i.categoryId === cat.id).length}
+              </span>
             </button>
           ))}
         </div>
 
         {/* Item Cards Grid */}
-        <div className="flex-1 overflow-y-auto p-4 pb-44 xl:pb-4 custom-scrollbar">
+        <div className="flex-1 overflow-y-auto p-4 max-md:p-3 pb-44 xl:pb-4 custom-scrollbar">
           {/* Cards never shrink below ~9.75rem: on a 10–13" till the old
               fixed column counts squeezed dishes to ~110px slivers with
               clipped names (field report, Oct 2026). auto-fill trades
               column count for a guaranteed tappable card size instead. */}
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(9.75rem,1fr))] gap-4">
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(9.75rem,1fr))] max-md:grid-cols-2 gap-4 max-md:gap-3">
             {filteredItems.map((item) => (
               <div
                 key={item.id}
                 role="button"
-                tabIndex={0}
+                tabIndex={item.isAvailable ? 0 : -1}
                 onClick={() => handleItemClick(item)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" || e.key === " ") {
@@ -1160,11 +1175,14 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
                     handleItemClick(item);
                   }
                 }}
-                className="group relative bg-neutral-900 hover:bg-neutral-850 active:bg-neutral-800 border border-neutral-800 hover:border-amber-500/50 active:border-amber-500 rounded-2xl p-3.5 flex flex-col justify-between cursor-pointer transition-all duration-150 hover:shadow-xl hover:shadow-amber-500/5 select-none"
+                className={`group relative bg-neutral-900 hover:bg-neutral-850 active:bg-neutral-800 border border-neutral-800 hover:border-amber-500/50 active:border-amber-500 rounded-2xl p-3.5 max-md:p-3 flex-col justify-between cursor-pointer transition-all duration-150 hover:shadow-xl hover:shadow-amber-500/5 select-none ${
+                  item.isAvailable ? "flex" : "hidden max-md:flex max-md:opacity-75"
+                }`}
+                aria-disabled={!item.isAvailable}
               >
                 <div>
                   {/* Photo with badges */}
-                  <div className="relative w-full h-32 rounded-xl overflow-hidden bg-neutral-800 mb-3">
+                  <div className={`relative w-full h-32 max-md:h-24 rounded-xl overflow-hidden bg-neutral-800 mb-3 ${item.isAvailable ? "" : "max-md:grayscale"}`}>
                     {item.imageUrl ? (
                       <Image unoptimized width={400} height={300}
                         src={item.imageUrl}
@@ -1183,9 +1201,21 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
                         <span>Recipe</span>
                       </div>
                     )}
-                    <div className="absolute bottom-2 right-2 px-2.5 py-1 rounded-lg bg-neutral-950/85 backdrop-blur-xs text-[0.8125rem] font-bold text-emerald-400 border border-neutral-700">
+                    <div className="max-md:hidden absolute bottom-2 right-2 px-2.5 py-1 rounded-lg bg-neutral-950/85 backdrop-blur-xs text-[0.8125rem] font-bold text-emerald-400 border border-neutral-700">
                       GH₵{Number(item.price).toFixed(2)}
                     </div>
+                    {/* Phone: how many of this dish are already on the bill —
+                        build the order without opening the sheet. */}
+                    {(cartQtyByItem.get(item.id) ?? 0) > 0 && (
+                      <div className="md:hidden absolute top-2 right-2 min-w-7 h-7 px-1.5 rounded-full bg-amber-500 text-black text-[0.75rem] font-extrabold flex items-center justify-center shadow-lg">
+                        ×{cartQtyByItem.get(item.id)}
+                      </div>
+                    )}
+                    {!item.isAvailable && (
+                      <div className="md:hidden absolute bottom-2 left-2 px-2 py-0.5 rounded-md bg-black/75 backdrop-blur-xs text-[0.625rem] font-bold text-rose-300 border border-rose-500/40">
+                        Unavailable
+                      </div>
+                    )}
                   </div>
 
                   <h4 className="font-bold text-neutral-50 text-[0.84375rem] leading-snug line-clamp-2">
@@ -1198,9 +1228,18 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
                   )}
                 </div>
 
-                <div className="mt-3 pt-2.5 border-t border-neutral-800/80 flex items-center justify-between text-[0.71875rem] text-neutral-400">
-                  <span className="capitalize text-neutral-500">{item.station || "Kitchen"}</span>
-                  <span className="w-8 h-8 rounded-lg bg-amber-500/10 text-amber-400 group-hover:bg-amber-500 group-hover:text-black flex items-center justify-center font-bold transition text-lg leading-none">
+                <div className="mt-3 pt-2.5 border-t border-neutral-800/80 flex items-center max-md:items-end justify-between text-[0.71875rem] text-neutral-400">
+                  <span className="flex flex-col min-w-0">
+                    <span className="capitalize text-neutral-500">{item.station || "Kitchen"}</span>
+                    {/* Phone cards carry the price here, Demo A style: big and
+                        bold beside the add button instead of a pill on the photo. */}
+                    <span className="md:hidden mt-0.5 text-[0.9375rem] leading-none font-extrabold text-neutral-50">
+                      GH₵{Number(item.price).toFixed(2)}
+                    </span>
+                  </span>
+                  <span className={`w-8 h-8 max-md:w-9 max-md:h-9 max-md:rounded-full rounded-lg bg-amber-500/10 text-amber-400 group-hover:bg-amber-500 group-hover:text-black flex items-center justify-center font-bold transition text-lg leading-none shrink-0 ${
+                    item.isAvailable ? "max-md:bg-amber-500 max-md:text-black" : "max-md:bg-neutral-800 max-md:text-neutral-500"
+                  }`}>
                     +
                   </span>
                 </div>
@@ -1213,6 +1252,13 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
               <Search className="w-10 h-10 mb-2 opacity-40" />
               <p className="text-sm font-medium">No dishes match your search.</p>
               <p className="text-xs text-neutral-600 mt-1">Try changing category or search terms.</p>
+            </div>
+          )}
+          {filteredItems.length > 0 && !filteredItems.some((i) => i.isAvailable) && (
+            <div className="hidden md:flex h-64 flex-col items-center justify-center text-center p-6 text-neutral-500">
+              <Search className="w-10 h-10 mb-2 opacity-40" />
+              <p className="text-sm font-medium">Everything here is marked unavailable.</p>
+              <p className="text-xs text-neutral-600 mt-1">On a phone these dishes show greyed-out instead.</p>
             </div>
           )}
         </div>
@@ -1237,15 +1283,23 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
           )}
         </span>
         <span className="flex-1 text-left min-w-0">
-          <span className="block text-[0.6875rem] font-bold tracking-[0.12em] text-neutral-500 uppercase">
+          {/* md+ keeps the one-line summary; phones split it so the total is
+              the biggest thing on the bar (mobile redesign rec, Oct 2026). */}
+          <span className="hidden md:block text-[0.6875rem] font-bold tracking-[0.12em] text-neutral-500 uppercase">
             Open order
           </span>
-          <span className="block text-base font-bold text-white truncate">
+          <span className="hidden md:block text-base font-bold text-white truncate">
             {cartCount === 0 ? "No items yet" : `${cartCount} item${cartCount === 1 ? "" : "s"}`}
             {cartCount > 0 ? ` · GH₵${totalAmount.toFixed(2)}` : ""}
           </span>
+          <span className="md:hidden block text-[0.6875rem] font-bold tracking-[0.12em] text-neutral-500 uppercase">
+            {cartCount === 0 ? "Open order" : `${cartCount} item${cartCount === 1 ? "" : "s"}`}
+          </span>
+          <span className="md:hidden block text-lg font-extrabold text-white truncate leading-tight">
+            {cartCount === 0 ? "No items yet" : `GH₵${totalAmount.toFixed(2)}`}
+          </span>
         </span>
-        <span className="shrink-0 h-11 px-3.5 rounded-xl bg-neutral-800 border border-neutral-700 text-white font-bold text-sm flex items-center gap-1.5">
+        <span className="shrink-0 h-11 px-3.5 rounded-xl max-md:bg-amber-500 max-md:border-amber-500 max-md:text-black bg-neutral-800 border border-neutral-700 text-white font-bold text-sm flex items-center gap-1.5">
           View <ChevronUp className="w-4 h-4" />
         </span>
       </button>
@@ -1271,6 +1325,8 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
       >
         {/* Sheet header — phones and tablets, wherever the panel overlays. */}
         <div className="xl:hidden shrink-0 px-4 pt-2.5 pb-2 border-b border-neutral-800">
+          {/* Grab pill on top, Demo A sheet style (phones; tablets keep theirs below). */}
+          <div className="md:hidden mx-auto mb-2 h-1.5 w-12 rounded-full bg-neutral-700" />
           <div className="flex items-center gap-2">
             <button
               onClick={() => setCartOpen(false)}
@@ -1289,7 +1345,7 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
             </div>
             <div className="w-11" />
           </div>
-          <div className="mt-1.5 h-1.5 w-12 mx-auto rounded-full bg-neutral-700" />
+          <div className="max-md:hidden mt-1.5 h-1.5 w-12 mx-auto rounded-full bg-neutral-700" />
         </div>
         {/* Order Meta Header — deliberately compact (field report, Oct 2026):
             the old labelled fields ate ~230px and squeezed the ticket items
