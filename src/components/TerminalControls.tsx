@@ -22,9 +22,11 @@ import type { CurrentUser } from "@/lib/api-types";
  * Slim top strip for md+ screens: signed-in user, Switch Staff, display
  * size, online/offline state (+ offline-queue sync), fullscreen and the
  * low-stock alert. These controls have lived in the top bar, then the
- * rail; staff asked for them across the top of the work area (Oct 2026),
- * which is where this strip sits — above the content, beside the rail.
- * Phones keep the Navbar instead (this strip is max-md:hidden).
+ * rail, then a full-width strip; staff asked for everything grouped on
+ * the left, above the menu column only (Oct 2026), so the POS bill
+ * panel can extend to the very top of the screen. On other screens the
+ * shell renders it across the top of the work area. Phones keep the
+ * Navbar instead (this strip is max-md:hidden).
  */
 export const TerminalControls: React.FC<{
   currentUser: CurrentUser;
@@ -62,7 +64,7 @@ export const TerminalControls: React.FC<{
   };
 
   return (
-    <div className="max-md:hidden shrink-0 h-14 bg-neutral-900 border-b border-neutral-800 flex items-center gap-2 px-3 select-none">
+    <div className="max-md:hidden shrink-0 h-14 bg-neutral-900 border-b border-neutral-800 flex items-center gap-2 px-3 select-none overflow-x-auto custom-scrollbar">
       {/* Signed-in user + fast staff switch */}
       <div className="flex items-center gap-2.5 min-w-0">
         <div className="w-9 h-9 rounded-lg bg-gradient-to-tr from-amber-600 to-orange-500 flex items-center justify-center text-sm font-bold text-white shadow-xs shrink-0">
@@ -94,9 +96,8 @@ export const TerminalControls: React.FC<{
         </button>
       </div>
 
-      <div className="flex-1" />
-
-      {/* Terminal state + controls */}
+      {/* Terminal state + controls — grouped with the user block on the
+          left at staff request; nothing sits on the right any more. */}
       {lowStockCount > 0 && (
         <div className="hidden xl:flex items-center gap-1.5 px-3 h-11 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 text-[0.75rem] font-semibold">
           <ShieldAlert className="w-4 h-4 shrink-0" />
