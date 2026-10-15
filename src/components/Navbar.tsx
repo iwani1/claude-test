@@ -96,6 +96,25 @@ export const Navbar: React.FC<NavbarProps> = ({
               <Menu className="w-6 h-6" />
             </button>
           )}
+          {/* Phone brand cluster (mobile redesign "Twin", Oct 2026): the Demo A
+              top bar carries the hotel identity on phones too. Mark always,
+              name + staff line only from 430px up — below that the bar cannot
+              hold branding AND every control, so the name yields (it still
+              appears in the drawer and on the sign-in screen). Desktop and
+              tablet bars are untouched: this cluster is sm:hidden. */}
+          <div className="flex sm:hidden items-center gap-2 min-w-0 shrink-0">
+            <div className="w-9 h-9 rounded-[0.625rem] bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center shadow-lg shadow-orange-500/20 shrink-0">
+              <Store className="w-5 h-5 text-white" />
+            </div>
+            <div className="hidden min-[430px]:block min-w-0">
+              <div className="text-[0.8125rem] font-bold tracking-tight text-neutral-100 truncate leading-tight">
+                Lush View Hotel
+              </div>
+              <div className="text-[0.625rem] text-neutral-400 truncate leading-tight">
+                {currentRoleInfo?.label || currentUser?.role || "Staff"} · {currentUser?.name || "Staff"}
+              </div>
+            </div>
+          </div>
           {/* The mark yields to the controls on phones: at the largest display
               size a 320px-wide bar cannot hold branding *and* every control.
               The brand still appears in the drawer and on the sign-in screen. */}
@@ -132,10 +151,11 @@ export const Navbar: React.FC<NavbarProps> = ({
                 ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
                 : "bg-amber-500/10 border-amber-500/30 text-amber-400"
             }`}
-            title={openShift ? "Register open" : "Register closed"}
+            title={openShift ? "Your shift is open" : "Your shift is closed"}
           >
             <span className={`w-2 h-2 rounded-full ${openShift ? "bg-emerald-400" : "bg-amber-400"}`} />
-            <span className="hidden sm:inline">{openShift ? "Open" : "Closed"}</span>
+            {/* Shifts are per-staff: this chip is about YOUR shift, not the till's. */}
+            <span className="hidden sm:inline">{openShift ? "My shift: Open" : "My shift: Closed"}</span>
           </div>
 
           {/* Network status — only shown when it matters: a phone's top bar has
