@@ -1,4 +1,5 @@
 import { secureRoute, ApiError } from "@/lib/api";
+import { ROLE_PERMISSIONS, type UserRole } from "@/lib/auth";
 import { NextResponse } from "next/server";
 import { db, requestContext } from "@/db";
 import { orders, orderItems, diningTables, kitchenTickets, menuItems, modifierOptions, refunds } from "@/db/schema";
@@ -8,7 +9,10 @@ import { loadBillingConfig, priceOrder, fromCents } from "@/lib/pricing";
 import { toCents } from "@/lib/pricing-core";
 
 /**
- * Owner-only re-pricing of a saved order.
+ * Re-pricing of a saved order — owner-only in full, with one till carve-out:
+ * staff working the POS may sync the ITEMS of a bill that is still open
+ * (an order reopened from the kitchen queue to add items or settle), while
+ * money-only edits and settled bills stay with the owner.
  *
  * The bill is recomputed with the same `priceOrder` the till uses, from menu
  * prices in the database — the browser never sets a price. Whatever the owner
@@ -40,6 +44,26 @@ async function handlePATCH(req: Request, { params }: { params: Promise<{ id: str
   const hasItems = Array.isArray(body.items);
   const hasMoney = body.discountAmount !== undefined || body.discountPercent !== undefined || body.tipAmount !== undefined;
   const reprice = hasItems || hasMoney;
+
+  // The full editor stays owner-only, but the till has one legitimate need:
+  // an order sent to the kitchen is reopened to add items or to settle, and
+  // that means pushing the ticket's lines back through here. Till staff may
+  // do exactly that — sync the ITEMS of a bill that is still open — and
+  // nothing more: no money-only edits, no settled or cancelled bills, and
+  // the discount already on the bill cannot move (discounts need a manager,
+  // exactly as when the order was first rung).
+  const perms = ROLE_PERMISSIONS[actor.role as UserRole];
+  if (!perms?.canEditOrders) {
+    const billStillOpen =
+      ["unpaid", "partially_paid"].includes(order.paymentStatus) &&
+      !["cancelled", "refunded"].includes(order.status);
+    const discountMoved =
+      (body.discountAmount !== undefined && toCents(body.discountAmount) !== toCents(order.discountAmount)) ||
+      (body.discountPercent !== undefined && Number(body.discountPercent || 0) !== 0);
+    if (!perms?.canAccessPos || !hasItems || !billStillOpen || discountMoved) {
+      throw new ApiError(403, "Only the owner can edit an order this way. Till staff can add items to an open, unpaid bill from the POS.");
+    }
+  }
 
   // Refunds are a separate ledger (orders.paid_amount stays gross), so read that
   // ledger rather than a display field: once money has gone back to the guest,
@@ -327,4 +351,4 @@ async function handlePATCH(req: Request, { params }: { params: Promise<{ id: str
   });
 }
 
-export const PATCH = secureRoute(handlePATCH, "canEditOrders");
+export const PATCH = secureRoute(handlePATCH, "canAccessPos");
