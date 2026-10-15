@@ -221,12 +221,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
               onCloseMobile?.();
             }}
             className={`w-full h-14 rounded-2xl bg-amber-500 hover:bg-amber-400 active:bg-amber-600 text-black font-bold shadow-lg shadow-amber-500/25 flex items-center justify-center gap-2.5 transition active:scale-[0.98] ${
-              collapsed ? "px-0" : "px-4"
+              collapsed ? "px-0 max-md:px-4" : "px-4"
             }`}
             title="Start a new order"
           >
             <Plus className="w-6 h-6 shrink-0" strokeWidth={3} />
-            {!collapsed && <span className="text-[0.9375rem]">New Order</span>}
+            <span className={`text-[0.9375rem] ${collapsed ? "hidden max-md:inline" : ""}`}>New Order</span>
           </button>
         </div>
       )}
@@ -238,12 +238,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
       >
         {navSections.map((sec, sIdx) => (
           <div key={sIdx} className="space-y-1.5">
-            {!collapsed && (
-              <div className="px-3 text-[0.625rem] font-bold tracking-[0.12em] text-neutral-500 uppercase">
-                {sec.title}
-              </div>
-            )}
-            {collapsed && sIdx > 0 && <div className="mx-3 border-t border-neutral-800" />}
+            <div className={`px-3 text-[0.625rem] font-bold tracking-[0.12em] text-neutral-500 uppercase ${collapsed ? "hidden max-md:block" : ""}`}>
+              {sec.title}
+            </div>
+            {collapsed && sIdx > 0 && <div className="mx-3 border-t border-neutral-800 max-md:hidden" />}
 
             {sec.items.map((it) => {
               const Icon = it.icon;
@@ -258,7 +256,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   // 52px row height keeps every target comfortably above the
                   // ~44px minimum for reliable finger taps.
                   className={`relative w-full flex items-center gap-3.5 rounded-xl transition-all group ${
-                    collapsed ? "h-14 justify-center px-0" : "h-[52px] px-3.5"
+                    collapsed ? "h-14 justify-center px-0 max-md:h-[52px] max-md:justify-start max-md:px-3.5" : "h-[52px] px-3.5"
                   } ${
                     isActive
                       ? "bg-amber-500 text-black font-bold shadow-lg shadow-amber-500/20"
@@ -272,8 +270,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       isActive ? "text-black" : "text-neutral-400 group-hover:text-amber-400"
                     }`}
                   />
-                  {!collapsed && (
-                    <div className="flex-1 flex items-center justify-between text-left min-w-0">
+                  <div className={`flex-1 items-center justify-between text-left min-w-0 ${collapsed ? "hidden max-md:flex" : "flex"}`}>
                       <span className="truncate text-[0.84375rem] font-semibold">{it.label}</span>
                       {it.badge !== undefined && it.badge !== "" && (
                         <span
@@ -286,8 +283,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                           {it.badge}
                         </span>
                       )}
-                    </div>
-                  )}
+                  </div>
 
                   {/* Active indicator edge for quick peripheral scanning */}
                   {isActive && (
@@ -301,19 +297,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </nav>
 
       {/* Footer Info */}
-      {!collapsed ? (
-        <div className="p-3.5 border-t border-neutral-800 bg-neutral-950/60 space-y-1">
+      <>
+        <div className={`p-3.5 border-t border-neutral-800 bg-neutral-950/60 space-y-1 ${collapsed ? "hidden max-md:block" : ""}`}>
           <div className="flex items-center justify-between text-[0.6875rem]">
             <span className="font-medium text-neutral-400">Lush View POS</span>
             <span className="text-emerald-400 font-semibold">GH₵ · GHS</span>
           </div>
           <div className="text-[0.625rem] text-neutral-600">v2.5.0 · Touch Terminal Build</div>
         </div>
-      ) : (
-        <div className="py-3 border-t border-neutral-800 bg-neutral-950/60 flex justify-center">
+        <div className={`py-3 border-t border-neutral-800 bg-neutral-950/60 justify-center ${collapsed ? "flex max-md:hidden" : "hidden"}`}>
           <span className="text-[0.625rem] font-bold text-neutral-600">v2.5</span>
         </div>
-      )}
+      </>
 
     </aside>
   );
