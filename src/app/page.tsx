@@ -310,9 +310,6 @@ export default function App() {
     beginNewOrder();
   };
 
-  const handleOpenDrawer = () => setActiveTab("shifts");
-  const handleGoTables = () => setActiveTab("tables");
-  const handleGoOrders = () => setActiveTab("orders");
 
   /** Open dine-in tables, shown as a glanceable count on the Tables button. */
   const openTableCount = tables.filter((t) => t.status === "occupied").length;
@@ -388,9 +385,6 @@ export default function App() {
             currentUser={currentUser}
             activeTableId={activeTableId}
             onOrderCreated={fetchOperationalData}
-            onOpenDrawer={handleOpenDrawer}
-            onGoTables={handleGoTables}
-            onGoOrders={handleGoOrders}
           />
         );
       case "tables":
@@ -448,11 +442,6 @@ export default function App() {
         onLogout={handleLogout}
         lowStockCount={lowStockCount}
         openShift={openShift}
-        onNewOrder={handleStartNewOrder}
-        onOpenDrawer={handleOpenDrawer}
-        onGoTables={handleGoTables}
-        onGoOrders={handleGoOrders}
-        currentTab={activeTab}
       />
 
       {/* Connection state, always visible while it matters. Offline is not an
