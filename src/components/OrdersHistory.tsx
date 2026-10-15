@@ -36,6 +36,13 @@ export const OrdersHistory: React.FC<{
   /** Finance and stock roles read this screen; only till roles can act on it.
    *  A visible button that always answers 403 is worse than no button. */
   const canWorkTill = perms.canAccessPos;
+  /** Refunds are requested by managers, the owner and accountants only
+   *  (owner directive, Oct 2026) — everyone else never sees the button,
+   *  and the API independently refuses them. */
+  const canRefund = perms.canIssueRefunds;
+  // Order details (View button, every history reader)
+  const [detailsOrder, setDetailsOrder] = useState<any | null>(null);
+  const [detailsLoading, setDetailsLoading] = useState(false);
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
@@ -139,6 +146,18 @@ export const OrdersHistory: React.FC<{
     return () => { clearTimeout(kick); clearInterval(timer); window.removeEventListener("focus", onFocus); };
   }, [fetchOrders]);
 
+  const openDetails = async (order: any) => {
+    setDetailsLoading(true);
+    try {
+      const data = await apiFetch(`/api/orders/${order.id}`);
+      setDetailsOrder(data.order);
+    } catch (e) {
+      notify(apiErrorMessage(e, "Could not load order details"), "error");
+    } finally {
+      setDetailsLoading(false);
+    }
+  };
+
   const handleProcessRefund = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!refundOrderTarget || refundBusy) return;
@@ -189,13 +208,15 @@ export const OrdersHistory: React.FC<{
             <span>Orders & Transaction History</span>
           </h2>
           <p className="text-xs text-neutral-400 mt-0.5">
-            {canWorkTill
-              ? "Audit transactions, reprint receipts, and process manager refunds"
-              : "Audit transactions and reprint receipts"}
+            {canRefund
+              ? "Audit transactions, reprint receipts, view order details, and process refunds"
+              : "Audit transactions, reprint receipts, and view order details"}
           </p>
-          {!canWorkTill && (
+          {!canRefund && (
             <p className="text-[0.6875rem] text-amber-300/90 mt-1">
-              Read-only: refunds, edits and deletions are done at the till by the owner or a manager.
+              {canWorkTill
+                ? "Refunds are requested by a restaurant manager, the owner, or an accountant."
+                : "Read-only: edits and deletions are done at the till by the owner or a manager."}
             </p>
           )}
         </div>
@@ -342,6 +363,13 @@ export const OrdersHistory: React.FC<{
 
                     <div className="flex flex-wrap gap-2">
                       <button
+                        onClick={() => openDetails(ord)}
+                        disabled={detailsLoading}
+                        className="h-12 px-3.5 rounded-xl bg-neutral-800 border border-neutral-700 text-neutral-200 font-semibold text-xs flex items-center gap-1.5 transition active:scale-[0.97]"
+                      >
+                        <Eye className="w-4 h-4 text-amber-400" /> View
+                      </button>
+                      <button
                         onClick={() => {
                           setDocketOrder(ord);
                           setShowDocketModal(true);
@@ -367,7 +395,7 @@ export const OrdersHistory: React.FC<{
                       >
                         <Printer className="w-4 h-4" /> Receipt
                       </button>
-                      {canWorkTill && Number(ord.paidAmount) > 0 && ord.paymentStatus !== "refunded" && (
+                      {canRefund && Number(ord.paidAmount) > 0 && ord.paymentStatus !== "refunded" && (
                         <button
                           onClick={() => openRefund(ord)}
                           className="h-12 px-3.5 rounded-xl bg-neutral-800 border border-neutral-700 text-neutral-200 font-semibold text-xs flex items-center gap-1.5 transition active:scale-[0.97]"
@@ -505,6 +533,16 @@ export const OrdersHistory: React.FC<{
                       <td className="px-4 py-3 text-right">
                         <div className="flex items-center justify-end gap-1.5">
                           <button
+                            onClick={() => openDetails(ord)}
+                            disabled={detailsLoading}
+                            className="p-1.5 bg-neutral-800 hover:bg-amber-500 text-neutral-300 hover:text-black rounded-lg transition border border-neutral-700 hover:border-amber-400"
+                            title="View order details"
+                            aria-label={`View details of order ${ord.orderNumber}`}
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                          </button>
+
+                          <button
                             onClick={() => {
                               setDocketOrder(ord);
                               setShowDocketModal(true);
@@ -537,7 +575,7 @@ export const OrdersHistory: React.FC<{
                             <Printer className="w-3.5 h-3.5" />
                           </button>
 
-                          {canWorkTill && Number(ord.paidAmount) > 0 && ord.paymentStatus !== "refunded" && (
+                          {canRefund && Number(ord.paidAmount) > 0 && ord.paymentStatus !== "refunded" && (
                             <button
                               onClick={() => openRefund(ord)}
                               className="px-2 py-1 bg-neutral-800 hover:bg-rose-950/40 text-neutral-300 hover:text-rose-400 rounded-lg text-[0.6875rem] font-medium border border-neutral-700 transition flex items-center gap-1"
@@ -616,6 +654,112 @@ export const OrdersHistory: React.FC<{
           )}
         </div>
       </div>
+
+      {/* Order details — available to every history reader. Read-only: it
+          shows what was sold, what was paid and what was refunded. */}
+      {detailsOrder && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/70 backdrop-blur-xs p-4 overflow-y-auto">
+          <div className="bg-neutral-900 border border-neutral-700 rounded-2xl p-6 w-full max-w-lg shadow-2xl space-y-4 max-h-[92dvh] overflow-y-auto my-auto">
+            <div className="flex justify-between items-start gap-3">
+              <div className="min-w-0">
+                <h3 className="text-base font-bold text-white flex items-center gap-2">
+                  <Eye className="w-5 h-5 text-amber-500" />
+                  <span>Order Details</span>
+                </h3>
+                <p className="text-xs text-neutral-400 mt-0.5 font-mono break-all">{detailsOrder.orderNumber}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDetailsOrder(null)}
+                className="h-11 w-11 shrink-0 rounded-xl bg-neutral-800 border border-neutral-700 text-neutral-300 flex items-center justify-center transition active:bg-neutral-700"
+                aria-label="Close order details"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <div className="bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2">
+                <div className="text-neutral-500 font-bold uppercase tracking-wider text-[0.625rem]">Date &amp; time</div>
+                <div className="text-neutral-200 font-medium mt-0.5">{new Date(detailsOrder.createdAt).toLocaleString()}</div>
+              </div>
+              <div className="bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2">
+                <div className="text-neutral-500 font-bold uppercase tracking-wider text-[0.625rem]">Type / Table</div>
+                <div className="text-neutral-200 font-medium mt-0.5 capitalize">
+                  {detailsOrder.orderType?.replace("_", " ")}{detailsOrder.tableId ? ` · T-#${detailsOrder.tableId}` : ""}
+                </div>
+              </div>
+              <div className="bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2">
+                <div className="text-neutral-500 font-bold uppercase tracking-wider text-[0.625rem]">Guest</div>
+                <div className="text-neutral-200 font-medium mt-0.5">{detailsOrder.customerName || "Walk-in Guest"}</div>
+              </div>
+              <div className="bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2">
+                <div className="text-neutral-500 font-bold uppercase tracking-wider text-[0.625rem]">Created by</div>
+                <div className="text-neutral-200 font-medium mt-0.5">{detailsOrder.userName || "Unknown"}</div>
+              </div>
+              <div className="bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2">
+                <div className="text-neutral-500 font-bold uppercase tracking-wider text-[0.625rem]">Order status</div>
+                <div className="text-neutral-200 font-medium mt-0.5 capitalize">{detailsOrder.status}</div>
+              </div>
+              <div className="bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2">
+                <div className="text-neutral-500 font-bold uppercase tracking-wider text-[0.625rem]">Payment</div>
+                <div className="text-neutral-200 font-medium mt-0.5 capitalize">{detailsOrder.paymentStatus}</div>
+              </div>
+            </div>
+
+            <div>
+              <div className="text-[0.625rem] font-bold uppercase tracking-wider text-neutral-500 mb-1.5">Items</div>
+              <div className="divide-y divide-neutral-800 border border-neutral-800 rounded-xl overflow-hidden">
+                {(detailsOrder.items || []).map((it: any, i: number) => (
+                  <div key={it.id ?? i} className="flex items-center gap-3 px-3 py-2.5 bg-neutral-950 text-xs">
+                    <span className="flex-1 min-w-0">
+                      <span className="block font-medium text-neutral-100 truncate">{it.itemName || it.name}</span>
+                      <span className="block text-neutral-500">GH₵{Number(it.unitPrice ?? it.price ?? 0).toFixed(2)} each</span>
+                    </span>
+                    <span className="font-semibold text-neutral-300">×{it.quantity}</span>
+                    <span className="font-mono font-bold text-white w-20 text-right">
+                      GH₵{Number(it.totalPrice ?? Number(it.unitPrice ?? 0) * Number(it.quantity ?? 1)).toFixed(2)}
+                    </span>
+                  </div>
+                ))}
+                {(detailsOrder.items || []).length === 0 && (
+                  <div className="px-3 py-4 bg-neutral-950 text-xs text-neutral-500 text-center">No items on this order.</div>
+                )}
+              </div>
+            </div>
+
+            {detailsOrder.notes && (
+              <div className="text-xs bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2">
+                <span className="text-neutral-500 font-bold uppercase tracking-wider text-[0.625rem] block">Note</span>
+                <span className="text-neutral-300">{detailsOrder.notes}</span>
+              </div>
+            )}
+
+            <div className="space-y-1.5 text-xs border-t border-neutral-800 pt-3">
+              <div className="flex justify-between font-bold text-sm text-white">
+                <span>Total</span>
+                <span className="font-mono">GH₵{Number(detailsOrder.totalAmount).toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between text-neutral-300">
+                <span>Paid</span>
+                <span className="font-mono">GH₵{Number(detailsOrder.paidAmount).toFixed(2)}</span>
+              </div>
+              {Number(detailsOrder.refundedAmount) > 0 && (
+                <div className="flex justify-between text-rose-300">
+                  <span>Refunded</span>
+                  <span className="font-mono">GH₵{Number(detailsOrder.refundedAmount).toFixed(2)}</span>
+                </div>
+              )}
+              {Number(detailsOrder.totalAmount) - Number(detailsOrder.paidAmount) > 0 && (
+                <div className="flex justify-between text-amber-300 font-semibold">
+                  <span>Balance due</span>
+                  <span className="font-mono">GH₵{(Number(detailsOrder.totalAmount) - Number(detailsOrder.paidAmount)).toFixed(2)}</span>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* MODAL 1: Refund Processing with Manager Authorization */}
       {refundOrderTarget && (

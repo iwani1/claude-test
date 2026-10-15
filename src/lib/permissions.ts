@@ -129,7 +129,11 @@ export const ROLE_PERMISSIONS: Record<UserRole, {
     canViewReports: true,
     canModifyInventory: false,
     canManageStaff: false,
-    canIssueRefunds: false,
+    // Finance may request refunds (owner directive, Oct 2026): the refund is
+    // still authorised by a manager/owner PIN and, for cash, paid out of the
+    // requester's own open shift — an accountant without one is limited to
+    // MoMo refunds until a manager runs the cash side at the till.
+    canIssueRefunds: true,
     canAccessPos: false,
     canAccessKds: false,
     canManageMenu: false,
