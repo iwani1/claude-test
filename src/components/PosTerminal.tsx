@@ -1263,7 +1263,7 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
           md and up: the in-flow right-hand column. Below md: a slide-up sheet
           with its own grab handle and close button. Same element either way. */}
       <div
-        className={`bg-neutral-900 flex flex-col shrink-0 transition-all duration-200 xl:h-full xl:w-96 xl:border-l xl:border-neutral-800 max-xl:fixed max-xl:z-30 max-xl:shadow-2xl max-xl:border-neutral-700 max-md:inset-x-0 max-md:bottom-[calc(4rem+env(safe-area-inset-bottom,0px))] max-md:rounded-t-3xl max-md:border-t max-md:max-h-[85dvh] md:max-xl:top-0 md:max-xl:bottom-0 md:max-xl:right-0 md:max-xl:w-[min(26rem,94vw)] md:max-xl:border-l ${
+        className={`bg-neutral-900 flex flex-col shrink-0 transition-all duration-200 xl:h-full xl:w-96 xl:border-l xl:border-neutral-800 max-xl:fixed max-xl:z-30 max-xl:shadow-2xl max-xl:border-neutral-700 max-md:inset-x-0 max-md:bottom-[calc(4rem+env(safe-area-inset-bottom,0px))] max-md:rounded-t-3xl max-md:border-t max-md:max-h-[min(85dvh,calc(100dvh-7.5rem))] md:max-xl:top-0 md:max-xl:bottom-0 md:max-xl:right-0 md:max-xl:w-[min(26rem,94vw)] md:max-xl:border-l ${
           cartOpen
             ? "max-xl:visible max-md:translate-y-0 md:max-xl:translate-x-0"
             : "max-xl:invisible max-xl:pointer-events-none max-md:translate-y-full md:max-xl:translate-x-full"
@@ -1298,7 +1298,7 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
         <div className="p-3 border-b border-neutral-800 space-y-2 shrink-0">
           {/* Order Type Selector — Room Service is distinct from restaurant
               table dining because the GH₵ room charge applies only there. */}
-          <div className="flex gap-1 bg-neutral-950 p-1 rounded-xl border border-neutral-800 text-[0.6875rem] font-bold">
+          <div className="flex gap-1 bg-neutral-950 p-1 rounded-xl border border-neutral-800 text-[0.625rem] min-[420px]:text-[0.6875rem] font-bold">
             {([
               ["dine_in", "Table"],
               ["room_service", "Room Service"],
@@ -1313,7 +1313,7 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
                   if (type !== "room_service") setIsComplimentary(false);
                   if (type !== "room_service") setRoomNumber("");
                 }}
-                className={`flex-1 h-11 px-0.5 rounded-lg transition active:scale-[0.97] ${
+                className={`flex-1 h-11 px-0.5 rounded-lg leading-[1.05] flex items-center justify-center text-center transition active:scale-[0.97] ${
                   orderType === type
                     ? type === "room_service"
                       ? "bg-sky-400 text-black shadow-xs"

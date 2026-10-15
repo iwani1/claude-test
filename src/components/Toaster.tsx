@@ -37,8 +37,13 @@ export function Toaster() {
   // Sits above the dialogs (z-120) so a result is never hidden, but the card
   // itself is click-through: a notice may never eat the tap that was meant for
   // the button underneath it. Only the dismiss button takes input.
+  //
+  // Phones hang notices from the top, just under the bar: the bottom edge of
+  // a phone already carries the tab bar and, on the till, the Open Order bar
+  // with the running total — the one number a cashier must never lose under
+  // a toast. Tablets/desktops keep the bottom-right corner as before.
   return (
-    <div className="fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom,0px))] md:bottom-4 z-[140] px-3 md:px-0 md:right-4 md:left-auto md:w-[380px] md:max-w-full flex flex-col gap-2 pointer-events-none">
+    <div className="fixed inset-x-0 top-[calc(env(safe-area-inset-top,0px)+5.25rem)] bottom-auto md:top-auto md:bottom-4 z-[140] px-3 md:px-0 md:right-4 md:left-auto md:w-[380px] md:max-w-full flex flex-col gap-2 pointer-events-none">
       {notices.map((notice) => {
         const { icon: Icon, cls } = TONE[notice.tone];
         return (
