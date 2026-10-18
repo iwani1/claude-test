@@ -157,7 +157,7 @@ async function applyStockChange(
       const delta = direction === "deduct" ? -magnitude : magnitude;
       // Reject shortages rather than silently creating a fictitious movement.
       const next = previous + delta;
-      if (next < 0) throw new ApiError(409, "Insufficient ingredient stock");
+      if (next < 0) throw new ApiError(409, `Insufficient ingredient stock: ${current.name} (have ${previous}, need ${magnitude})`);
 
       await tx
         .update(ingredients)
