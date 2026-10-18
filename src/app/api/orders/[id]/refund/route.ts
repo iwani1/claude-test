@@ -58,8 +58,16 @@ export const POST = secureRoute(async (req, { params }) => {
   if (returnStock && !full) throw new ApiError(400, "Stock can only be returned when all collected funds have been refunded");
   // Lock the operator's own open shift, not the historical sale's shift and
   // not a colleague's: cash handed back comes out of this operator's float.
-  const [shift] = await db.select().from(shifts).where(and(eq(shifts.status, "open"), eq(shifts.userId, actor.id))).for("update");
-  if (cash > 0 && !shift) throw new ApiError(409, "Open your shift before recording a cash refund");
+  // Accountants may request refunds but cannot open shifts, so when the
+  // requester has none, the cash comes out of the approving manager's open
+  // shift instead — they are authorising this refund with their PIN and are
+  // the person physically at the till handing the money back (owner
+  // directive, Oct 2026). The movement still records who requested it.
+  let [shift] = await db.select().from(shifts).where(and(eq(shifts.status, "open"), eq(shifts.userId, actor.id))).for("update");
+  if (!shift && cash > 0 && manager.id !== actor.id) {
+    [shift] = await db.select().from(shifts).where(and(eq(shifts.status, "open"), eq(shifts.userId, manager.id))).for("update");
+  }
+  if (cash > 0 && !shift) throw new ApiError(409, "A cash refund needs an open shift — open yours, or have the approving manager at a till with their shift open");
   const [refund] = await db.insert(refunds).values({ orderId, amount: (cents / 100).toFixed(2), cashAmount: (cash / 100).toFixed(2), momoAmount: (momo / 100).toFixed(2),
     shiftId: shift?.id ?? null, idempotencyKey, requestFingerprint: fingerprint, reason: reason.trim(), authorizedBy: manager.id, stockReturned: !!returnStock }).returning();
   if (cash > 0 && shift) {

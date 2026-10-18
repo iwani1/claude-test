@@ -13,5 +13,13 @@ next-env.d.ts
 # It contains legacy credentials and insecure code; see docs/SYSTEM_AUDIT.md.
 11claude.zip
 
+# Database files and dumps: live business data, never committed. (The legacy
+# restpos.db was uploaded in Oct 2026 and removed from the tip in the
+# 2026-10-19 audit follow-up; it remains in history until the repo is private
+# and history is purged — see docs/AUDIT_2026-10-19.md.)
+*.db
+*.dump
+*.sqlite*
+
 # Release archive: built by scripts/package-release.py and by CI, never committed.
 11claude-fixed.zip

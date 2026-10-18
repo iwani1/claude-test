@@ -256,6 +256,14 @@ async function main() {
   check((await admin.query("SELECT cash_payouts FROM shifts WHERE branch_id=1 AND status='open' AND user_id=2")).rows[0].cash_payouts === beforeFaultPayouts, "failed refund rolls back drawer aggregate");
   check((await admin.query("SELECT dm.id FROM drawer_movements dm JOIN refunds r ON r.id=dm.refund_id WHERE r.order_id=$1", [faultId])).rowCount === 0, "failed refund leaves no drawer movement");
   await admin.query("DROP TRIGGER test_refund_fault ON audit_logs; DROP FUNCTION test_refund_fault()");
+  // An accountant has no shift of their own: their cash refund is authorised
+  // by the manager's PIN and paid out of the manager's open shift.
+  const acctOrder = await request("/api/orders", "POST", order("accountant-refund-order"), cashier);
+  const acctOrderId = acctOrder.body.order.id;
+  await request(`/api/orders/${acctOrderId}/pay`, "POST", { paymentMethod: "cash", amount: "10" }, cashier);
+  const acctRefund = await request(`/api/orders/${acctOrderId}/refund`, "POST", { amount: "4", cashAmount: "4", momoAmount: "0.00", reason: "Accountant cash refund", managerPin: "2222" }, accountant);
+  check(acctRefund.status === 200, "accountant cash refund succeeds via the approving manager's shift");
+  check(Number((await admin.query("SELECT user_id FROM shifts WHERE id=(SELECT shift_id FROM refunds WHERE order_id=$1)", [acctOrderId])).rows[0].user_id) === 2, "accountant cash refund is recorded on the manager's shift");
   const branchWrites = await Promise.all([
     request("/api/orders", "POST", order("branch-one-parallel"), cashier),
     request("/api/orders", "POST", order("branch-two-parallel", { items: [{ menuItemId: 2, quantity: 1 }] }), other),

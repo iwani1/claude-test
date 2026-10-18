@@ -23,6 +23,14 @@ still carry the chains above — there is currently no compatible patched
 release to move to. `npm audit --omit=dev` remains **0**. Re-check monthly;
 the moment either upstream ships a fix, this exception should be closed.
 
+**Update 2026-10-19 (full-system audit follow-up):** lockfile refreshed with
+`npm update` (all semver-compatible bumps applied). `eslint-config-next`
+(16.4.2, latest for Next 16.4) and `drizzle-kit` (0.31.11, latest stable)
+were confirmed current; both chains remain open upstream with no patched
+compatible release. Counts unchanged: full audit 9 (5 high, 4 moderate),
+`npm audit --omit=dev` **0**. Exception continues under the controls above;
+next re-check due within 30 days.
+
 ## Release decision
 
 This is a documented, **pending owner acceptance**, tooling-only risk exception,
