@@ -1,6 +1,6 @@
 "use client";
 
-import { apiFetch } from "./api-client";
+import { apiFetch, ApiClientError } from "./api-client";
 
 // Legacy key names are kept so terminals upgraded mid-service never lose
 // already-queued offline orders; the prefix is internal only.
@@ -207,7 +207,7 @@ export function clearOfflineQueue(branchId: number) {
   localStorage.removeItem(scopedKey(OFFLINE_QUEUE_KEY, branchId));
 }
 
-export async function syncOfflineQueueToServer(branchId: number): Promise<{ success: boolean; count: number }> {
+export async function syncOfflineQueueToServer(branchId: number): Promise<{ success: boolean; count: number; error?: string }> {
   const queue = getOfflineQueue(branchId).slice(0, 50);
   if (queue.length === 0) return { success: true, count: 0 };
 
@@ -224,8 +224,12 @@ export async function syncOfflineQueueToServer(branchId: number): Promise<{ succ
       localStorage.setItem(scopedKey(OFFLINE_QUEUE_KEY, branchId), JSON.stringify(remaining));
       return { success: true, count: data.syncedCount ?? queue.length };
     }
-    return { success: false, count: 0 };
+    return { success: false, count: 0, error: "The server refused the offline orders" };
   } catch (e) {
+    // A server refusal carries its reason ("Insufficient ingredient stock: …")
+    // and callers show it; a network failure has no reason to show, so error
+    // stays undefined and callers use their could-not-reach wording instead.
+    if (e instanceof ApiClientError) return { success: false, count: 0, error: e.message };
     /* audit-ok: the sync reports failure; callers tell the user and keep the queue */
     return { success: false, count: 0 };
   }

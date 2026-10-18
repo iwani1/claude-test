@@ -508,7 +508,7 @@ export default function App() {
                 if (result.success && result.count > 0) {
                   notify(`Sent ${result.count} offline order${result.count === 1 ? "" : "s"} to the server. Collect any payments that were taken on paper.`, "ok");
                 } else if (!result.success) {
-                  notify("Could not reach the server — the offline orders are still on this device.", "error");
+                  notify(result.error ? `Sync failed: ${result.error} — the offline orders are still on this device.` : "Could not reach the server — the offline orders are still on this device.", "error");
                 } else {
                   notify("Nothing waiting to sync.", "ok");
                 }
