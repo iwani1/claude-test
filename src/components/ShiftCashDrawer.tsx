@@ -44,7 +44,11 @@ export const ShiftCashDrawer: React.FC<{ currentUser: CurrentUser; readOnly?: bo
   const [closeTarget, setCloseTarget] = useState<any | null>(null);
 
   // Form states
-  const [openingCashInput, setOpeningCashInput] = useState("1200.00");
+  // This company starts shifts with an empty drawer (owner-approved,
+  // Oct 2026): zero is the normal float, and the amount field only appears
+  // for the rare shift that genuinely starts holding cash.
+  const [openingCashInput, setOpeningCashInput] = useState("0.00");
+  const [startsWithCash, setStartsWithCash] = useState(false);
   const [openNotes, setOpenNotes] = useState("");
   const [countedCashInput, setCountedCashInput] = useState("");
   const [closeNotes, setCloseNotes] = useState("");
@@ -77,12 +81,15 @@ export const ShiftCashDrawer: React.FC<{ currentUser: CurrentUser; readOnly?: bo
         body: JSON.stringify({
           action: "open_shift",
           userId: currentUser?.id || 1,
-          openingCash: openingCashInput,
+          openingCash: startsWithCash ? openingCashInput : "0.00",
           notes: openNotes,
         }),
       });
       if (data.success) {
         setShowOpenModal(false);
+        setOpeningCashInput("0.00");
+        setStartsWithCash(false);
+        setOpenNotes("");
         fetchShifts();
       } else {
         notify(data.error || "Failed to open shift", "error");
@@ -556,18 +563,44 @@ export const ShiftCashDrawer: React.FC<{ currentUser: CurrentUser; readOnly?: bo
             </h3>
 
             <div className="space-y-3 text-xs">
-              <div>
-                <label className="text-neutral-300 block mb-1">Starting Cash Float (GH₵)</label>
-                <input
-                  type="number"
-                        inputMode="decimal"
-                  step="10.00"
-                  required
-                  value={openingCashInput}
-                  onChange={(e) => setOpeningCashInput(e.target.value)}
-                  className="w-full bg-neutral-800 border border-neutral-700 rounded-xl px-3 py-2 text-white font-mono font-bold text-lg"
-                />
+              <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2.5">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="font-semibold text-emerald-200">Opening float</span>
+                  <span className="font-mono text-sm font-bold text-emerald-300">
+                    GH₵{startsWithCash ? Number(openingCashInput || 0).toFixed(2) : "0.00"}
+                  </span>
+                </div>
+                <p className="mt-1 text-[0.6875rem] leading-relaxed text-emerald-100/70">
+                  Standard for this company: shifts start with an empty drawer.
+                </p>
               </div>
+
+              <label className="flex min-h-11 cursor-pointer items-center gap-2.5 rounded-xl border border-neutral-700 bg-neutral-800/60 px-3 py-2">
+                <input
+                  type="checkbox"
+                  checked={startsWithCash}
+                  onChange={(e) => setStartsWithCash(e.target.checked)}
+                  className="h-4 w-4 shrink-0 accent-amber-500"
+                />
+                <span className="font-medium text-neutral-200">Drawer starts with cash</span>
+              </label>
+
+              {startsWithCash && (
+                <div>
+                  <label className="text-neutral-300 block mb-1">Starting Cash Float (GH₵)</label>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    step="10.00"
+                    min="0"
+                    required
+                    autoFocus
+                    value={openingCashInput}
+                    onChange={(e) => setOpeningCashInput(e.target.value)}
+                    className="w-full bg-neutral-800 border border-neutral-700 rounded-xl px-3 py-2 text-white font-mono font-bold text-lg"
+                  />
+                </div>
+              )}
 
               <div>
                 <label className="text-neutral-300 block mb-1">Shift Notes</label>
@@ -593,7 +626,7 @@ export const ShiftCashDrawer: React.FC<{ currentUser: CurrentUser; readOnly?: bo
                 type="submit"
                 className="px-4 py-1.5 text-xs font-semibold bg-amber-500 text-black rounded-lg"
               >
-                Open Shift
+                {startsWithCash ? "Open Shift" : "Open Shift — Zero Float"}
               </button>
             </div>
           </form>
