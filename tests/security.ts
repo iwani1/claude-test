@@ -158,6 +158,31 @@ async function main() {
   check(dupCreate.status === 409 && /already used/i.test(dupCreate.body.error), "employee creation rejects duplicate PIN with clear message");
   const dupEmail = await request("/api/staff", "POST", { action: "create_employee", name: "Dup Email", email: "pintest@test.invalid", role: "cashier", password: "Dup-email-password-123!" }, owner);
   check(dupEmail.status === 409 && /already registered/i.test(dupEmail.body.error), "duplicate email rejected with clear message");
+  // --- Owner-selected per-user permissions ----------------------------------
+  // A role is only the starting point: the owner may give one person a single
+  // extra ability (or take one away) without changing their whole role, and
+  // nobody below the owner may touch the selections.
+  const permStaff = await request("/api/staff", "POST", { action: "create_employee", name: "Permissions Test", email: "permtest@test.invalid", role: "cashier", password: "Permissions-password-123!", pin: "1212" }, owner);
+  check(permStaff.status === 200 && permStaff.body.employee.permissions.canViewReports === false, "a new cashier starts from the role's default permissions");
+  const permStaffId = permStaff.body.employee.id;
+  const permLogin = await request("/api/auth/login", "POST", { email: "permtest@test.invalid", password: "Permissions-password-123!" });
+  check((await request("/api/reports", "GET", undefined, permLogin.cookie)).status === 403, "the cashier cannot read reports before the owner grants it");
+  check((await request("/api/staff", "POST", { action: "update_permissions", userId: permStaffId, permissions: { canViewReports: true } }, manager)).status === 403, "a manager cannot select permissions — the owner alone");
+  check((await request("/api/staff", "POST", { action: "update_permissions", userId: permStaffId, permissions: { canFly: true } }, owner)).status === 400, "an unknown permission name is refused, not ignored");
+  const granted = await request("/api/staff", "POST", { action: "update_permissions", userId: permStaffId, permissions: { canViewReports: true } }, owner);
+  check(granted.status === 200 && granted.body.employee.permissions.canViewReports === true && granted.body.employee.permissionOverrides.canViewReports === true, "the owner grants one cashier report access on top of the cashier role");
+  check((await request("/api/auth/me", "GET", undefined, permLogin.cookie)).status === 401, "a permission change signs the person out so the new access is what they return to");
+  const permLogin2 = await request("/api/auth/login", "POST", { email: "permtest@test.invalid", password: "Permissions-password-123!" });
+  check(permLogin2.body.user.permissions.canViewReports === true, "the granted permission arrives with the next sign-in");
+  check((await request("/api/reports", "GET", undefined, permLogin2.cookie)).status === 200, "the granted cashier can now read reports");
+  const revoked = await request("/api/staff", "POST", { action: "update_permissions", userId: permStaffId, permissions: { canViewReports: false } }, owner);
+  check(revoked.status === 200 && revoked.body.employee.permissions.canViewReports === false && Object.keys(revoked.body.employee.permissionOverrides).length === 0, "returning to the role default stores no override");
+  const permLogin3 = await request("/api/auth/login", "POST", { email: "permtest@test.invalid", password: "Permissions-password-123!" });
+  check((await request("/api/reports", "GET", undefined, permLogin3.cookie)).status === 403, "the revoked permission is refused again");
+  check((await request("/api/staff", "POST", { action: "update_permissions", userId: 1, permissions: { canAccessPos: false } }, owner)).status === 400, "an owner account cannot be limited by permission selections");
+  const createdWithPermissions = await request("/api/staff", "POST", { action: "create_employee", name: "Tailored Test", email: "tailored@test.invalid", role: "cashier", password: "Tailored-password-123!", pin: "3434", permissions: { canViewReports: true } }, owner);
+  check(createdWithPermissions.status === 200 && createdWithPermissions.body.employee.permissions.canViewReports === true, "the owner can select permissions when creating an employee");
+  check((await request("/api/staff", "POST", { action: "create_employee", name: "Manager Tailored", email: "mgrtailored@test.invalid", role: "cashier", password: "Tailored-password-123!", pin: "5656", permissions: { canViewReports: true } }, manager)).status === 403, "a manager cannot select permissions at creation either");
   const pinPad = await request("/api/auth/login", "POST", { pin: "6677" });
   check(pinPad.status === 400 && /email and password/i.test(pinPad.body.error), "login-screen PIN pad explains email/password is required when PIN login is disabled");
   const menu = await request("/api/menu", "GET", undefined, other);

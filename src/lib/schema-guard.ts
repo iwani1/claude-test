@@ -37,6 +37,8 @@ export const REQUIRED_COLUMNS: ReadonlyArray<readonly [string, string]> = [
   ["payments", "request_fingerprint"],
   // 0005_staff_removal.sql
   ["users", "deleted_at"],
+  // 0009_user_permissions.sql
+  ["users", "permission_overrides"],
 ];
 
 /**

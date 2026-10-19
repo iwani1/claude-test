@@ -1,5 +1,5 @@
 import { secureRoute, ApiError } from "@/lib/api";
-import { ROLE_PERMISSIONS, type UserRole } from "@/lib/auth";
+
 import { NextResponse } from "next/server";
 import { db, requestContext } from "@/db";
 import { orders, orderItems, diningTables, kitchenTickets, menuItems, modifierOptions, refunds } from "@/db/schema";
@@ -52,7 +52,7 @@ async function handlePATCH(req: Request, { params }: { params: Promise<{ id: str
   // nothing more: no money-only edits, no settled or cancelled bills, and
   // the discount already on the bill cannot move (discounts need a manager,
   // exactly as when the order was first rung).
-  const perms = ROLE_PERMISSIONS[actor.role as UserRole];
+  const perms = actor.permissions;
   if (!perms?.canEditOrders) {
     const billStillOpen =
       ["unpaid", "partially_paid"].includes(order.paymentStatus) &&

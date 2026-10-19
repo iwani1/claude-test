@@ -59,6 +59,9 @@ export const users = pgTable("users", {
   pinLookup: text("pin_lookup"),
   pin: text("pin"), // 4-digit quick POS switch PIN
   role: text("role").notNull(), // 'super_admin' | 'manager' | 'cashier' | 'cook' | 'inventory_officer' | 'accountant'
+  // Owner-selected per-user permission overrides (migration 0009): only the
+  // keys that differ from the role's defaults are stored, as { key: boolean }.
+  permissionOverrides: jsonb("permission_overrides").$type<Partial<Record<string, boolean>>>().notNull().default({}),
   avatarUrl: text("avatar_url"),
   phone: text("phone"),
   isActive: boolean("is_active").default(true).notNull(),

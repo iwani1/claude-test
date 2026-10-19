@@ -349,7 +349,8 @@ export default function App() {
   }
 
   // --- Authenticated workspace --------------------------------------------
-  const perms = ROLE_PERMISSIONS[currentUser?.role as UserRole] ?? ROLE_PERMISSIONS.cashier;
+  // Effective permissions: role defaults plus the owner's per-user selections.
+  const perms = currentUser?.permissions ?? ROLE_PERMISSIONS[currentUser?.role as UserRole] ?? ROLE_PERMISSIONS.cashier;
 
   /** Client-side guard mirroring the sidebar gates. The matching API routes
    *  enforce the same rules server-side, so this is UX only. */
@@ -542,6 +543,7 @@ export default function App() {
           openTableCount={openTableCount}
           shiftOpen={!!openShift}
           userRole={currentUser?.role}
+          userPermissions={currentUser?.permissions}
         />
 
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">

@@ -2,6 +2,14 @@ import { NextResponse } from "next/server";
 import { requestContext } from "@/db";
 import { ROLE_PERMISSIONS, SessionUser } from "./auth";
 export type Permission = Exclude<keyof (typeof ROLE_PERMISSIONS)["super_admin"], "label">;
+/** The one permission question every gate asks: the person's *effective*
+ *  permissions (role defaults + the owner's per-user selections). Sessions
+ *  built before per-user permissions existed fall back to the role matrix. */
+export function hasPermission(user: { role: SessionUser["role"]; permissions?: SessionUser["permissions"] } | null | undefined, permission: Permission): boolean {
+  if (!user) return false;
+  if (user.permissions) return user.permissions[permission] === true;
+  return ROLE_PERMISSIONS[user.role]?.[permission] === true;
+}
 export async function getSessionUser(): Promise<SessionUser | null> {
   return requestContext.getStore()?.user ?? null;
 }
@@ -14,6 +22,6 @@ export async function requireSession(): Promise<GuardFailure | GuardSuccess> {
 export async function requirePermission(permission: Permission, _context: string): Promise<GuardFailure | GuardSuccess> {
   const session = await requireSession();
   if (!session.ok) return session;
-  return ROLE_PERMISSIONS[session.user.role]?.[permission] === true ? session :
+  return hasPermission(session.user, permission) ? session :
     { ok: false, response: NextResponse.json({ error: "Access denied" }, { status: 403 }) };
 }

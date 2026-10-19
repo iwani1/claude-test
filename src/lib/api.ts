@@ -5,7 +5,7 @@ import { NextResponse } from "next/server";
 import { eq, sql } from "drizzle-orm";
 import { rootDb, requestContext, Transaction } from "@/db";
 import { users, branches } from "@/db/schema";
-import { authSecret, hasTerminalAccess, ROLE_PERMISSIONS, SessionUser, UserRole, verifyToken } from "./auth";
+import { authSecret, effectivePermissions, sanitizePermissionOverrides, SessionUser, UserRole, verifyToken } from "./auth";
 import type { Permission } from "./guard";
 import { databaseUnreachableMessage, schemaDriftMessage } from "./schema-guard";
 export class ApiError extends Error {
@@ -68,11 +68,16 @@ function logRequestFailure(requestId: string, req: Request, status: number, err:
   console.error(JSON.stringify(entry));
 }
 export function safeSession(row: typeof users.$inferSelect): SessionUser {
+  const permissionOverrides = sanitizePermissionOverrides(row.permissionOverrides);
   return { id: row.id, restaurantId: row.restaurantId, branchId: row.branchId, name: row.name, email: row.email,
-    role: row.role as UserRole, avatarUrl: row.avatarUrl, sessionVersion: row.sessionVersion };
+    role: row.role as UserRole, avatarUrl: row.avatarUrl, sessionVersion: row.sessionVersion,
+    permissionOverrides, permissions: effectivePermissions(row.role as UserRole, permissionOverrides) };
 }
 export async function activateUser(tx: Transaction, row: typeof users.$inferSelect | undefined) {
-  if (!row || !row.isActive || !hasTerminalAccess(row.role as UserRole)) throw new ApiError(401, "Invalid credentials or inactive account");
+  if (!row || !row.isActive) throw new ApiError(401, "Invalid credentials or inactive account");
+  // Terminal access is an effective permission: the owner may have revoked it
+  // from this person, or granted it to a role that lacks it by default.
+  if (!effectivePermissions(row.role as UserRole, row.permissionOverrides).terminalAccess) throw new ApiError(401, "Invalid credentials or inactive account");
   const [branch] = await tx.select().from(branches).where(eq(branches.id, row.branchId));
   if (!branch?.isActive || branch.restaurantId !== row.restaurantId) throw new ApiError(403, "No active branch assigned");
   const user = safeSession(row);
@@ -112,7 +117,7 @@ export function secureRoute(handler: Handler, permission: Permission | "session"
           const [fresh] = await tx.select().from(users).where(eq(users.id, claims.id));
           if (!fresh || fresh.sessionVersion !== claims.version) throw new ApiError(401, "Session revoked");
           const user = await activateUser(tx, fresh);
-          if (permission !== "session" && !ROLE_PERMISSIONS[user.role]?.[permission]) throw new ApiError(403, "Access denied");
+          if (permission !== "session" && !user.permissions?.[permission]) throw new ApiError(403, "Access denied");
         }
         const params = (await context?.params) || {};
         const response = await handler(req, { params: Promise.resolve({ id: params.id || "" }) });
