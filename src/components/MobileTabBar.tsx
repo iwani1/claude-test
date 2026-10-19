@@ -2,13 +2,15 @@
 
 import React from "react";
 import { Calculator, Grid, ChefHat, Receipt, Coins } from "lucide-react";
-import { ROLE_PERMISSIONS, UserRole } from "@/lib/permissions";
+import { ROLE_PERMISSIONS, UserRole, type RolePermissionSet } from "@/lib/permissions";
 import type { NavTab } from "@/components/Sidebar";
 
 interface MobileTabBarProps {
   activeTab: NavTab;
   onTabChange: (tab: NavTab) => void;
   userRole?: UserRole;
+  /** Effective permissions for the signed-in person (role + owner selections). */
+  userPermissions?: RolePermissionSet;
   /** Glanceable badge: tables that currently have an order on them. */
   openTableCount?: number;
   /** Glanceable state: is the cash drawer open (green) or closed (amber)? */
@@ -27,11 +29,12 @@ export const MobileTabBar: React.FC<MobileTabBarProps> = ({
   activeTab,
   onTabChange,
   userRole,
+  userPermissions,
   openTableCount = 0,
   shiftOpen = false,
 }) => {
   // No role known yet: show nothing rather than guessing at permissions.
-  const perms = userRole ? ROLE_PERMISSIONS[userRole] : undefined;
+  const perms = userPermissions ?? (userRole ? ROLE_PERMISSIONS[userRole] : undefined);
 
   const tabs: {
     id: NavTab;

@@ -32,7 +32,8 @@ export const OrdersHistory: React.FC<{
   /** Reopens an open order on the till's bill panel to add items / settle. */
   onOpenInPos?: (order: any) => void;
 }> = ({ currentUser, onOpenInPos }) => {
-  const perms = ROLE_PERMISSIONS[currentUser?.role as UserRole] ?? ROLE_PERMISSIONS.cashier;
+  // Effective permissions: role defaults plus the owner's per-user selections.
+  const perms = currentUser?.permissions ?? ROLE_PERMISSIONS[currentUser?.role as UserRole] ?? ROLE_PERMISSIONS.cashier;
   /** Finance and stock roles read this screen; only till roles can act on it.
    *  A visible button that always answers 403 is worse than no button. */
   const canWorkTill = perms.canAccessPos;
@@ -403,7 +404,7 @@ export const OrdersHistory: React.FC<{
                           <RotateCcw className="w-4 h-4 text-rose-400" /> Refund
                         </button>
                       )}
-                      {currentUser?.role === "super_admin" && (
+                      {perms.canEditOrders && (
                         <button
                           onClick={() => setEditTarget(ord)}
                           className="h-12 px-3.5 rounded-xl bg-neutral-800 border border-neutral-700 text-neutral-200 font-semibold text-xs flex items-center gap-1.5 transition active:scale-[0.97]"
@@ -412,7 +413,7 @@ export const OrdersHistory: React.FC<{
                           <Pencil className="w-4 h-4" /> Edit
                         </button>
                       )}
-                      {currentUser?.role === "super_admin" && (
+                      {perms.canDeleteOrders && (
                         <button
                           onClick={() => {
                             setDeleteError("");
@@ -586,25 +587,25 @@ export const OrdersHistory: React.FC<{
                             </button>
                           )}
 
-                          {currentUser?.role === "super_admin" && (
+                          {perms.canEditOrders && (
                             <button
                               onClick={() => setEditTarget(ord)}
                               className="p-1.5 bg-neutral-800 hover:bg-amber-500 text-neutral-400 hover:text-black rounded-lg transition border border-neutral-700 hover:border-amber-400"
-                              title="Edit this order (owner only)"
+                              title="Edit this order"
                               aria-label={`Edit order ${ord.orderNumber}`}
                             >
                               <Pencil className="w-3.5 h-3.5" />
                             </button>
                           )}
 
-                          {currentUser?.role === "super_admin" && (
+                          {perms.canDeleteOrders && (
                             <button
                               onClick={() => {
                                 setDeleteError("");
                                 setDeleteTarget(ord);
                               }}
                               className="p-1.5 bg-neutral-800 hover:bg-rose-600 text-neutral-400 hover:text-white rounded-lg transition border border-neutral-700 hover:border-rose-500"
-                              title="Delete this order permanently (owner only)"
+                              title="Delete this order permanently"
                               aria-label={`Delete order ${ord.orderNumber}`}
                             >
                               <Trash2 className="w-3.5 h-3.5" />

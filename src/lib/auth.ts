@@ -1,10 +1,16 @@
 import crypto from "node:crypto";
-import type { UserRole } from "./permissions";
-export { ROLE_PERMISSIONS, hasTerminalAccess, TERMINAL_ACCESS_DENIED_MESSAGE } from "./permissions";
-export type { UserRole } from "./permissions";
+import type { PermissionOverrides, RolePermissionSet, UserRole } from "./permissions";
+export { ROLE_PERMISSIONS, PERMISSION_DEFINITIONS, PERMISSION_KEYS, effectivePermissions, hasTerminalAccess, permissionOverridesFor, sanitizePermissionOverrides, TERMINAL_ACCESS_DENIED_MESSAGE } from "./permissions";
+export type { PermissionKey, PermissionOverrides, RolePermissionSet, UserRole } from "./permissions";
 export interface SessionUser {
   id: number; restaurantId: number; branchId: number; name: string; email: string;
   role: UserRole; avatarUrl?: string | null; sessionVersion: number;
+  /** The owner's per-user selections for this account (role defaults are
+   *  filled in in `permissions`). Empty for an untouched account. */
+  permissionOverrides: PermissionOverrides;
+  /** Effective permissions: role defaults + the owner's selections. Every
+   *  gate, server and screen, reads this — never the role alone. */
+  permissions: RolePermissionSet;
 }
 export const SESSION_SECONDS = 60 * 60 * 8;
 export function authSecret(): string {

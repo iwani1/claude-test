@@ -5,9 +5,9 @@ import { ROLE_PERMISSIONS } from "@/lib/permissions";
  * else, cashiers included, works from sale prices only. The same question is
  * asked wherever a menu item or an order line leaves the server.
  */
-export function maySeeCost(user: { role: keyof typeof ROLE_PERMISSIONS } | null | undefined): boolean {
+export function maySeeCost(user: { role: keyof typeof ROLE_PERMISSIONS; permissions?: (typeof ROLE_PERMISSIONS)[keyof typeof ROLE_PERMISSIONS] } | null | undefined): boolean {
   if (!user) return false;
-  const permissions = ROLE_PERMISSIONS[user.role];
+  const permissions = user.permissions ?? ROLE_PERMISSIONS[user.role];
   return !!permissions && (permissions.canViewReports || permissions.canManageMenu);
 }
 

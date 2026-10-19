@@ -18,14 +18,66 @@ import {
   Trash2,
   UserCheck,
 } from "lucide-react";
-import { ROLE_PERMISSIONS, UserRole } from "@/lib/permissions";
+import { PERMISSION_DEFINITIONS, PERMISSION_KEYS, ROLE_PERMISSIONS, UserRole, type PermissionKey } from "@/lib/permissions";
 import { apiErrorMessage, apiFetch } from "@/lib/api-client";
 import { notify } from "@/lib/notify";
+
+type PermissionMap = Record<PermissionKey, boolean>;
+
+/** A full on/off map from any partial permission source (role row, stored
+ *  overrides resolved by the API, a draft being edited). */
+const permissionMapFrom = (source?: Partial<Record<PermissionKey, boolean>> | null): PermissionMap =>
+  Object.fromEntries(PERMISSION_KEYS.map((key) => [key, !!source?.[key]])) as PermissionMap;
+
+const PERMISSION_GROUPS = [...new Set(PERMISSION_DEFINITIONS.map((d) => d.group))];
+
+/** The owner's permission picker: every selectable permission, grouped, with
+ *  what it actually opens. Shared by the edit dialog and Add Employee so the
+ *  two can never offer different choices. */
+const PermissionPicker: React.FC<{
+  value: PermissionMap;
+  onChange: (next: PermissionMap) => void;
+}> = ({ value, onChange }) => (
+  <div className="space-y-4">
+    {PERMISSION_GROUPS.map((group) => (
+      <div key={group}>
+        <div className="text-[0.625rem] font-bold uppercase tracking-wider text-neutral-500 mb-1.5">{group}</div>
+        <div className="space-y-1">
+          {PERMISSION_DEFINITIONS.filter((d) => d.group === group).map((d) => (
+            <label
+              key={d.key}
+              className="flex items-start gap-3 px-3 py-2 rounded-xl bg-neutral-950 border border-neutral-800 cursor-pointer active:bg-neutral-800"
+            >
+              <input
+                type="checkbox"
+                checked={!!value[d.key]}
+                onChange={(e) => onChange({ ...value, [d.key]: e.target.checked })}
+                className="mt-0.5 h-5 w-5 shrink-0 accent-amber-500"
+              />
+              <span className="min-w-0">
+                <span className="block text-xs font-semibold text-neutral-100">{d.label}</span>
+                <span className="block text-[0.6875rem] text-neutral-500">{d.description}</span>
+              </span>
+            </label>
+          ))}
+        </div>
+      </div>
+    ))}
+  </div>
+);
 
 export const StaffManager: React.FC<{ currentUser?: any }> = ({ currentUser }) => {
   const [staff, setStaff] = useState<any[]>([]);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showPinModal, setShowPinModal] = useState<any | null>(null);
+  // Owner-only permission selection: for an existing account, and (starting
+  // from the chosen role's defaults) for a new one.
+  const [showPermissionsModal, setShowPermissionsModal] = useState<any | null>(null);
+  const [permissionDraft, setPermissionDraft] = useState<PermissionMap>(() => permissionMapFrom(ROLE_PERMISSIONS.cashier));
+  const [permissionBusy, setPermissionBusy] = useState(false);
+  const [permissionError, setPermissionError] = useState("");
+  const [newPermissionDraft, setNewPermissionDraft] = useState<PermissionMap>(() => permissionMapFrom(ROLE_PERMISSIONS.cashier));
+  const [newPermissionsCustom, setNewPermissionsCustom] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState<any | null>(null);
   const [newPassword, setNewPassword] = useState("");
   const [newPin, setNewPin] = useState("");
@@ -74,6 +126,11 @@ export const StaffManager: React.FC<{ currentUser?: any }> = ({ currentUser }) =
           pin,
           password,
           phone,
+          // Only when the owner actually changed the ticks: an untouched
+          // picker means "the role's defaults", now and if defaults change.
+          ...(currentUser?.role === "super_admin" && newPermissionsCustom
+            ? { permissions: newPermissionDraft }
+            : {}),
         }),
       });
       if (data.success) {
@@ -83,11 +140,43 @@ export const StaffManager: React.FC<{ currentUser?: any }> = ({ currentUser }) =
         setPhone("");
         setPassword("");
         setPin("");
+        setNewPermissionsCustom(false);
         fetchStaff();
       } else { setError(data.error || "Staff update failed"); }
     } catch (e) {
       console.error(e);
       setError(apiErrorMessage(e, "Could not reach the server. Please try again."));
+    }
+  };
+
+  const handleSavePermissions = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!showPermissionsModal) return;
+    setPermissionBusy(true);
+    setPermissionError("");
+    try {
+      const data = await apiFetch("/api/staff", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "update_permissions",
+          userId: showPermissionsModal.id,
+          permissions: permissionDraft,
+        }),
+      });
+      if (data.success) {
+        const savedName = showPermissionsModal.name;
+        setShowPermissionsModal(null);
+        notify(`${savedName}'s permissions were updated. They have been signed out and will see the new access when they sign in again.`, "ok");
+        fetchStaff();
+      } else {
+        setPermissionError(data.error || "Permissions were not saved");
+      }
+    } catch (err) {
+      console.error(err);
+      setPermissionError(apiErrorMessage(err, "Could not reach the server. Permissions were not saved."));
+    } finally {
+      setPermissionBusy(false);
     }
   };
 
@@ -220,7 +309,12 @@ export const StaffManager: React.FC<{ currentUser?: any }> = ({ currentUser }) =
         </div>
 
         <button
-          onClick={() => { setShowAddModal(true); setError(""); }}
+          onClick={() => {
+            setShowAddModal(true);
+            setError("");
+            setNewPermissionDraft(permissionMapFrom(ROLE_PERMISSIONS[role]));
+            setNewPermissionsCustom(false);
+          }}
           className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-black font-semibold rounded-xl text-xs shadow-md shadow-amber-500/20 flex items-center gap-1.5 transition"
         >
           <Plus className="w-4 h-4" />
@@ -248,6 +342,10 @@ export const StaffManager: React.FC<{ currentUser?: any }> = ({ currentUser }) =
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {staff.map((u) => {
             const roleInfo = ROLE_PERMISSIONS[u.role as UserRole];
+            // What this person can actually do: role defaults with the
+            // owner's selections laid over them (resolved by the API).
+            const effective = u.permissions ?? roleInfo;
+            const hasCustomPermissions = !!u.permissionOverrides && Object.keys(u.permissionOverrides).length > 0;
 
             return (
               <div
@@ -278,7 +376,12 @@ export const StaffManager: React.FC<{ currentUser?: any }> = ({ currentUser }) =
                       >
                         {u.isActive ? "Active" : "Inactive"}
                       </span>
-                      {!roleInfo?.terminalAccess && (
+                      {hasCustomPermissions && (
+                        <span className="px-2 py-0.5 rounded-md text-[0.625rem] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                          Custom permissions
+                        </span>
+                      )}
+                      {!effective?.terminalAccess && (
                         <span className="px-2 py-0.5 rounded-md text-[0.625rem] font-bold bg-orange-500/20 text-orange-300 border border-orange-500/40">
                           No Terminal Access
                         </span>
@@ -307,27 +410,27 @@ export const StaffManager: React.FC<{ currentUser?: any }> = ({ currentUser }) =
 
                   {/* Permissions tags */}
                   <div className="pt-2 text-[0.625rem] text-neutral-400 flex flex-wrap gap-1">
-                    {roleInfo?.canAccessPos && (
+                    {effective?.canAccessPos && (
                       <span className="px-1.5 py-0.5 rounded-md bg-neutral-800 text-neutral-300">
                         POS
                       </span>
                     )}
-                    {roleInfo?.canAccessKds && (
+                    {effective?.canAccessKds && (
                       <span className="px-1.5 py-0.5 rounded-md bg-neutral-800 text-neutral-300">
                         Docket Progress
                       </span>
                     )}
-                    {roleInfo?.canModifyInventory && (
+                    {effective?.canModifyInventory && (
                       <span className="px-1.5 py-0.5 rounded-md bg-neutral-800 text-neutral-300">
                         Inventory
                       </span>
                     )}
-                    {roleInfo?.canIssueRefunds && (
+                    {effective?.canIssueRefunds && (
                       <span className="px-1.5 py-0.5 rounded-md bg-neutral-800 text-neutral-300">
                         Refunds
                       </span>
                     )}
-                    {roleInfo?.canViewReports && (
+                    {effective?.canViewReports && (
                       <span className="px-1.5 py-0.5 rounded-md bg-neutral-800 text-neutral-300">
                         Financial Reports
                       </span>
@@ -336,6 +439,21 @@ export const StaffManager: React.FC<{ currentUser?: any }> = ({ currentUser }) =
                 </div>
 
                 <div className="mt-4 pt-3 border-t border-neutral-800 flex flex-wrap items-center gap-2 text-xs">
+                  {/* Selecting permissions is the owner's call alone; owner
+                      accounts themselves always have full access. */}
+                  {currentUser?.role === "super_admin" && u.role !== "super_admin" && (
+                    <button
+                      onClick={() => {
+                        setPermissionDraft(permissionMapFrom(effective));
+                        setPermissionError("");
+                        setShowPermissionsModal(u);
+                      }}
+                      className="min-h-11 px-3 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-300 font-semibold flex items-center gap-1.5 transition"
+                    >
+                      <ShieldCheck className="w-4 h-4" />
+                      <span>Permissions</span>
+                    </button>
+                  )}
                   <button
                     onClick={() => {
                       setShowPinModal(u);
@@ -391,7 +509,7 @@ export const StaffManager: React.FC<{ currentUser?: any }> = ({ currentUser }) =
         <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/70 backdrop-blur-xs p-4 overflow-y-auto">
           <form
             onSubmit={handleAddEmployee}
-            className="bg-neutral-900 border border-neutral-700 rounded-2xl p-6 w-full max-w-sm shadow-2xl space-y-4 max-h-[92dvh] overflow-y-auto my-auto"
+            className="bg-neutral-900 border border-neutral-700 rounded-2xl p-6 w-full max-w-lg shadow-2xl space-y-4 max-h-[92dvh] overflow-y-auto my-auto"
           >
             <div className="flex justify-between items-center">
               <h3 className="text-sm font-bold text-white">Add New Employee</h3>
@@ -438,7 +556,14 @@ export const StaffManager: React.FC<{ currentUser?: any }> = ({ currentUser }) =
                 <label className="text-neutral-300 block mb-1">Role & Authority</label>
                 <select
                   value={role}
-                  onChange={(e) => setRole(e.target.value as UserRole)}
+                  onChange={(e) => {
+                    const nextRole = e.target.value as UserRole;
+                    setRole(nextRole);
+                    // A different role is a different starting point: any
+                    // ticks made for the old role are discarded.
+                    setNewPermissionDraft(permissionMapFrom(ROLE_PERMISSIONS[nextRole]));
+                    setNewPermissionsCustom(false);
+                  }}
                   className="w-full bg-neutral-800 border border-neutral-700 rounded-xl px-3 py-2 text-white"
                 >
                   <option value="cashier">Cashier / Waiter</option>
@@ -449,6 +574,23 @@ export const StaffManager: React.FC<{ currentUser?: any }> = ({ currentUser }) =
                   <option value="super_admin">Super Admin / Owner</option>
                 </select>
               </div>
+
+              {currentUser?.role === "super_admin" && (
+                <div>
+                  <label className="text-neutral-300 block mb-1">Permissions</label>
+                  <p className="text-[0.6875rem] text-neutral-500 mb-2">
+                    Starts from the {ROLE_PERMISSIONS[role]?.label || role} defaults. Tick or untick to
+                    tailor this person; leave untouched to keep the defaults.
+                  </p>
+                  <PermissionPicker
+                    value={newPermissionDraft}
+                    onChange={(next) => {
+                      setNewPermissionDraft(next);
+                      setNewPermissionsCustom(true);
+                    }}
+                  />
+                </div>
+              )}
 
               <div>
                 <label className="text-neutral-300 block mb-1">4–8 Digit Quick POS PIN</label>
@@ -488,6 +630,54 @@ export const StaffManager: React.FC<{ currentUser?: any }> = ({ currentUser }) =
                 className="px-4 py-1.5 text-xs font-semibold bg-amber-500 text-black rounded-lg"
               >
                 Save Employee
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* MODAL: Select permissions (owner only) */}
+      {showPermissionsModal && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/70 backdrop-blur-xs p-4 overflow-y-auto">
+          <form
+            onSubmit={handleSavePermissions}
+            className="bg-neutral-900 border border-neutral-700 rounded-2xl p-6 w-full max-w-lg shadow-2xl space-y-4 max-h-[92dvh] overflow-y-auto my-auto"
+          >
+            <div className="flex justify-between items-start">
+              <div>
+                <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                  <ShieldCheck className="w-4 h-4 text-amber-400" />
+                  <span>Permissions for {showPermissionsModal.name}</span>
+                </h3>
+                <p className="text-xs text-neutral-400 mt-1">
+                  {ROLE_PERMISSIONS[showPermissionsModal.role as UserRole]?.label || showPermissionsModal.role} by
+                  role — your selections below are what this person actually gets. Saving signs them out, and
+                  the new access applies when they sign in again.
+                </p>
+              </div>
+              <button type="button" onClick={() => setShowPermissionsModal(null)} className="text-neutral-400 hover:text-white">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            {permissionError && <p role="alert" className="text-red-400 text-xs">{permissionError}</p>}
+            <PermissionPicker value={permissionDraft} onChange={setPermissionDraft} />
+            <div className="flex flex-wrap justify-end gap-2 pt-2 border-t border-neutral-800">
+              <button
+                type="button"
+                onClick={() => setPermissionDraft(permissionMapFrom(ROLE_PERMISSIONS[showPermissionsModal.role as UserRole]))}
+                className="px-3 py-2 text-xs text-neutral-300 bg-neutral-800 border border-neutral-700 rounded-lg hover:text-white"
+              >
+                Reset to role defaults
+              </button>
+              <button type="button" onClick={() => setShowPermissionsModal(null)} className="px-3 py-2 text-xs text-neutral-400 hover:text-white">
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={permissionBusy}
+                className="px-4 py-2 text-xs font-semibold bg-amber-500 text-black rounded-lg disabled:opacity-50"
+              >
+                {permissionBusy ? "Saving…" : "Save Permissions"}
               </button>
             </div>
           </form>

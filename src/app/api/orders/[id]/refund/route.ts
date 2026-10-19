@@ -8,14 +8,13 @@ import { pinDigest, verifyPassword } from "@/lib/auth";
 import { reverseStockForOrder } from "@/lib/inventory-deduction";
 import { ApiError, assertNotThrottled, recordFailedAttempt, secureRoute } from "@/lib/api";
 import { moneyCents } from "@/lib/money";
-import { ROLE_PERMISSIONS } from "@/lib/permissions";
 export const POST = secureRoute(async (req, { params }) => {
   const actor = requestContext.getStore()!.user!;
   // Only managers, the owner and accountants may request a refund (owner
   // directive, Oct 2026). The manager PIN below remains the authorisation;
   // this gate decides who may ask at all. Cashiers no longer reach this
   // handler, so the check runs before any money validation or throttling.
-  if (!ROLE_PERMISSIONS[actor.role]?.canIssueRefunds) throw new ApiError(403, "Your role cannot request refunds");
+  if (!actor.permissions?.canIssueRefunds) throw new ApiError(403, "You do not have permission to request refunds");
   const orderId = Number((await params).id);
   if (!Number.isSafeInteger(orderId) || orderId <= 0) throw new ApiError(400, "Invalid order ID");
   const { amount, reason, managerPin, returnStock, cashAmount, momoAmount, idempotencyKey } = await req.json();
@@ -85,7 +84,7 @@ export const POST = secureRoute(async (req, { params }) => {
 
 export const GET = secureRoute(async (_req, { params }) => {
   const actor = requestContext.getStore()!.user!;
-  if (!ROLE_PERMISSIONS[actor.role]?.canIssueRefunds) throw new ApiError(403, "Your role cannot request refunds");
+  if (!actor.permissions?.canIssueRefunds) throw new ApiError(403, "You do not have permission to request refunds");
   const orderId = Number((await params).id);
   if (!Number.isSafeInteger(orderId) || orderId <= 0) throw new ApiError(400, "Invalid order ID");
   const [order] = await db.select().from(orders).where(eq(orders.id, orderId));

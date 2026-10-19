@@ -22,7 +22,7 @@ import {
   X,
   Store,
 } from "lucide-react";
-import { UserRole, ROLE_PERMISSIONS } from "@/lib/permissions";
+import { UserRole, ROLE_PERMISSIONS, type RolePermissionSet } from "@/lib/permissions";
 
 export type NavTab =
   | "dashboard"
@@ -46,6 +46,8 @@ interface SidebarProps {
   activeTab: NavTab;
   onTabChange: (tab: NavTab) => void;
   userRole?: UserRole;
+  /** Effective permissions for the signed-in person (role + owner selections). */
+  userPermissions?: RolePermissionSet;
   /** Fired by the prominent "New Order" action at the top of the rail. */
   onNewOrder?: () => void;
   /** Count of open tables, surfaced as a glanceable badge. */
@@ -66,6 +68,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   activeTab,
   onTabChange,
   userRole = "super_admin",
+  userPermissions,
   onNewOrder,
   openTableCount = 0,
   shiftOpen = false,
@@ -73,7 +76,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   mobileOpen = false,
   onCloseMobile,
 }) => {
-  const perms = ROLE_PERMISSIONS[userRole] ?? ROLE_PERMISSIONS.cashier;
+  const perms = userPermissions ?? ROLE_PERMISSIONS[userRole] ?? ROLE_PERMISSIONS.cashier;
 
   // Till screens are usually 10–13" tablets in landscape: a 264px labelled
   // rail plus the order panel leaves the dish grid too narrow to tap
