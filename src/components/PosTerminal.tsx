@@ -102,6 +102,7 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
   const [myOpenShift, setMyOpenShift] = useState<any | null | undefined>(undefined);
   const [showShiftGate, setShowShiftGate] = useState(false);
   const [gateFloat, setGateFloat] = useState("");
+  const [gateStartsWithCash, setGateStartsWithCash] = useState(false);
   const [gateBusy, setGateBusy] = useState(false);
   const gateContinuationRef = useRef<(() => void) | null>(null);
 
@@ -766,15 +767,16 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
     e.preventDefault();
     setGateBusy(true);
     try {
+      const openingCash = gateStartsWithCash ? gateFloat || "0" : "0";
       const data = await apiFetch("/api/shifts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "open_shift", openingCash: gateFloat || "0" }),
+        body: JSON.stringify({ action: "open_shift", openingCash }),
       });
       if (data.success) {
         setMyOpenShift(data.shift);
         setShowShiftGate(false);
-        notify(`Your shift is open — float GH₵${Number(gateFloat || 0).toFixed(2)}. Your sales now land on your own shift.`, "ok");
+        notify(`Your shift is open — float GH₵${Number(openingCash).toFixed(2)}. Your sales now land on your own shift.`, "ok");
         const go = gateContinuationRef.current;
         gateContinuationRef.current = null;
         go?.();
@@ -1740,25 +1742,37 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
             </h3>
             <p className="text-xs text-neutral-400 leading-relaxed">
               {currentUser?.name}, every sale you ring lands on <strong className="text-neutral-200">your own shift</strong> — your
-              float, your cash sales, your count at closing. How much float are you starting with?
+              float, your cash sales, your count at closing. Shifts here normally start with an empty drawer, recorded as
+              an opening float of <strong className="text-neutral-200">GH₵0.00</strong>.
             </p>
-            <div>
-              <label className="text-neutral-300 block mb-1 text-xs" htmlFor="gate-float">
-                Opening float (GH₵)
-              </label>
+            <label className="flex min-h-11 cursor-pointer items-center gap-2.5 rounded-xl border border-neutral-700 bg-neutral-800/60 px-3 py-2">
               <input
-                id="gate-float"
-                type="number"
-                inputMode="decimal"
-                step="10.00"
-                min="0"
-                autoFocus
-                value={gateFloat}
-                onChange={(e) => setGateFloat(e.target.value)}
-                placeholder="0.00"
-                className="w-full bg-neutral-800 border border-neutral-700 rounded-xl px-3 py-2.5 text-white font-mono font-bold text-lg focus:outline-none focus:border-amber-500"
+                type="checkbox"
+                checked={gateStartsWithCash}
+                onChange={(e) => setGateStartsWithCash(e.target.checked)}
+                className="h-4 w-4 shrink-0 accent-amber-500"
               />
-            </div>
+              <span className="text-xs font-medium text-neutral-200">Drawer starts with cash</span>
+            </label>
+            {gateStartsWithCash && (
+              <div>
+                <label className="text-neutral-300 block mb-1 text-xs" htmlFor="gate-float">
+                  Opening float (GH₵)
+                </label>
+                <input
+                  id="gate-float"
+                  type="number"
+                  inputMode="decimal"
+                  step="10.00"
+                  min="0"
+                  autoFocus
+                  value={gateFloat}
+                  onChange={(e) => setGateFloat(e.target.value)}
+                  placeholder="0.00"
+                  className="w-full bg-neutral-800 border border-neutral-700 rounded-xl px-3 py-2.5 text-white font-mono font-bold text-lg focus:outline-none focus:border-amber-500"
+                />
+              </div>
+            )}
             <div className="flex gap-2">
               <button
                 type="button"
@@ -1772,7 +1786,7 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
                 disabled={gateBusy}
                 className="flex-1 h-12 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-40 text-black font-bold text-sm transition active:scale-[0.98]"
               >
-                {gateBusy ? "Opening…" : "Open Shift & Sell"}
+                {gateBusy ? "Opening…" : gateStartsWithCash ? "Open Shift & Sell" : "Open Shift — Zero Float & Sell"}
               </button>
             </div>
           </form>
