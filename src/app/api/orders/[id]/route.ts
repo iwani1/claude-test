@@ -28,7 +28,33 @@ async function handleGET(req: Request, { params }: { params: Promise<{ id: strin
 
     const [creator] = await db.select({ name: users.name }).from(users).where(eq(users.id, order.userId)).limit(1);
 
-    return NextResponse.json({ order: { ...order, userName: creator?.name || "Unknown", items, refundedAmount: fromCents(refundedCents) } });
+    // Tender detail for the Order Details view: how the money actually came
+    // in, payment by payment. Completed payments only (a failed attempt is
+    // not money in hand). Amounts are summed in pesewas, never floats.
+    const paymentRows = (await db.select().from(payments).where(eq(payments.orderId, orderId)))
+      .filter((row) => row.status === "completed")
+      .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+    const tenderCents = (method: string) => paymentRows
+      .filter((row) => row.paymentMethod === method)
+      .reduce((sum, row) => sum + Math.round(Number(row.amount) * 100), 0);
+    const cashCents = tenderCents("cash");
+    const momoCents = tenderCents("momo");
+    const totalPaidCents = paymentRows.reduce((sum, row) => sum + Math.round(Number(row.amount) * 100), 0);
+    const paymentBreakdown = {
+      cash: fromCents(cashCents),
+      momo: fromCents(momoCents),
+      other: fromCents(totalPaidCents - cashCents - momoCents),
+      refundedCash: fromCents(refundRows.reduce((sum, row) => sum + Math.round(Number(row.cashAmount ?? 0) * 100), 0)),
+      refundedMomo: fromCents(refundRows.reduce((sum, row) => sum + Math.round(Number(row.momoAmount ?? 0) * 100), 0)),
+      payments: paymentRows.map((row) => ({
+        method: row.paymentMethod,
+        amount: fromCents(Math.round(Number(row.amount) * 100)),
+        referenceNumber: row.referenceNumber,
+        createdAt: row.createdAt,
+      })),
+    };
+
+    return NextResponse.json({ order: { ...order, userName: creator?.name || "Unknown", items, refundedAmount: fromCents(refundedCents), paymentBreakdown } });
   } catch (err: any) {
     if (isDatabaseFailure(err)) throw err;
     return NextResponse.json({ error: err.message }, { status: 500 });
