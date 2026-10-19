@@ -175,6 +175,8 @@ export const ShiftCashDrawer: React.FC<{ currentUser: CurrentUser; readOnly?: bo
 
   const openingFloat = Number(activeShift?.openingCash || 0);
   const cashSales = Number(activeShift?.totalCashSales || 0);
+  // Legacy column name: totalCardSales is where MoMo collections accumulate
+  // (see the pay route). The UI calls it MoMo everywhere it is shown.
   const cardSales = Number(activeShift?.totalCardSales || 0);
   const payouts = Number(activeShift?.cashPayouts || 0);
   const expectedInDrawer = openingFloat + cashSales - payouts;
@@ -356,6 +358,10 @@ export const ShiftCashDrawer: React.FC<{ currentUser: CurrentUser; readOnly?: bo
                         Opened {new Date(o.openedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} · Sales GH₵{Number(o.totalSales || 0).toFixed(2)} · Expected cash{" "}
                         <span className="text-amber-400 font-mono font-bold">GH₵{expected.toFixed(2)}</span>
                       </div>
+                      <div className="text-[0.6875rem] text-neutral-400">
+                        Cash <span className="text-emerald-400 font-mono font-bold">GH₵{Number(o.totalCashSales || 0).toFixed(2)}</span>
+                        {" "}· MoMo <span className="text-sky-400 font-mono font-bold">GH₵{Number(o.totalCardSales || 0).toFixed(2)}</span>
+                      </div>
                     </div>
                     <button
                       onClick={() => {
@@ -425,6 +431,18 @@ export const ShiftCashDrawer: React.FC<{ currentUser: CurrentUser; readOnly?: bo
                           {s.actualClosingCash ? `GH₵${Number(s.actualClosingCash).toFixed(2)}` : "—"}
                         </div>
                       </div>
+                      <div className="bg-neutral-850 rounded-lg px-2.5 py-2">
+                        <div className="text-neutral-500">Cash</div>
+                        <div className="font-mono text-emerald-400 font-bold">GH₵{Number(s.totalCashSales || 0).toFixed(2)}</div>
+                      </div>
+                      <div className="bg-neutral-850 rounded-lg px-2.5 py-2">
+                        <div className="text-neutral-500">MoMo</div>
+                        <div className="font-mono text-sky-400 font-bold">GH₵{Number(s.totalCardSales || 0).toFixed(2)}</div>
+                      </div>
+                      <div className="bg-neutral-850 rounded-lg px-2.5 py-2">
+                        <div className="text-neutral-500">Cash out</div>
+                        <div className="font-mono text-rose-300">GH₵{Number(s.cashPayouts || 0).toFixed(2)}</div>
+                      </div>
                     </div>
 
                     <div className="text-[0.6875rem]">
@@ -459,6 +477,8 @@ export const ShiftCashDrawer: React.FC<{ currentUser: CurrentUser; readOnly?: bo
                   <th className="px-4 py-3">Closed</th>
                   <th className="px-4 py-3 text-right">Opening Float</th>
                   <th className="px-4 py-3 text-right">Total Sales</th>
+                  <th className="px-4 py-3 text-right">Cash</th>
+                  <th className="px-4 py-3 text-right">MoMo</th>
                   <th className="px-4 py-3 text-right">Counted Cash</th>
                   <th className="px-4 py-3 text-right">Over / Short</th>
                   <th className="px-4 py-3">Status</th>
@@ -482,6 +502,12 @@ export const ShiftCashDrawer: React.FC<{ currentUser: CurrentUser; readOnly?: bo
                       <td className="px-4 py-3 text-right">GH₵{Number(s.openingCash).toFixed(2)}</td>
                       <td className="px-4 py-3 text-right text-emerald-400 font-bold">
                         GH₵{Number(s.totalSales).toFixed(2)}
+                      </td>
+                      <td className="px-4 py-3 text-right text-emerald-400">
+                        GH₵{Number(s.totalCashSales || 0).toFixed(2)}
+                      </td>
+                      <td className="px-4 py-3 text-right text-sky-400">
+                        GH₵{Number(s.totalCardSales || 0).toFixed(2)}
                       </td>
                       <td className="px-4 py-3 text-right">
                         {s.actualClosingCash ? `GH₵${Number(s.actualClosingCash).toFixed(2)}` : "—"}
