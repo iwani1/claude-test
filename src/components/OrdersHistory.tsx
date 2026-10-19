@@ -744,9 +744,35 @@ export const OrdersHistory: React.FC<{
                 <span>Paid</span>
                 <span className="font-mono">GH₵{Number(detailsOrder.paidAmount).toFixed(2)}</span>
               </div>
+              {/* Tender split: how the paid money actually came in. */}
+              {Number(detailsOrder.paymentBreakdown?.cash) > 0 && (
+                <div className="flex justify-between text-neutral-400 pl-3">
+                  <span>Paid by Cash</span>
+                  <span className="font-mono text-emerald-300">GH₵{Number(detailsOrder.paymentBreakdown.cash).toFixed(2)}</span>
+                </div>
+              )}
+              {Number(detailsOrder.paymentBreakdown?.momo) > 0 && (
+                <div className="flex justify-between text-neutral-400 pl-3">
+                  <span>Paid by MoMo</span>
+                  <span className="font-mono text-sky-300">GH₵{Number(detailsOrder.paymentBreakdown.momo).toFixed(2)}</span>
+                </div>
+              )}
+              {Number(detailsOrder.paymentBreakdown?.other) > 0 && (
+                <div className="flex justify-between text-neutral-400 pl-3">
+                  <span>Paid by Card / Other</span>
+                  <span className="font-mono text-neutral-200">GH₵{Number(detailsOrder.paymentBreakdown.other).toFixed(2)}</span>
+                </div>
+              )}
               {Number(detailsOrder.refundedAmount) > 0 && (
                 <div className="flex justify-between text-rose-300">
-                  <span>Refunded</span>
+                  <span>
+                    Refunded
+                    {(Number(detailsOrder.paymentBreakdown?.refundedCash) > 0 || Number(detailsOrder.paymentBreakdown?.refundedMomo) > 0) && (
+                      <span className="text-rose-300/70">
+                        {" "}(Cash GH₵{Number(detailsOrder.paymentBreakdown?.refundedCash ?? 0).toFixed(2)} · MoMo GH₵{Number(detailsOrder.paymentBreakdown?.refundedMomo ?? 0).toFixed(2)})
+                      </span>
+                    )}
+                  </span>
                   <span className="font-mono">GH₵{Number(detailsOrder.refundedAmount).toFixed(2)}</span>
                 </div>
               )}
@@ -757,6 +783,32 @@ export const OrdersHistory: React.FC<{
                 </div>
               )}
             </div>
+
+            {(detailsOrder.paymentBreakdown?.payments || []).length > 0 && (
+              <div>
+                <div className="text-[0.625rem] font-bold uppercase tracking-wider text-neutral-500 mb-1.5">Payments received</div>
+                <div className="divide-y divide-neutral-800 border border-neutral-800 rounded-xl overflow-hidden">
+                  {detailsOrder.paymentBreakdown.payments.map((pay: any, i: number) => (
+                    <div key={i} className="flex items-center gap-3 px-3 py-2 bg-neutral-950 text-xs">
+                      <span className={`px-2 py-0.5 rounded-md text-[0.625rem] font-bold capitalize ${
+                        pay.method === "cash"
+                          ? "bg-emerald-500/10 text-emerald-300"
+                          : pay.method === "momo"
+                          ? "bg-sky-500/10 text-sky-300"
+                          : "bg-neutral-800 text-neutral-300"
+                      }`}>
+                        {pay.method === "momo" ? "MoMo" : pay.method}
+                      </span>
+                      <span className="flex-1 min-w-0 text-neutral-400 truncate">
+                        {new Date(pay.createdAt).toLocaleString()}
+                        {pay.referenceNumber ? ` · Ref ${pay.referenceNumber}` : ""}
+                      </span>
+                      <span className="font-mono font-bold text-white">GH₵{Number(pay.amount).toFixed(2)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

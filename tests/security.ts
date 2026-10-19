@@ -198,6 +198,9 @@ async function main() {
   const pay = await Promise.all([1,2].map(() => request(`/api/orders/${id}/pay`, "POST", { paymentMethod: "split", amount: "10", cashAmount: "4", momoAmount: "6" }, cashier)));
   check(pay.filter(r => r.status === 200).length === 1 && pay.filter(r => r.status === 409).length === 1, "concurrent payments cannot overpay");
   check(Number((await admin.query("SELECT sum(amount) AS amount FROM payments WHERE order_id=$1", [id])).rows[0].amount) === 10, "split payment ledger equals sale total");
+  const tenderDetail = await request(`/api/orders/${id}`, "GET", undefined, cashier);
+  check(tenderDetail.body.order.paymentBreakdown?.cash === "4.00" && tenderDetail.body.order.paymentBreakdown?.momo === "6.00" && tenderDetail.body.order.paymentBreakdown?.other === "0.00", "order details split paid money into cash and MoMo");
+  check(Array.isArray(tenderDetail.body.order.paymentBreakdown?.payments) && tenderDetail.body.order.paymentBreakdown.payments.length === 2, "order details list each payment received");
   for (const amount of ["-1", "0", "NaN", "0.001", "1e2"]) check((await request(`/api/orders/${id}/refund`, "POST", { amount, reason: "Test", managerPin: "2222" }, manager)).status === 400, `refund rejects ${amount}`);
   await admin.query("DELETE FROM auth_attempts WHERE key='refund:branch:1'");
   check((await request(`/api/orders/${id}/refund`, "POST", { amount: "1", reason: "Test", managerPin: "8888" }, manager)).status === 403, "other-branch manager cannot authorize refund");
