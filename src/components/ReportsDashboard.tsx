@@ -21,30 +21,69 @@ import {
 import { apiErrorMessage, apiFetch } from "@/lib/api-client";
 import { notify } from "@/lib/notify";
 
+type PresetTimeframe = "today" | "7days" | "30days" | "all";
+type Timeframe = PresetTimeframe | "custom";
+
 export const ReportsDashboard: React.FC<{ canExportTransactions?: boolean }> = ({ canExportTransactions = false }) => {
-  const [timeframe, setTimeframe] = useState<"today" | "7days" | "30days" | "all">("all");
+  const [timeframe, setTimeframe] = useState<Timeframe>("all");
+  // Custom range: the inputs are a draft until "Apply" is tapped, so the
+  // report (and the CSV exports) never chase half-typed dates.
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [appliedRange, setAppliedRange] = useState<{ start: string; end: string } | null>(null);
   const [data, setData] = useState<any | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
-  const fetchReports = useCallback(() => fetch(`/api/reports?timeframe=${timeframe}`)
-    .then(res => { if (!res.ok) throw new Error("Request failed"); return res.json(); })
-    .then(json => {
-      setLoadError(null);
-      setData(json);
+  const fetchReports = useCallback(() => {
+    if (timeframe === "custom" && !appliedRange) {
+      // Nothing to ask the server yet: keep the last figures on screen.
+      return Promise.resolve();
+    }
+    const query = timeframe === "custom"
+      ? `timeframe=custom&start=${appliedRange!.start}&end=${appliedRange!.end}`
+      : `timeframe=${timeframe}`;
+    return fetch(`/api/reports?${query}`)
+      .then(res => { if (!res.ok) throw new Error("Request failed"); return res.json(); })
+      .then(json => {
+        setLoadError(null);
+        setData(json);
 
-    }).catch(() => setLoadError("Reports could not be loaded. The figures shown may be out of date.")).finally(() => setIsLoading(false)), [timeframe]);
+      }).catch(() => setLoadError("Reports could not be loaded. The figures shown may be out of date.")).finally(() => setIsLoading(false));
+  }, [timeframe, appliedRange]);
 
   useEffect(() => {
     fetchReports();
   }, [fetchReports]);
 
+  const applyCustomRange = () => {
+    if (!startDate || !endDate) {
+      notify("Choose both a start date and an end date", "warn");
+      return;
+    }
+    if (startDate > endDate) {
+      notify("The start date must be on or before the end date", "warn");
+      return;
+    }
+    setIsLoading(true);
+    setAppliedRange({ start: startDate, end: endDate });
+  };
+
   const handleExportCSV = async (format: "quickbooks" | "xero") => {
+    if (timeframe === "custom" && !appliedRange) {
+      notify("Choose a start and end date, then tap Apply — the export follows the dates on screen", "warn");
+      return;
+    }
     try {
       const exportData = await apiFetch("/api/integrations", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "export_accounting", format, timeframe }),
+        body: JSON.stringify({
+          action: "export_accounting",
+          format,
+          timeframe,
+          ...(timeframe === "custom" && appliedRange ? appliedRange : {}),
+        }),
       });
       if (exportData.csvContent) {
         const blob = new Blob([exportData.csvContent], { type: "text/csv;charset=utf-8;" });
@@ -99,9 +138,10 @@ export const ReportsDashboard: React.FC<{ canExportTransactions?: boolean }> = (
         </div>
 
         {/* Date Filter & Export */}
-        <div className="flex items-center gap-2 text-xs">
+        <div className="flex flex-col items-start sm:items-end gap-2 text-xs">
+          <div className="flex items-center gap-2">
           <div className="bg-neutral-950 p-1 rounded-xl border border-neutral-800 flex">
-            {(["today", "7days", "30days", "all"] as const).map((t) => (
+            {(["today", "7days", "30days", "all", "custom"] as const).map((t) => (
               <button
                 key={t}
                 onClick={() => setTimeframe(t)}
@@ -135,11 +175,51 @@ export const ReportsDashboard: React.FC<{ canExportTransactions?: boolean }> = (
             <span className="hidden md:inline">Xero CSV</span>
           </button>
           </>}
+          </div>
+
+          {timeframe === "custom" && (
+            <div className="flex flex-wrap items-center gap-2">
+              <label className="text-neutral-400 flex items-center gap-1.5">
+                <Calendar className="w-3.5 h-3.5 text-amber-500" />
+                From
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  title="Start date"
+                  className="bg-neutral-800 border border-neutral-700 rounded-xl px-2 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500"
+                />
+              </label>
+              <label className="text-neutral-400 flex items-center gap-1.5">
+                To
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  title="End date"
+                  className="bg-neutral-800 border border-neutral-700 rounded-xl px-2 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500"
+                />
+              </label>
+              <button
+                onClick={applyCustomRange}
+                className="min-h-9 px-3.5 py-1.5 bg-amber-500 hover:bg-amber-400 text-black font-bold rounded-xl transition"
+              >
+                Apply
+              </button>
+              <span className="text-neutral-500">Whole days, Ghana time (UTC) — same start and end picks a single day.</span>
+            </div>
+          )}
         </div>
       </div>
 
       {/* Reports Content */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
+        {timeframe === "custom" && appliedRange && (
+          <p className="text-xs font-semibold text-amber-300 flex items-center gap-1.5">
+            <Calendar className="w-3.5 h-3.5" />
+            Showing {appliedRange.start} to {appliedRange.end} (Ghana time)
+          </p>
+        )}
         <section className="grid grid-cols-1 sm:grid-cols-3 gap-3" aria-label="Collection reconciliation">
           {[["Gross collections", summary.grossCollections], ["Refunds recorded", summary.totalRefunds], ["Net collections", summary.netCollections]].map(([label, value]) => (
             <div key={label} className="p-4 rounded-2xl bg-neutral-900 border border-neutral-800">

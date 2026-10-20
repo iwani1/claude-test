@@ -77,6 +77,20 @@ async function main() {
   const records = csv.csvContent.split("\r\n").slice(1).map((line: string) => line.split(","));
   check(records.length === 4 && records.reduce((sum: number, row: string[]) => sum + Number(row[7]), 0) === -12, "CSV event totals match dashboard selected timeframe");
   check((await request("reports?timeframe=invalid")).status === 400, "invalid report timeframe rejected");
+  // A selected date range covers whole Ghana days; picking today for both
+  // ends must agree with the Today preset exactly.
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const customToday = await ok(`reports?timeframe=custom&start=${todayStr}&end=${todayStr}`);
+  check(customToday.summary.totalRefunds === "12.00" && customToday.summary.netCollections === "-12.00", "custom range for today matches the Today preset");
+  check(customToday.window.start?.startsWith(todayStr) && customToday.window.endExclusive?.startsWith(new Date(Date.parse(todayStr) + 86400000).toISOString().slice(0, 10)), "custom range window is the selected day through midnight");
+  const yesterdayStr = new Date(Date.parse(todayStr) - 86400000).toISOString().slice(0, 10);
+  check((await ok(`reports?timeframe=custom&start=${yesterdayStr}&end=${yesterdayStr}`)).summary.totalRefunds === "0.00", "custom range for yesterday excludes today's refunds");
+  const customCsv = await ok("integrations", { action: "export_accounting", format: "xero", timeframe: "custom", start: todayStr, end: todayStr });
+  check(customCsv.csvContent.split("\r\n").slice(1).length === 4, "CSV export follows the selected custom range");
+  check((await request("reports?timeframe=custom&start=2026-02-31&end=2026-03-01")).status === 400, "impossible custom date rejected");
+  check((await request(`reports?timeframe=custom&start=${todayStr}`)).status === 400, "custom range needs both dates");
+  check((await request("reports?timeframe=custom&start=2026-03-02&end=2026-03-01")).status === 400, "custom range with start after end rejected");
+  check((await request("integrations", { action: "export_accounting", format: "xero", timeframe: "custom", start: "not-a-date", end: todayStr })).status === 400, "CSV export validates the custom range too");
   const otherCookie = (await request("auth/login", { email: "user8@test.invalid", password: "Test-password-only-123!" })).cookie;
   check((await request(path, undefined, otherCookie)).status === 404, "other branch cannot inspect refundable balances");
   check((await request("reports?timeframe=today", undefined, otherCookie)).data.summary.totalRefunds === "0.00", "collection reports remain branch-isolated");

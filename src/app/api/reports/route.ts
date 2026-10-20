@@ -18,7 +18,10 @@ async function handleGET(req: Request) {
     const { searchParams } = new URL(req.url);
     const timeframe = searchParams.get("timeframe") || "all"; // 'today', '7days', '30days', 'all'
 
-    const window = reportWindow(timeframe);
+    const window = reportWindow(timeframe, new Date(), {
+      start: searchParams.get("start") ?? undefined,
+      end: searchParams.get("end") ?? undefined,
+    });
     const collections = await collectionSummary(window);
     const allOrders = await db.select().from(orders).where(and(
       window.start ? gte(orders.createdAt, window.start) : undefined, lt(orders.createdAt, window.end)

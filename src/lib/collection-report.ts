@@ -1,12 +1,41 @@
 import { sql } from "drizzle-orm";
 import { db } from "@/db";
 import { ApiError } from "./api";
-export function reportWindow(timeframe: string, now = new Date()) {
+export interface ReportDateRange {
+  start?: string;
+  end?: string;
+}
+
+const DAY_MS = 86400000;
+
+/** One calendar day (UTC / Africa/Accra) from a strict YYYY-MM-DD input.
+ *  The round-trip comparison refuses impossible dates such as 2026-02-31,
+ *  which Date would otherwise roll silently into March. */
+function reportDay(value: unknown, label: string): Date {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    throw new ApiError(400, `Choose a valid ${label} date`);
+  }
+  const day = new Date(`${value}T00:00:00.000Z`);
+  if (Number.isNaN(day.getTime()) || day.toISOString().slice(0, 10) !== value) {
+    throw new ApiError(400, `Choose a valid ${label} date`);
+  }
+  return day;
+}
+
+export function reportWindow(timeframe: string, now = new Date(), range: ReportDateRange = {}) {
+  if (timeframe === "custom") {
+    // A selected range covers whole calendar days: the start day from
+    // midnight, the end day up to the following midnight (exclusive).
+    const start = reportDay(range.start, "start");
+    const endDay = reportDay(range.end, "end");
+    if (start.getTime() > endDay.getTime()) throw new ApiError(400, "The start date must be on or before the end date");
+    return { start, end: new Date(endDay.getTime() + DAY_MS) };
+  }
   if (!["all", "today", "7days", "30days"].includes(timeframe)) throw new ApiError(400, "Invalid timeframe");
   const end = now;
   const start = timeframe === "all" ? null : timeframe === "today"
     ? new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
-    : new Date(now.getTime() - (timeframe === "7days" ? 7 : 30) * 86400000);
+    : new Date(now.getTime() - (timeframe === "7days" ? 7 : 30) * DAY_MS);
   return { start, end };
 }
 export type ReportWindow = ReturnType<typeof reportWindow>;
