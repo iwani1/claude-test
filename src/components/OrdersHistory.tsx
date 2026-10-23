@@ -956,7 +956,8 @@ export const OrdersHistory: React.FC<{
             ? `Permanent: GH₵${Number(deleteTarget.totalAmount || 0).toFixed(2)} disappears from history, reports and collections, and any stock it used goes back to inventory. A minimal deletion record (order number, amount, who deleted it) is kept for accounting. This cannot be undone.`
             : ""
         }
-        confirmLabel="Delete forever"
+        confirmLabel="Hold to delete"
+        holdToConfirm
         cancelLabel="Keep it"
         busy={deleteBusy}
         busyLabel="Deleting…"

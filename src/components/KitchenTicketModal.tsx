@@ -2,6 +2,7 @@
 
 import React, { useMemo } from "react";
 import { Printer, X, ChefHat, Flame, Wine, Cake, Clock, Utensils } from "lucide-react";
+import { StampBadge, TicketPerforation } from "@/components/interface-studies";
 
 interface KitchenTicketModalProps {
   isOpen: boolean;
@@ -92,6 +93,12 @@ export const KitchenTicketModal: React.FC<KitchenTicketModalProps> = ({
           <div className="flex items-center gap-2 text-sm font-bold">
             <ChefHat className="w-4 h-4 text-orange-400" />
             <span>Kitchen Docket — Print &amp; Deliver</span>
+            <span className="print:hidden">
+              <StampBadge
+                text={order.reprint ? "Reprint" : "New"}
+                className="border-orange-300 text-orange-300"
+              />
+            </span>
           </div>
           <button
             onClick={onClose}
@@ -232,7 +239,27 @@ export const KitchenTicketModal: React.FC<KitchenTicketModalProps> = ({
               Printed {new Date().toLocaleTimeString()} • Lush View Hotel
             </div>
           </div>
+
+          {/* Tear-off stub: stays with the pass/server while station blocks
+              go to the line. Real content, repeated on purpose. */}
+          <TicketPerforation>
+            <div className="flex items-center justify-between text-[0.6875rem] font-bold uppercase">
+              <span>Stub — {order.orderNumber}</span>
+              <span>
+                {itemCount} item{itemCount === 1 ? "" : "s"} •{" "}
+                {new Date(order.createdAt || 0).toLocaleTimeString([], {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
+              </span>
+            </div>
+            <div className="mt-0.5 text-[0.625rem] uppercase">
+              {orderTypeLabel}
+              {order.customerName ? ` • Guest: ${order.customerName}` : ""}
+            </div>
+          </TicketPerforation>
         </div>
+        <div aria-hidden="true" className="receipt-edge print:hidden" />
 
         {/* Actions */}
         <div className="p-4 bg-neutral-100 flex items-center justify-end gap-3 print:hidden border-t border-neutral-200">

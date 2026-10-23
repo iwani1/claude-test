@@ -33,7 +33,12 @@ import {
   saveBillingConfigToCache,
   getCachedBillingConfig,
 } from "@/lib/offline-storage";
-import { notify } from "@/lib/notify";
+import { notify, notifyWithAction } from "@/lib/notify";
+import {
+  DynamicButton,
+  ScrollFadeList,
+  TactileButton,
+} from "@/components/interface-studies";
 import { priceOrder, fromCents, toCents } from "@/lib/pricing-core";
 import type { BillingConfig } from "@/lib/pricing-core";
 import { apiErrorMessage, apiFetch } from "@/lib/api-client";
@@ -361,9 +366,26 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
   };
 
   const removeCartItem = (index: number) => {
+    const removed = cart[index];
+    if (!removed) return;
     const updated = [...cart];
     updated.splice(index, 1);
     setCart(updated);
+    // Local-only and fully reversible, so this is a genuine Undo (a timed
+    // notice), unlike server-committed payments which never offer one.
+    notifyWithAction(
+      `${removed.itemName} removed from the ticket.`,
+      "Undo",
+      () => {
+        setCart((current) => {
+          if (current.some((line) => line.cartItemId === removed.cartItemId)) return current;
+          const restored = [...current];
+          restored.splice(Math.min(index, restored.length), 0, removed);
+          return restored;
+        });
+      },
+      "ok",
+    );
   };
 
   const clearCart = () => {
@@ -1480,7 +1502,7 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
             {" — add items, then Settle Bill to take payment."}
           </div>
         )}
-        <div className="flex-1 min-h-0 overflow-y-auto p-2 space-y-2 custom-scrollbar">
+        <ScrollFadeList className="flex-1 min-h-0 overflow-y-auto p-2 space-y-2 custom-scrollbar">
           {cart.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-center text-neutral-500 p-6">
               <Receipt className="w-12 h-12 mb-2 opacity-30 text-amber-500" />
@@ -1542,17 +1564,10 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
                       <Plus className="w-4 h-4" strokeWidth={3} />
                     </button>
                     <button
-                      onClick={() =>
-                        setPendingConfirm({
-                          title: `Remove ${it.itemName}?`,
-                          message: `This line (${it.quantity} × GH₵${Number(it.unitPrice).toFixed(2)}) will be taken off the ticket.`,
-                          confirmLabel: "Remove item",
-                          action: () => removeCartItem(idx),
-                        })
-                      }
+                      onClick={() => removeCartItem(idx)}
                       aria-label="Remove item"
                       className="ml-1 w-8 h-8 rounded-lg text-neutral-500 hover:text-rose-400 hover:bg-rose-500/10 flex items-center justify-center transition"
-                      title="Remove item (asks first)"
+                      title="Remove item (Undo appears afterwards)"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -1561,7 +1576,7 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
               </div>
             ))
           )}
-        </div>
+        </ScrollFadeList>
 
         {/* Order Calculations & Checkout Bar — shrink-0: totals and Settle
             are always on screen; the panel never scrolls to reach them. */}
@@ -1686,23 +1701,25 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
             {isComplimentary ? (
               /* A comp order has nothing to collect, so it is sent straight
                  through — no payment modal, no tender step. */
-              <button
+              <TactileButton
                 onClick={() => requireShift(() => void handleProcessPayment())}
                 disabled={cart.length === 0 || isSubmitting}
-                className="w-full h-14 px-4 bg-sky-600 hover:bg-sky-500 active:bg-sky-700 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-2xl text-[0.9375rem] font-bold flex items-center justify-center gap-2.5 shadow-lg shadow-sky-600/25 transition active:scale-[0.98]"
+                toneClass="bg-sky-600 hover:bg-sky-500 text-white text-[0.9375rem] font-bold"
+                className="w-full h-14 px-4 disabled:cursor-not-allowed rounded-2xl"
               >
                 <Coffee className="w-6 h-6 shrink-0" />
                 <span>{isSubmitting ? "Sending…" : "Send Comp Order · GH₵0.00"}</span>
-              </button>
+              </TactileButton>
             ) : (
-              <button
+              <TactileButton
                 onClick={() => requireShift(proceedToSettle)}
                 disabled={cart.length === 0 || isSubmitting}
-                className="w-full h-14 px-4 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-2xl text-[0.9375rem] font-bold flex items-center justify-center gap-2.5 shadow-lg shadow-emerald-600/25 transition active:scale-[0.98]"
+                toneClass="bg-emerald-600 hover:bg-emerald-500 text-white text-[0.9375rem] font-bold"
+                className="w-full h-14 px-4 disabled:cursor-not-allowed rounded-2xl"
               >
                 <DollarSign className="w-6 h-6 text-amber-300 shrink-0" />
                 <span>Settle Bill · GH₵{totalAmount.toFixed(2)}</span>
-              </button>
+              </TactileButton>
             )}
 
             <div className="grid grid-cols-2 gap-2">
@@ -2071,6 +2088,7 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
               >
                 <DollarSign className="w-4 h-4 text-emerald-400" />
                 <span>Cash (GH₵)</span>
+                <span className="text-[0.5625rem] font-medium opacity-70 leading-none">Notes &amp; change</span>
               </button>
 
               <button
@@ -2084,6 +2102,7 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
               >
                 <Smartphone className="w-4 h-4 text-amber-400" />
                 <span>MoMo</span>
+                <span className="text-[0.5625rem] font-medium opacity-70 leading-none">Verify on phone</span>
               </button>
 
               <button
@@ -2105,6 +2124,7 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
               >
                 <Coins className="w-4 h-4 text-purple-400" />
                 <span>Cash + MoMo</span>
+                <span className="text-[0.5625rem] font-medium opacity-70 leading-none">Split the bill</span>
               </button>
             </div>
 
@@ -2332,30 +2352,28 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
               </div>
             )}
 
-            {/* Confirm Payment Button */}
-            <button
+            {/* Confirm Payment Button — label morphs to its busy state. */}
+            <DynamicButton
               onClick={handleProcessPayment}
+              busy={isSubmitting}
+              busyLabel="Recording Payment..."
+              fullWidth
+              icon={<CheckCircle2 className="w-4 h-4" />}
               disabled={
-                isSubmitting ||
                 (paymentMethod === "cash" && Number(cashTendered || 0) < totalAmount - 0.01) ||
                 (paymentMethod === "split" &&
                   (Number(splitCashAmount || 0) <= 0 ||
                     Number(splitMomoAmount || 0) <= 0 ||
                     Number(splitCashAmount || 0) + Number(splitMomoAmount || 0) < totalAmount - 0.01))
               }
-              className="w-full h-16 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold rounded-2xl text-base shadow-lg shadow-emerald-600/25 transition flex items-center justify-center gap-2.5 active:scale-[0.98]"
+              className="w-full h-16 px-4 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold rounded-2xl text-base shadow-lg shadow-emerald-600/25 transition active:scale-[0.98]"
             >
-              <CheckCircle2 className="w-4 h-4" />
-              <span>
-                {isSubmitting
-                  ? "Recording Payment..."
-                  : paymentMethod === "momo"
-                  ? `Confirm MoMo Payment (GH₵${totalAmount.toFixed(2)})`
-                  : paymentMethod === "cash"
+              {paymentMethod === "momo"
+                ? `Confirm MoMo Payment (GH₵${totalAmount.toFixed(2)})`
+                : paymentMethod === "cash"
                   ? `Confirm Cash Payment (GH₵${totalAmount.toFixed(2)})`
                   : `Confirm Split (GH₵${Number(splitCashAmount || 0).toFixed(2)} Cash + GH₵${Number(splitMomoAmount || 0).toFixed(2)} MoMo)`}
-              </span>
-            </button>
+            </DynamicButton>
           </div>
         </div>
       )}

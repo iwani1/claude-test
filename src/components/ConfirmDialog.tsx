@@ -1,6 +1,7 @@
 "use client";
 
 import { AlertTriangle } from "lucide-react";
+import { HoldToConfirmButton } from "@/components/interface-studies";
 
 export interface ConfirmDialogProps {
   open: boolean;
@@ -13,6 +14,11 @@ export interface ConfirmDialogProps {
   busyLabel?: string;
   /** Failure from the server, shown inside the dialog instead of vanishing. */
   error?: string;
+  /**
+   * Irreversible actions (permanent deletion) require a press-and-hold on
+   * the confirm button instead of a single tap. Cancel stays a plain tap.
+   */
+  holdToConfirm?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
 }
@@ -32,6 +38,7 @@ export function ConfirmDialog({
   busy = false,
   busyLabel = "Working…",
   error,
+  holdToConfirm = false,
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
@@ -60,13 +67,23 @@ export function ConfirmDialog({
           >
             {cancelLabel}
           </button>
-          <button
-            onClick={onConfirm}
-            disabled={busy}
-            className="h-14 rounded-2xl bg-rose-600 hover:bg-rose-500 active:bg-rose-700 text-white text-base font-bold transition active:scale-[0.98] disabled:opacity-40"
-          >
-            {busy ? busyLabel : confirmLabel}
-          </button>
+          {holdToConfirm && !busy ? (
+            <HoldToConfirmButton
+              label={confirmLabel}
+              holdingLabel="Keep holding…"
+              disabled={busy}
+              onConfirm={onConfirm}
+              className="h-14 rounded-2xl bg-rose-600 hover:bg-rose-500 text-white text-base font-bold disabled:opacity-40"
+            />
+          ) : (
+            <button
+              onClick={onConfirm}
+              disabled={busy}
+              className="h-14 rounded-2xl bg-rose-600 hover:bg-rose-500 active:bg-rose-700 text-white text-base font-bold transition active:scale-[0.98] disabled:opacity-40"
+            >
+              {busy ? busyLabel : confirmLabel}
+            </button>
+          )}
         </div>
       </div>
     </div>

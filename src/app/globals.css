@@ -96,6 +96,192 @@
   background-clip: content-box;
 }
 
+/* ------------------------------------------------------------------ */
+/* Interface-study motion & surfaces (see components/interface-studies) */
+/* ------------------------------------------------------------------ */
+
+/* Tactile button: raised face on a compressible edge. Colour/meaning come
+   from the caller's classes on the face. */
+.tactile-btn {
+  border: none;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.tactile-btn-face {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -3px 0 rgba(0, 0, 0, 0.28),
+    0 3px 0 rgba(0, 0, 0, 0.45),
+    0 8px 16px rgba(0, 0, 0, 0.35);
+  transform: translateY(0);
+  transition: transform 80ms ease, box-shadow 80ms ease, filter 120ms ease;
+}
+.tactile-btn:hover .tactile-btn-face {
+  filter: brightness(1.06);
+}
+.tactile-btn:active .tactile-btn-face,
+.tactile-btn[data-pressing="true"] .tactile-btn-face {
+  transform: translateY(3px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.25),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.28),
+    0 0 0 rgba(0, 0, 0, 0.45),
+    0 3px 8px rgba(0, 0, 0, 0.3);
+}
+.tactile-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.tactile-btn:disabled .tactile-btn-face {
+  transform: none;
+  filter: none;
+}
+
+/* Serrated paper edge + perforated tear line for receipts/dockets.
+   Screen presentation only; print keeps plain paper edges. */
+.serrated-bottom {
+  --serration: rgba(255, 255, 255, 1);
+  position: relative;
+}
+.serrated-bottom::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -9px;
+  height: 9px;
+  background:
+    linear-gradient(-45deg, transparent 6px, var(--serration) 0) 0 0 / 12px 12px repeat-x,
+    linear-gradient(45deg, transparent 6px, var(--serration) 0) 6px 0 / 12px 12px repeat-x;
+}
+/* Sawtooth strip that makes the on-screen receipt look torn from the roll. */
+.receipt-edge {
+  height: 10px;
+  background:
+    linear-gradient(45deg, transparent 33.333%, #fafafa 33.333%, #fafafa 66.667%, transparent 66.667%),
+    linear-gradient(-45deg, transparent 33.333%, #fafafa 33.333%, #fafafa 66.667%, transparent 66.667%);
+  background-size: 12px 24px;
+  background-position: 0 -12px;
+}
+
+.ticket-tear {
+  border-top: 2px dashed rgba(0, 0, 0, 0.45);
+  margin: 10px 0 8px;
+  position: relative;
+}
+.ticket-tear::before,
+.ticket-tear::after {
+  content: "";
+  position: absolute;
+  top: -7px;
+  width: 12px;
+  height: 12px;
+  border-radius: 9999px;
+  background: #171717; /* matches the dark modal surround */
+}
+.ticket-tear::before {
+  left: -18px;
+}
+.ticket-tear::after {
+  right: -18px;
+}
+
+/* Receipt "feed" — paper slides out of the printer slot on screen only. */
+@keyframes receipt-feed {
+  from {
+    transform: translateY(-14px);
+    opacity: 0.25;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+.receipt-feed {
+  animation: receipt-feed 650ms cubic-bezier(0.22, 0.9, 0.3, 1) both;
+  transform-origin: top center;
+}
+
+@keyframes logo-trace-spin-kf {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.logo-trace-spin {
+  animation: logo-trace-spin-kf 900ms linear infinite;
+}
+
+@keyframes signature-reveal-kf {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+.signature-reveal {
+  animation: signature-reveal-kf 900ms ease-out 150ms both;
+}
+
+@keyframes cassette-reel-kf {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.cassette-reel {
+  animation: cassette-reel-kf 1.1s linear infinite;
+  transform-origin: center;
+  transform-box: fill-box;
+}
+
+/* Subtle iridescent sheen for report KPI cards (pointer-fine devices). */
+.foil-card {
+  position: relative;
+  overflow: hidden;
+}
+.foil-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    115deg,
+    transparent 30%,
+    rgba(245, 158, 11, 0.1) 42%,
+    rgba(56, 189, 248, 0.1) 52%,
+    rgba(244, 114, 182, 0.08) 60%,
+    transparent 72%
+  );
+  transform: translateX(-70%);
+  transition: transform 700ms ease;
+  pointer-events: none;
+}
+.foil-card:hover::before,
+.foil-card:focus-within::before {
+  transform: translateX(70%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .receipt-feed,
+  .logo-trace-spin,
+  .signature-reveal,
+  .cassette-reel {
+    animation: none !important;
+  }
+  .tactile-btn-face,
+  .foil-card::before {
+    transition: none !important;
+  }
+}
+
 /* Thermal POS Receipt & Kitchen Docket Print Styles */
 @media print {
   body {

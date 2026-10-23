@@ -16,6 +16,40 @@ import {
   Trash2,
 } from "lucide-react";
 import { notify } from "@/lib/notify";
+import { MagneticDropZone } from "@/components/interface-studies";
+
+/**
+ * Reads a dropped/chosen photo and shrinks it to a modest JPEG data URL so
+ * it can be saved with the menu item like any other image address. Large
+ * phone photos are downscaled (max 900px) — menu thumbnails never need more.
+ */
+function fileToMenuPhoto(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new window.Image();
+    img.onload = () => {
+      try {
+        const scale = Math.min(1, 900 / Math.max(img.width, img.height));
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, Math.round(img.width * scale));
+        canvas.height = Math.max(1, Math.round(img.height * scale));
+        const ctx = canvas.getContext("2d");
+        if (!ctx) throw new Error("no-canvas");
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        URL.revokeObjectURL(url);
+        resolve(canvas.toDataURL("image/jpeg", 0.82));
+      } catch (err) {
+        URL.revokeObjectURL(url);
+        reject(err);
+      }
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("unreadable-image"));
+    };
+    img.src = url;
+  });
+}
 
 interface MenuManagerProps {
   categories: any[];
@@ -449,14 +483,44 @@ export const MenuManager: React.FC<MenuManagerProps> = ({
               </div>
 
               <div>
-                <label className="text-neutral-300 block mb-1">Photo Image URL</label>
+                <label className="text-neutral-300 block mb-1">Dish Photo</label>
+                <MagneticDropZone
+                  label="Drop a dish photo here"
+                  hint="or tap to choose — it is resized and saved with the item"
+                  invalidMessage="Please choose an image file (JPG, PNG or WebP)."
+                  onFile={(file) => {
+                    void fileToMenuPhoto(file)
+                      .then((dataUrl) => {
+                        setImageUrl(dataUrl);
+                        notify("Photo attached — save the item to keep it.", "ok");
+                      })
+                      .catch(() => notify("That photo could not be read.", "error"));
+                  }}
+                />
                 <input
                   type="text"
-                  placeholder="Image address (optional)"
-                  value={imageUrl}
+                  placeholder="…or paste an image address (optional)"
+                  value={imageUrl.startsWith("data:") ? "" : imageUrl}
                   onChange={(e) => setImageUrl(e.target.value)}
-                  className="w-full bg-neutral-800 border border-neutral-700 rounded-xl px-3 py-2 text-white"
+                  className="mt-2 w-full bg-neutral-800 border border-neutral-700 rounded-xl px-3 py-2 text-white"
                 />
+                {imageUrl && (
+                  <div className="mt-2 flex items-center gap-3">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={imageUrl}
+                      alt="Dish photo preview"
+                      className="h-14 w-14 rounded-lg object-cover border border-neutral-700"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setImageUrl("")}
+                      className="text-xs font-semibold text-rose-400 hover:text-rose-300"
+                    >
+                      Remove photo
+                    </button>
+                  </div>
+                )}
               </div>
 
               <div>

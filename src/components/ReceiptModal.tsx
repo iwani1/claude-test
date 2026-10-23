@@ -1,7 +1,10 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Printer, X, CheckCircle, Smartphone } from "lucide-react";
+import { StampBadge } from "@/components/interface-studies";
+
+type ReceiptStage = "ready" | "printing" | "complete";
 
 interface ReceiptModalProps {
   isOpen: boolean;
@@ -16,10 +19,30 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
   order,
   restaurantInfo,
 }) => {
+  // Screen-only print sequence: ready → printing → complete. It describes
+  // the real window.print() call; it never pretends the printer reported
+  // success — "complete" means the print dialog finished.
+  // Both callers mount this modal fresh per open, so "ready" is the
+  // correct initial stage every time it appears.
+  const [stage, setStage] = useState<ReceiptStage>("ready");
+
+  useEffect(() => {
+    if (stage !== "printing") return;
+    const finish = () => setStage("complete");
+    window.addEventListener("afterprint", finish);
+    const fallback = window.setTimeout(finish, 4000);
+    return () => {
+      window.removeEventListener("afterprint", finish);
+      window.clearTimeout(fallback);
+    };
+  }, [stage]);
+
   if (!isOpen || !order) return null;
 
   const handlePrint = () => {
-    window.print();
+    setStage("printing");
+    // Let the stage paint before the (blocking) print dialog opens.
+    window.setTimeout(() => window.print(), 350);
   };
 
   const subtotal = Number(order.subtotal || 0);
@@ -59,6 +82,18 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
           <div className="flex items-center gap-2 text-sm font-semibold">
             <Printer className="w-4 h-4 text-emerald-400" />
             <span>Thermal Receipt Preview (80mm)</span>
+            <span
+              role="status"
+              className={`ml-1 rounded-full px-2 py-0.5 text-[0.625rem] font-black uppercase tracking-wider ${
+                stage === "printing"
+                  ? "bg-amber-500/20 text-amber-300"
+                  : stage === "complete"
+                    ? "bg-emerald-500/20 text-emerald-300"
+                    : "bg-neutral-800 text-neutral-300"
+              }`}
+            >
+              {stage === "printing" ? "Printing…" : stage === "complete" ? "Sent to printer" : "Ready"}
+            </span>
           </div>
           <button
             onClick={onClose}
@@ -68,8 +103,8 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
           </button>
         </div>
 
-        {/* Printable Receipt Body */}
-        <div className="p-6 font-mono text-xs leading-relaxed bg-neutral-50 border-y border-neutral-200 print:border-none print:p-0 print:bg-white">
+        {/* Printable Receipt Body — feeds out on screen; print is plain. */}
+        <div className="receipt-feed p-6 font-mono text-xs leading-relaxed bg-neutral-50 border-y border-neutral-200 print:border-none print:p-0 print:bg-white">
           <div className="text-center mb-4">
             <h2 className="text-base font-bold tracking-wider uppercase text-neutral-900 whitespace-pre-line">
               {receiptHeader}
@@ -283,7 +318,15 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
             </div>
             <p className="text-[0.625rem] text-neutral-400">Powered by Lush View Hotel POS</p>
           </div>
+
+          {/* Screen-only paid stamp; the paper receipt keeps its own text. */}
+          {!isComp && (
+            <div className="mt-3 flex justify-center print:hidden">
+              <StampBadge text="Paid" className="border-emerald-700 text-emerald-700" />
+            </div>
+          )}
         </div>
+        <div aria-hidden="true" className="receipt-edge print:hidden" />
 
         {/* Modal Actions */}
         <div className="p-4 bg-neutral-100 flex items-center justify-end gap-3 print:hidden border-t border-neutral-200">
@@ -298,7 +341,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
             className="px-5 py-2 text-sm font-semibold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg flex items-center gap-2 shadow-xs transition"
           >
             <Printer className="w-4 h-4" />
-            <span>Print Receipt</span>
+            <span>{stage === "printing" ? "Printing…" : stage === "complete" ? "Print Again" : "Print Receipt"}</span>
           </button>
         </div>
       </div>

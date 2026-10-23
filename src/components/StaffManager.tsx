@@ -786,7 +786,8 @@ export const StaffManager: React.FC<{ currentUser?: any }> = ({ currentUser }) =
         open={!!confirmDelete}
         title={`Delete ${confirmDelete?.name ?? "this"}${confirmDelete ? "'s" : ""} account?`}
         message="They disappear from the staff list and can never sign in again — password, PIN and phone number are wiped. Their past sales stay in the reports under their name. This cannot be undone."
-        confirmLabel="Yes, delete account"
+        confirmLabel="Hold to delete"
+        holdToConfirm
         cancelLabel="Keep the account"
         busy={deleteBusy}
         busyLabel="Removing…"

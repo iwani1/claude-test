@@ -23,6 +23,7 @@ import {
   Store,
 } from "lucide-react";
 import { UserRole, ROLE_PERMISSIONS, type RolePermissionSet } from "@/lib/permissions";
+import { ScrambleText, TactileButton } from "@/components/interface-studies";
 
 export type NavTab =
   | "dashboard"
@@ -218,19 +219,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
           Oversized so it can be hit without looking away from the customer. */}
       {showNewOrder && (
         <div className="p-3 pb-1">
-          <button
+          <TactileButton
             onClick={() => {
               onNewOrder?.();
               onCloseMobile?.();
             }}
-            className={`w-full h-14 rounded-2xl bg-amber-500 hover:bg-amber-400 active:bg-amber-600 text-black font-bold shadow-lg shadow-amber-500/25 flex items-center justify-center gap-2.5 transition active:scale-[0.98] ${
+            toneClass="bg-amber-500 hover:bg-amber-400 text-black font-bold"
+            className={`w-full h-14 rounded-2xl ${
               collapsed ? "px-0 max-md:px-4" : "px-4"
             }`}
             title="Start a new order"
           >
             <Plus className="w-6 h-6 shrink-0" strokeWidth={3} />
             <span className={`text-[0.9375rem] ${collapsed ? "hidden max-md:inline" : ""}`}>New Order</span>
-          </button>
+          </TactileButton>
         </div>
       )}
 
@@ -303,10 +305,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
       <>
         <div className={`p-3.5 border-t border-neutral-800 bg-neutral-950/60 space-y-1 ${collapsed ? "hidden max-md:block" : ""}`}>
           <div className="flex items-center justify-between text-[0.6875rem]">
-            <span className="font-medium text-neutral-400">Lush View POS</span>
+            <span className="font-medium text-neutral-400">
+              <ScrambleText text="Lush View POS" />
+            </span>
             <span className="text-emerald-400 font-semibold">GH₵ · GHS</span>
           </div>
-          <div className="text-[0.625rem] text-neutral-600">v2.5.0 · Touch Terminal Build</div>
+          <div className="text-[0.625rem] text-neutral-600">
+            <ScrambleText text="v2.5.0 · Touch Terminal Build" />
+          </div>
         </div>
         <div className={`py-3 border-t border-neutral-800 bg-neutral-950/60 justify-center ${collapsed ? "flex max-md:hidden" : "hidden"}`}>
           <span className="text-[0.625rem] font-bold text-neutral-600">v2.5</span>
