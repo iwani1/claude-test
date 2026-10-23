@@ -39,6 +39,8 @@ export const REQUIRED_COLUMNS: ReadonlyArray<readonly [string, string]> = [
   ["users", "deleted_at"],
   // 0009_user_permissions.sql
   ["users", "permission_overrides"],
+  // 0010_menu_item_archive.sql
+  ["menu_items", "is_archived"],
 ];
 
 /**

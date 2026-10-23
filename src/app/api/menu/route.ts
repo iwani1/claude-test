@@ -13,9 +13,12 @@ import { eq, asc } from "drizzle-orm";
 import { getSessionUser } from "@/lib/guard";
 import { hideCost, maySeeCost } from "@/lib/cost-visibility";
 
-async function handleGET() {
+async function handleGET(req: Request) {
   try {
     const showCost = maySeeCost(await getSessionUser());
+    // Deleted (archived) dishes are hidden everywhere by default; the Menu
+    // Manager's Deleted view opts in so an item can be restored.
+    const includeArchived = new URL(req.url).searchParams.get("includeArchived") === "1";
     const categories = await db
       .select()
       .from(menuCategories)
@@ -25,6 +28,7 @@ async function handleGET() {
     const items = await db
       .select()
       .from(menuItems)
+      .where(includeArchived ? undefined : eq(menuItems.isArchived, false))
       .orderBy(asc(menuItems.id));
 
     const mods = await db.select().from(modifiers);

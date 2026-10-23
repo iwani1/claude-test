@@ -143,6 +143,10 @@ export const menuItems = pgTable("menu_items", {
   prepTimeMinutes: integer("prep_time_minutes").default(15),
   station: text("station").default("kitchen"), // 'kitchen' | 'bar' | 'grill' | 'dessert'
   isAvailable: boolean("is_available").default(true).notNull(),
+  // Deleted-from-menu marker (0010): the row survives for sales history and
+  // reports, but menu endpoints stop returning it. Distinct from
+  // isAvailable, which is the reversible daily 86.
+  isArchived: boolean("is_archived").default(false).notNull(),
   isFeatured: boolean("is_featured").default(false),
   taxRate: numeric("tax_rate", { precision: 5, scale: 2 }).default("8.25"),
   hasRecipe: boolean("has_recipe").default(false),

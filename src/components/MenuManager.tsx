@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { notify } from "@/lib/notify";
 import { MagneticDropZone } from "@/components/interface-studies";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 
 /**
  * Reads a dropped/chosen photo and shrinks it to a modest JPEG data URL so
@@ -64,6 +65,13 @@ export const MenuManager: React.FC<MenuManagerProps> = ({
   const [search, setSearch] = useState("");
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingItem, setEditingItem] = useState<any | null>(null);
+
+  // Delete (archive) + restore
+  const [deleteTarget, setDeleteTarget] = useState<any | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
+  const [showArchived, setShowArchived] = useState(false);
+  const [archivedItems, setArchivedItems] = useState<any[]>([]);
 
   // Form states
   const [name, setName] = useState("");
@@ -143,6 +151,71 @@ export const MenuManager: React.FC<MenuManagerProps> = ({
     }
   };
 
+  const fetchArchived = async () => {
+    try {
+      const res = await fetch("/api/menu?includeArchived=1");
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        notify(data.error || "Deleted items could not be loaded", "error");
+        return;
+      }
+      setArchivedItems((data.items || []).filter((i: any) => i.isArchived));
+    } catch (e) {
+      console.error(e);
+      notify("Could not reach the server. Deleted items were not loaded.", "error");
+    }
+  };
+
+  const handleDeleteItem = async () => {
+    if (!deleteTarget) return;
+    setDeleteBusy(true);
+    setDeleteError("");
+    try {
+      // The API requires a JSON content type on every write (else 415).
+      const res = await fetch(`/api/menu/${deleteTarget.id}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) {
+        setDeleteError(data.error || "Item was not removed");
+        return;
+      }
+      notify(`"${deleteTarget.name}" removed from the menu.`, "ok");
+      setDeleteTarget(null);
+      onRefresh();
+      if (showArchived) void fetchArchived();
+    } catch (e) {
+      console.error(e);
+      setDeleteError("Could not reach the server. Item was not removed.");
+    } finally {
+      setDeleteBusy(false);
+    }
+  };
+
+  const handleRestoreItem = async (item: any) => {
+    try {
+      const res = await fetch(`/api/menu/${item.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        // Back on the list, still 86'd: staff choose when it sells again.
+        body: JSON.stringify({ isArchived: false, isAvailable: false }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) {
+        notify(data.error || "Item was not restored", "error");
+        return;
+      }
+      notify(`"${item.name}" is back on the menu list (still 86'd).`, "ok");
+      void fetchArchived();
+      onRefresh();
+    } catch (e) {
+      console.error(e);
+      notify("Could not reach the server. Item was not restored.", "error");
+    }
+  };
+
   const filtered = menuItems.filter((m) => {
     const matchCat = selectedCatId === "all" || m.categoryId === selectedCatId;
     const matchSearch =
@@ -206,19 +279,81 @@ export const MenuManager: React.FC<MenuManagerProps> = ({
           ))}
         </div>
 
-        <div className="relative">
-          <Search className="w-3.5 h-3.5 text-neutral-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            placeholder="Search items..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-8 pr-3 py-1 bg-neutral-800 border border-neutral-700 rounded-lg text-xs text-white focus:outline-none focus:border-amber-500"
-          />
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => {
+              const next = !showArchived;
+              setShowArchived(next);
+              if (next) void fetchArchived();
+            }}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition flex items-center gap-1.5 ${
+              showArchived ? "bg-rose-500 text-white" : "bg-neutral-800 text-neutral-300 hover:text-white"
+            }`}
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            <span>{showArchived ? "Back to menu" : "Deleted items"}</span>
+          </button>
+          <div className="relative">
+            <Search className="w-3.5 h-3.5 text-neutral-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              placeholder="Search items..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-8 pr-3 py-1 bg-neutral-800 border border-neutral-700 rounded-lg text-xs text-white focus:outline-none focus:border-amber-500"
+            />
+          </div>
         </div>
       </div>
 
-      {/* Items Table */}
+      {/* Deleted (archived) items — restorable, history untouched */}
+      {showArchived ? (
+        <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
+          <div className="bg-neutral-900 border border-neutral-800 rounded-2xl overflow-hidden shadow-xl">
+            <div className="px-4 py-3 border-b border-neutral-800">
+              <h3 className="text-sm font-bold text-white">Deleted items</h3>
+              <p className="text-[0.6875rem] text-neutral-500 mt-0.5">
+                These dishes are off the menu and the till, but their past sales stay in reports.
+                Restore brings a dish back to the list, still 86&apos;d — tap In Stock when it should sell again.
+              </p>
+            </div>
+            {archivedItems.filter(
+              (i) => !search || i.name.toLowerCase().includes(search.toLowerCase()),
+            ).length === 0 ? (
+              <div className="p-8 text-center text-neutral-500 text-sm">No deleted items.</div>
+            ) : (
+              <div className="divide-y divide-neutral-800/60">
+                {archivedItems
+                  .filter((i) => !search || i.name.toLowerCase().includes(search.toLowerCase()))
+                  .map((item) => (
+                    <div key={item.id} className="px-4 py-3 flex items-center gap-3">
+                      <Image
+                        unoptimized
+                        width={40}
+                        height={40}
+                        src={item.imageUrl || "/menu-images/placeholder.svg"}
+                        alt={item.name}
+                        className="w-10 h-10 rounded-lg object-cover bg-neutral-800 shrink-0 grayscale"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="font-semibold text-white text-xs truncate">{item.name}</div>
+                        <div className="text-[0.625rem] text-neutral-500 font-mono">
+                          {item.sku} · GH₵{Number(item.price).toFixed(2)}
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => handleRestoreItem(item)}
+                        className="px-3 py-1.5 rounded-lg bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 text-xs font-bold transition active:scale-[0.98]"
+                      >
+                        Restore
+                      </button>
+                    </div>
+                  ))}
+              </div>
+            )}
+          </div>
+        </div>
+      ) : (
       <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
         <div className="bg-neutral-900 border border-neutral-800 rounded-2xl overflow-hidden shadow-xl">
           {/* Phones: dish cards with full-size availability and edit buttons.
@@ -285,6 +420,17 @@ export const MenuManager: React.FC<MenuManagerProps> = ({
                       className="h-12 px-5 rounded-xl bg-neutral-800 border border-neutral-700 text-amber-400 font-bold text-sm transition active:scale-[0.98]"
                     >
                       Edit
+                    </button>
+                    <button
+                      onClick={() => {
+                        setDeleteError("");
+                        setDeleteTarget(item);
+                      }}
+                      aria-label={`Remove ${item.name} from the menu`}
+                      className="h-12 px-4 rounded-xl bg-neutral-800 border border-neutral-700 text-rose-400 font-bold text-sm transition active:scale-[0.98] flex items-center gap-1.5"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      <span>Delete</span>
                     </button>
                   </div>
                 </div>
@@ -365,6 +511,16 @@ export const MenuManager: React.FC<MenuManagerProps> = ({
                     >
                       Edit
                     </button>
+                    <button
+                      onClick={() => {
+                        setDeleteError("");
+                        setDeleteTarget(item);
+                      }}
+                      className="ml-3 text-rose-400 hover:text-rose-300 font-semibold text-xs inline-flex items-center gap-1"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Delete</span>
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -373,6 +529,7 @@ export const MenuManager: React.FC<MenuManagerProps> = ({
           </div>
         </div>
       </div>
+      )}
 
       {/* MODAL: Add / Edit Item */}
       {showAddModal && (
@@ -551,6 +708,23 @@ export const MenuManager: React.FC<MenuManagerProps> = ({
           </form>
         </div>
       )}
+
+      {/* CONFIRM: Remove item from the menu (archive — restorable) */}
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title={deleteTarget ? `Remove "${deleteTarget.name}" from the menu?` : "Remove item?"}
+        message="It disappears from the till and this list straight away. Past sales and reports are not touched — a dish that has been sold stays in the history — and you can bring it back any time from Deleted items. For a dish that is only out of stock today, use the 86 button instead."
+        confirmLabel="Remove from menu"
+        cancelLabel="Keep it"
+        busy={deleteBusy}
+        busyLabel="Removing…"
+        error={deleteError}
+        onCancel={() => {
+          setDeleteTarget(null);
+          setDeleteError("");
+        }}
+        onConfirm={handleDeleteItem}
+      />
     </div>
   );
 };

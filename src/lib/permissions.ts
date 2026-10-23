@@ -175,7 +175,7 @@ export const PERMISSION_DEFINITIONS: readonly PermissionDefinition[] = [
   { key: "canDeleteOrders", group: "Orders & Money", label: "Delete orders", description: "Permanently delete an order and its financial trail. Sensitive." },
   { key: "canViewTransactionTrail", group: "Orders & Money", label: "Audit & transaction trail", description: "Read audit logs, individual payments and the accounting export." },
   { key: "canModifyInventory", group: "Stock & Menu", label: "Inventory & purchasing", description: "Change ingredient stock, recipes' stock, purchasing and goods received." },
-  { key: "canManageMenu", group: "Stock & Menu", label: "Menu management", description: "Create and edit menu items, prices and recipes." },
+  { key: "canManageMenu", group: "Stock & Menu", label: "Menu management", description: "Create, edit and remove menu items, prices and recipes. Removal archives the item — past sales stay in reports." },
   { key: "canViewReports", group: "Management", label: "Reports & dashboard", description: "Read financial reports and the owner dashboard." },
   { key: "canManageStaff", group: "Management", label: "Staff management", description: "View and manage staff accounts. Only the owner can change permissions." },
   { key: "canManageSettings", group: "Management", label: "Settings & integrations", description: "Change branch settings, hardware and tender configuration." },
