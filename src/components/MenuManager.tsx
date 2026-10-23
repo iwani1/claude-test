@@ -54,12 +54,15 @@ interface MenuManagerProps {
   categories: any[];
   menuItems: any[];
   onRefresh: () => void;
+  /** Removing/restoring items is owner-only (enforced server-side too). */
+  canDeleteItems?: boolean;
 }
 
 export const MenuManager: React.FC<MenuManagerProps> = ({
   categories,
   menuItems,
   onRefresh,
+  canDeleteItems = false,
 }) => {
   const [selectedCatId, setSelectedCatId] = useState<number | "all">("all");
   const [search, setSearch] = useState("");
@@ -167,7 +170,7 @@ export const MenuManager: React.FC<MenuManagerProps> = ({
   };
 
   const handleDeleteItem = async () => {
-    if (!deleteTarget) return;
+    if (!deleteTarget || !canDeleteItems) return;
     setDeleteBusy(true);
     setDeleteError("");
     try {
@@ -195,6 +198,7 @@ export const MenuManager: React.FC<MenuManagerProps> = ({
   };
 
   const handleRestoreItem = async (item: any) => {
+    if (!canDeleteItems) return;
     try {
       const res = await fetch(`/api/menu/${item.id}`, {
         method: "PUT",
@@ -280,6 +284,7 @@ export const MenuManager: React.FC<MenuManagerProps> = ({
         </div>
 
         <div className="flex items-center gap-2">
+          {canDeleteItems && (
           <button
             onClick={() => {
               const next = !showArchived;
@@ -293,6 +298,7 @@ export const MenuManager: React.FC<MenuManagerProps> = ({
             <Trash2 className="w-3.5 h-3.5" />
             <span>{showArchived ? "Back to menu" : "Deleted items"}</span>
           </button>
+          )}
           <div className="relative">
             <Search className="w-3.5 h-3.5 text-neutral-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
             <input
@@ -307,7 +313,7 @@ export const MenuManager: React.FC<MenuManagerProps> = ({
       </div>
 
       {/* Deleted (archived) items — restorable, history untouched */}
-      {showArchived ? (
+      {showArchived && canDeleteItems ? (
         <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
           <div className="bg-neutral-900 border border-neutral-800 rounded-2xl overflow-hidden shadow-xl">
             <div className="px-4 py-3 border-b border-neutral-800">
@@ -421,6 +427,7 @@ export const MenuManager: React.FC<MenuManagerProps> = ({
                     >
                       Edit
                     </button>
+                    {canDeleteItems && (
                     <button
                       onClick={() => {
                         setDeleteError("");
@@ -432,6 +439,7 @@ export const MenuManager: React.FC<MenuManagerProps> = ({
                       <Trash2 className="w-4 h-4" />
                       <span>Delete</span>
                     </button>
+                    )}
                   </div>
                 </div>
               ))
@@ -511,6 +519,7 @@ export const MenuManager: React.FC<MenuManagerProps> = ({
                     >
                       Edit
                     </button>
+                    {canDeleteItems && (
                     <button
                       onClick={() => {
                         setDeleteError("");
@@ -521,6 +530,7 @@ export const MenuManager: React.FC<MenuManagerProps> = ({
                       <Trash2 className="w-3.5 h-3.5" />
                       <span>Delete</span>
                     </button>
+                    )}
                   </td>
                 </tr>
               ))}

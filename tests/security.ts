@@ -138,8 +138,14 @@ async function main() {
   check((await request("/api/menu?includeArchived=1", "GET", undefined, owner)).body.items.some((i: any) => i.id === deletableId && i.isArchived === true), "removed item is archived, not erased");
   const soldHistory = await request(`/api/orders/${soldDish.body.order.id}`, "GET", undefined, owner);
   check(soldHistory.status === 200 && soldHistory.body.order.items.some((i: any) => i.itemName === "Delete Me Dish"), "a removed dish stays on the orders that sold it");
+  // Removal is owner-only: a manager holds menu management, yet both the
+  // DELETE and the restore side door (PUT isArchived) refuse them.
+  check((await request(`/api/menu/${deletableId}`, "DELETE", {}, manager)).status === 403, "manager cannot remove menu items — owner only");
+  check((await request(`/api/menu/${deletableId}`, "PUT", { isArchived: false }, manager)).status === 403, "manager cannot restore menu items either");
+  check((await request("/api/menu?includeArchived=1", "GET", undefined, owner)).body.items.some((i: any) => i.id === deletableId && i.isArchived === true), "the refused manager attempts change nothing");
   check((await request(`/api/menu/${deletableId}`, "PUT", { isArchived: false, isAvailable: false }, owner)).status === 200, "owner restores a removed item");
   check((await request("/api/menu", "GET", undefined, owner)).body.items.some((i: any) => i.id === deletableId && i.isArchived === false), "restored item returns to the menu list");
+  check((await request(`/api/menu/${deletableId}`, "PUT", { price: "13.00" }, manager)).status === 200, "manager can still edit menu items");
   check((await request(`/api/menu/99999999`, "DELETE", {}, owner)).status === 404, "removing a missing menu item is a 404");
   if (soldDish.body.order?.id) await request(`/api/orders/${soldDish.body.order.id}`, "DELETE", {}, owner);
   const staff = await request("/api/staff", "GET", undefined, manager);

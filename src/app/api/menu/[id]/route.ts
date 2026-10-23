@@ -3,12 +3,37 @@ import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { menuItems, auditLogs } from "@/db/schema";
 import { eq } from "drizzle-orm";
+import { getSessionUser } from "@/lib/guard";
+
+/**
+ * Removing an item from the menu (and bringing one back) is owner-only —
+ * stricter than general menu management. A role check, not a permission,
+ * so per-user permission selections can never grant it to a manager.
+ */
+async function requireOwnerForArchiveChange(): Promise<NextResponse | null> {
+  const actor = await getSessionUser();
+  if (!actor || actor.role !== "super_admin") {
+    return NextResponse.json(
+      { error: "Only the owner can remove or restore menu items" },
+      { status: 403 },
+    );
+  }
+  return null;
+}
 
 async function handlePUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
     const itemId = Number(id);
     const body = await req.json();
+
+    // Editing is menu management; archiving or restoring is owner-only, so
+    // a PUT that touches isArchived must come from the owner. This closes
+    // the side door around the DELETE rule below.
+    if (Object.prototype.hasOwnProperty.call(body, "isArchived")) {
+      const refused = await requireOwnerForArchiveChange();
+      if (refused) return refused;
+    }
 
     const [updated] = await db
       .update(menuItems)
@@ -41,6 +66,7 @@ async function handlePUT(req: Request, { params }: { params: Promise<{ id: strin
  * menu endpoints stop returning it, so it leaves the till grid and the
  * Menu Manager list at once — and it can be restored from the Deleted
  * view. (The daily, reversible "86" remains the isAvailable toggle.)
+ * Owner-only: see requireOwnerForArchiveChange.
  */
 async function handleDELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -49,6 +75,9 @@ async function handleDELETE(req: Request, { params }: { params: Promise<{ id: st
     if (!Number.isSafeInteger(itemId) || itemId <= 0) {
       return NextResponse.json({ error: "Invalid menu item id" }, { status: 400 });
     }
+
+    const refused = await requireOwnerForArchiveChange();
+    if (refused) return refused;
 
     const [archived] = await db
       .update(menuItems)
