@@ -1,0 +1,15 @@
+-- Menu item deletion (Oct 2026).
+--
+-- Until now there was no way to remove a dish from the menu: the Menu
+-- Manager screen offered only Edit and the 86 (availability) toggle, and
+-- the DELETE endpoint merely flipped is_available off. A hard DELETE of
+-- the row is not an option either — order_items holds a foreign key to
+-- menu_items and a dish that has been sold is part of sales history and
+-- reports, which must never be erased.
+--
+-- Deleting an item therefore archives it: the row stays (history and
+-- reports keep working byte-for-byte), but the menu endpoints stop
+-- returning it, so it disappears from the till grid and the Menu Manager
+-- list immediately. Archived items can be restored from the manager's
+-- Deleted view, so an accidental removal is recoverable.
+ALTER TABLE menu_items ADD COLUMN IF NOT EXISTS is_archived boolean NOT NULL DEFAULT false;

@@ -125,6 +125,23 @@ async function main() {
   // below — deletion returns exactly what the order consumed.
   check((await request(`/api/orders/${financeOrderId}`, "DELETE", {}, owner)).status === 200, "the finance probe sale erases cleanly, leaving fixture stock untouched");
   check((await request("/api/menu", "POST", { name: "Bad", categoryId: 1, price: 1 }, cashier)).status === 403, "cashier cannot modify menu");
+  // Menu removal archives: the dish leaves every menu list at once, a sold
+  // dish's history is untouched, and the Deleted view can bring it back.
+  const deletable = await request("/api/menu", "POST", { name: "Delete Me Dish", categoryId: 1, price: "12.50" }, owner);
+  check(deletable.status === 200 && deletable.body.item?.id > 0, "owner creates a menu item to remove");
+  const deletableId = deletable.body.item.id;
+  const soldDish = await request("/api/orders", "POST", order("menu-delete-history", { items: [{ menuItemId: deletableId, quantity: 1 }] }), cashier);
+  check(soldDish.status === 200, "the dish sells before it is removed");
+  check((await request(`/api/menu/${deletableId}`, "DELETE", {}, cashier)).status === 403, "cashier cannot remove menu items");
+  check((await request(`/api/menu/${deletableId}`, "DELETE", {}, owner)).status === 200, "owner removes a sold menu item");
+  check(!(await request("/api/menu", "GET", undefined, owner)).body.items.some((i: any) => i.id === deletableId), "removed item leaves the menu list");
+  check((await request("/api/menu?includeArchived=1", "GET", undefined, owner)).body.items.some((i: any) => i.id === deletableId && i.isArchived === true), "removed item is archived, not erased");
+  const soldHistory = await request(`/api/orders/${soldDish.body.order.id}`, "GET", undefined, owner);
+  check(soldHistory.status === 200 && soldHistory.body.order.items.some((i: any) => i.itemName === "Delete Me Dish"), "a removed dish stays on the orders that sold it");
+  check((await request(`/api/menu/${deletableId}`, "PUT", { isArchived: false, isAvailable: false }, owner)).status === 200, "owner restores a removed item");
+  check((await request("/api/menu", "GET", undefined, owner)).body.items.some((i: any) => i.id === deletableId && i.isArchived === false), "restored item returns to the menu list");
+  check((await request(`/api/menu/99999999`, "DELETE", {}, owner)).status === 404, "removing a missing menu item is a 404");
+  if (soldDish.body.order?.id) await request(`/api/orders/${soldDish.body.order.id}`, "DELETE", {}, owner);
   const staff = await request("/api/staff", "GET", undefined, manager);
   check(staff.status === 200 && staff.body.staff.every((u: any) => u.branchId === 1 && !('pin' in u) && !('passwordHash' in u) && !('pinLookup' in u)), "staff list scoped and credentials redacted");
   check((await request("/api/staff", "POST", { action: "create_employee", name: "Escalation", email: "escalate@test.invalid", role: "super_admin", password: "Long-enough-password" }, manager)).status === 403, "manager cannot create owner");
