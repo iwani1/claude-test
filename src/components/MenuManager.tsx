@@ -29,18 +29,34 @@ function fileToMenuPhoto(file: File): Promise<string> {
     const url = URL.createObjectURL(file);
     const img = new window.Image();
     img.onload = () => {
-      const scale = Math.min(1, 900 / Math.max(img.width, img.height));
-      const canvas = document.createElement("canvas");
-      canvas.width = Math.max(1, Math.round(img.width * scale));
-      canvas.height = Math.max(1, Math.round(img.height * scale));
-      const ctx = canvas.getContext("2d");
+      // Size budget: the photo is stored on the item and returned with
+      // every menu fetch (and API writes cap at 1MB), so step size and
+      // quality down until it fits instead of failing opaquely later.
+      const BUDGET = 380_000;
+      const attempts: Array<[number, number]> = [
+        [900, 0.82],
+        [720, 0.74],
+        [560, 0.66],
+        [420, 0.58],
+      ];
+      let result: string | null = null;
+      for (const [maxDim, quality] of attempts) {
+        const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, Math.round(img.width * scale));
+        canvas.height = Math.max(1, Math.round(img.height * scale));
+        const ctx = canvas.getContext("2d");
+        if (!ctx) break;
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        result = canvas.toDataURL("image/jpeg", quality);
+        if (result.length <= BUDGET) break;
+      }
       URL.revokeObjectURL(url);
-      if (!ctx) {
-        reject(new Error("no-canvas"));
+      if (!result || result.length > BUDGET) {
+        reject(new Error("photo-too-detailed"));
         return;
       }
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      resolve(canvas.toDataURL("image/jpeg", 0.82));
+      resolve(result);
     };
     img.onerror = () => {
       URL.revokeObjectURL(url);
@@ -659,7 +675,12 @@ export const MenuManager: React.FC<MenuManagerProps> = ({
                         setImageUrl(dataUrl);
                         notify("Photo attached — save the item to keep it.", "ok");
                       })
-                      .catch(() => notify("That photo could not be read.", "error"));
+                      .catch(() =>
+                        notify(
+                          "That photo could not be stored — try a smaller or simpler image.",
+                          "error",
+                        ),
+                      );
                   }}
                 />
                 <input

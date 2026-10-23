@@ -15,10 +15,19 @@ import { hideCost, maySeeCost } from "@/lib/cost-visibility";
 
 async function handleGET(req: Request) {
   try {
-    const showCost = maySeeCost(await getSessionUser());
+    const sessionUser = await getSessionUser();
+    const showCost = maySeeCost(sessionUser);
     // Deleted (archived) dishes are hidden everywhere by default; the Menu
-    // Manager's Deleted view opts in so an item can be restored.
+    // Manager's Deleted view opts in so an item can be restored. That list
+    // is menu-management data, so it needs the menu permission — a plain
+    // session is not enough.
     const includeArchived = new URL(req.url).searchParams.get("includeArchived") === "1";
+    if (includeArchived && !sessionUser?.permissions?.canManageMenu) {
+      return NextResponse.json(
+        { error: "Deleted items are only visible to menu managers" },
+        { status: 403 },
+      );
+    }
     const categories = await db
       .select()
       .from(menuCategories)
