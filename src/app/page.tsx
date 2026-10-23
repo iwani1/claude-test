@@ -436,6 +436,7 @@ export default function App() {
             categories={categories}
             menuItems={menuItems}
             onRefresh={fetchOperationalData}
+            canDeleteItems={currentUser.role === "super_admin"}
           />
         );
       case "recipes":
