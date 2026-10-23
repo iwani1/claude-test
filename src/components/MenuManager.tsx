@@ -28,20 +28,18 @@ function fileToMenuPhoto(file: File): Promise<string> {
     const url = URL.createObjectURL(file);
     const img = new window.Image();
     img.onload = () => {
-      try {
-        const scale = Math.min(1, 900 / Math.max(img.width, img.height));
-        const canvas = document.createElement("canvas");
-        canvas.width = Math.max(1, Math.round(img.width * scale));
-        canvas.height = Math.max(1, Math.round(img.height * scale));
-        const ctx = canvas.getContext("2d");
-        if (!ctx) throw new Error("no-canvas");
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        URL.revokeObjectURL(url);
-        resolve(canvas.toDataURL("image/jpeg", 0.82));
-      } catch (err) {
-        URL.revokeObjectURL(url);
-        reject(err);
+      const scale = Math.min(1, 900 / Math.max(img.width, img.height));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.round(img.width * scale));
+      canvas.height = Math.max(1, Math.round(img.height * scale));
+      const ctx = canvas.getContext("2d");
+      URL.revokeObjectURL(url);
+      if (!ctx) {
+        reject(new Error("no-canvas"));
+        return;
       }
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      resolve(canvas.toDataURL("image/jpeg", 0.82));
     };
     img.onerror = () => {
       URL.revokeObjectURL(url);
