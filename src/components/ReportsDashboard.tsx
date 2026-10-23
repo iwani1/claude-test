@@ -222,7 +222,7 @@ export const ReportsDashboard: React.FC<{ canExportTransactions?: boolean }> = (
         )}
         <section className="grid grid-cols-1 sm:grid-cols-3 gap-3" aria-label="Collection reconciliation">
           {[["Gross collections", summary.grossCollections], ["Refunds recorded", summary.totalRefunds], ["Net collections", summary.netCollections]].map(([label, value]) => (
-            <div key={label} className="p-4 rounded-2xl bg-neutral-900 border border-neutral-800">
+            <div key={label} className="foil-card p-4 rounded-2xl bg-neutral-900 border border-neutral-800">
               <h3 className="text-xs text-neutral-400">{label}</h3><p className="text-xl font-mono text-white">GH₵{Number(value || 0).toFixed(2)}</p>
             </div>
           ))}
@@ -233,7 +233,7 @@ export const ReportsDashboard: React.FC<{ canExportTransactions?: boolean }> = (
         <p className="text-xs text-neutral-500">CSV exports contain payment/refund events for this timeframe; review and map them before importing into accounting software. Item/category charts remain gross bill analysis.</p>
         {/* KPI Cards Grid */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3.5">
-          <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-4 shadow-lg">
+          <div className="foil-card bg-neutral-900 border border-neutral-800 rounded-2xl p-4 shadow-lg">
             <span className="text-[0.625rem] text-neutral-400 uppercase font-bold tracking-wider block">
               Gross Billed Sales
             </span>
@@ -245,7 +245,7 @@ export const ReportsDashboard: React.FC<{ canExportTransactions?: boolean }> = (
             </div>
           </div>
 
-          <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-4 shadow-lg">
+          <div className="foil-card bg-neutral-900 border border-neutral-800 rounded-2xl p-4 shadow-lg">
             <span className="text-[0.625rem] text-neutral-400 uppercase font-bold tracking-wider block">
               Gross Bill Margin (Estimate)
             </span>
@@ -257,7 +257,7 @@ export const ReportsDashboard: React.FC<{ canExportTransactions?: boolean }> = (
             </div>
           </div>
 
-          <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-4 shadow-lg">
+          <div className="foil-card bg-neutral-900 border border-neutral-800 rounded-2xl p-4 shadow-lg">
             <span className="text-[0.625rem] text-neutral-400 uppercase font-bold tracking-wider block">
               Food Cost Ratio
             </span>
@@ -267,7 +267,7 @@ export const ReportsDashboard: React.FC<{ canExportTransactions?: boolean }> = (
             <div className="text-[0.6875rem] text-neutral-500 mt-1">Industry target: 28-35%</div>
           </div>
 
-          <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-4 shadow-lg">
+          <div className="foil-card bg-neutral-900 border border-neutral-800 rounded-2xl p-4 shadow-lg">
             <span className="text-[0.625rem] text-neutral-400 uppercase font-bold tracking-wider block">
               Average Check (AOV)
             </span>

@@ -16,6 +16,11 @@ import { syncOfflineQueueToServer } from "@/lib/offline-storage";
 import { DisplaySizeControl } from "@/components/DisplaySizeControl";
 import { PinSwitchModal } from "@/components/PinSwitchModal";
 import { notify } from "@/lib/notify";
+import {
+  AnimatedSignature,
+  CassetteSyncIndicator,
+  DynamicButton,
+} from "@/components/interface-studies";
 import type { CurrentUser } from "@/lib/api-types";
 
 /**
@@ -72,7 +77,10 @@ export const TerminalControls: React.FC<{
         </div>
         <div className="text-left min-w-0 hidden sm:block">
           <div className="text-[0.8125rem] font-semibold leading-tight text-neutral-100 truncate">
-            {currentUser.name || "Staff"}
+            <AnimatedSignature
+              key={currentUser.name || "Staff"}
+              name={currentUser.name || "Staff"}
+            />
           </div>
           <div className="text-[0.65625rem] text-amber-400 font-medium truncate">
             {roleLabel}
@@ -117,15 +125,21 @@ export const TerminalControls: React.FC<{
         {isOnline ? <Wifi className="w-4 h-4" /> : <WifiOff className="w-4 h-4" />}
         <span className="font-medium hidden sm:inline">{isOnline ? "Online" : "Offline"}</span>
         {offlineCount > 0 && (
-          <button
+          <DynamicButton
             onClick={handleManualSync}
-            disabled={isSyncing}
-            className="ml-0.5 px-2 h-7 bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 border border-amber-500/40 rounded-lg text-[0.6875rem] font-bold flex items-center gap-1 transition"
+            busy={isSyncing}
+            busyLabel="Syncing"
+            icon={
+              <span className="flex items-center gap-1">
+                <CassetteSyncIndicator spinning={isSyncing} />
+                <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? "animate-spin" : ""}`} />
+              </span>
+            }
+            className="ml-0.5 px-2 h-7 bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 border border-amber-500/40 rounded-lg text-[0.6875rem] font-bold transition"
             title="Sync offline queue"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? "animate-spin" : ""}`} />
-            <span>{offlineCount}</span>
-          </button>
+            {offlineCount} queued
+          </DynamicButton>
         )}
       </div>
       <button

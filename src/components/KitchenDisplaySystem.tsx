@@ -16,6 +16,7 @@ import {
   Printer,
 } from "lucide-react";
 import { KitchenTicketModal } from "./KitchenTicketModal";
+import { ScrollFadeList } from "@/components/interface-studies";
 import { apiErrorMessage, apiFetch } from "@/lib/api-client";
 import { notify } from "@/lib/notify";
 
@@ -237,7 +238,7 @@ export const KitchenDisplaySystem: React.FC = () => {
                   </div>
 
                   {/* Ticket Items */}
-                  <div className="p-4 space-y-3 flex-1 overflow-y-auto max-h-96 custom-scrollbar">
+                  <ScrollFadeList className="p-4 space-y-3 flex-1 overflow-y-auto max-h-96 custom-scrollbar">
                     {ticket.items?.map((it: any, idx: number) => (
                       <div
                         key={idx}
@@ -279,7 +280,7 @@ export const KitchenDisplaySystem: React.FC = () => {
                         {ticket.orderNotes}
                       </div>
                     )}
-                  </div>
+                  </ScrollFadeList>
 
                   {/* Footer Actions */}
                   <div className="p-3 bg-neutral-850 border-t border-neutral-800 flex gap-2 text-xs">

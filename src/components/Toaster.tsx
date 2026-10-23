@@ -54,6 +54,17 @@ export function Toaster() {
           >
             <Icon className="w-5 h-5 shrink-0 mt-0.5" />
             <span className="flex-1 text-sm font-semibold leading-snug">{notice.text}</span>
+            {notice.actionLabel && notice.onAction && (
+              <button
+                onClick={() => {
+                  notice.onAction?.();
+                  setNotices((current) => current.filter((n) => n.id !== notice.id));
+                }}
+                className="pointer-events-auto shrink-0 px-3 py-2 -my-1 rounded-lg bg-white/15 hover:bg-white/25 font-black text-xs uppercase tracking-wide"
+              >
+                {notice.actionLabel}
+              </button>
+            )}
             <button
               onClick={() => setNotices((current) => current.filter((n) => n.id !== notice.id))}
               className="pointer-events-auto shrink-0 -mr-1 p-2 -my-1 rounded-lg hover:bg-white/10"

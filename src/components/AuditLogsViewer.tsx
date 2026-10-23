@@ -4,6 +4,7 @@ import { LoadFailure } from "./LoadFailure";
 
 import React, { useState, useEffect, useCallback } from "react";
 import { FileText, Search, Shield, RefreshCw } from "lucide-react";
+import { ScrollFadeList } from "@/components/interface-studies";
 
 export const AuditLogsViewer: React.FC = () => {
   const [logs, setLogs] = useState<any[]>([]);
@@ -62,7 +63,7 @@ export const AuditLogsViewer: React.FC = () => {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
+      <ScrollFadeList className="flex-1 overflow-y-auto p-4 custom-scrollbar">
         <div className="bg-neutral-900 border border-neutral-800 rounded-2xl overflow-hidden shadow-xl">
           <div className="md:hidden divide-y divide-neutral-800/70">
             {filteredLogs.length === 0 ? (
@@ -124,7 +125,7 @@ export const AuditLogsViewer: React.FC = () => {
           </table>
           </div>
         </div>
-      </div>
+      </ScrollFadeList>
     </div>
   );
 };

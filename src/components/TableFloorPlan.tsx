@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { apiErrorMessage, apiFetch } from "@/lib/api-client";
 import { notify } from "@/lib/notify";
+import { FannedTicketStack } from "@/components/interface-studies";
 
 interface TableFloorPlanProps {
   areas: any[];
@@ -207,8 +208,9 @@ export const TableFloorPlan: React.FC<TableFloorPlanProps> = ({
             return (
               <div
                 key={tbl.id}
-                className={`bg-neutral-900 border ${borderColor} rounded-2xl p-4 flex flex-col justify-between shadow-lg transition-all duration-150 hover:shadow-2xl`}
+                className={`relative bg-neutral-900 border ${borderColor} rounded-2xl p-4 flex flex-col justify-between shadow-lg transition-all duration-150 hover:shadow-2xl`}
               >
+                {isOccupied && <FannedTicketStack count={2} />}
                 <div>
                   <div className="flex items-center justify-between mb-2">
                     <span className="font-mono font-bold text-base text-white">

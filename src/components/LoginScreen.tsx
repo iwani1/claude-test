@@ -9,9 +9,9 @@ import {
   LogIn,
   ShieldCheck,
   AlertCircle,
-  Loader2,
   KeyRound,
 } from "lucide-react";
+import { LogoTraceLoader, TactileButton } from "@/components/interface-studies";
 
 interface LoginScreenProps {
   onAuthenticated: (user: any) => void;
@@ -229,9 +229,8 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onAuthenticated }) => 
               </div>
 
               {isBusy && (
-                <div className="flex items-center justify-center gap-2 text-xs text-amber-400">
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Verifying authorization...</span>
+                <div className="flex items-center justify-center text-xs text-amber-400">
+                  <LogoTraceLoader label="Verifying authorization..." />
                 </div>
               )}
             </div>
@@ -270,18 +269,21 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onAuthenticated }) => 
                 </div>
               </div>
 
-              <button
+              <TactileButton
                 type="submit"
                 disabled={isBusy}
-                className="w-full py-2.5 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-black font-bold rounded-xl text-sm flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20 transition"
+                toneClass="bg-amber-500 hover:bg-amber-400 text-black font-bold text-sm"
+                className="w-full h-11 rounded-xl disabled:opacity-50"
               >
                 {isBusy ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <LogoTraceLoader label="Authenticating..." />
                 ) : (
-                  <LogIn className="w-4 h-4" />
+                  <>
+                    <LogIn className="w-4 h-4" />
+                    <span>Sign In to Terminal</span>
+                  </>
                 )}
-                <span>{isBusy ? "Authenticating..." : "Sign In to Terminal"}</span>
-              </button>
+              </TactileButton>
             </form>
           )}
 
