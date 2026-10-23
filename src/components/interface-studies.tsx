@@ -198,10 +198,16 @@ export function TactileButton({
 }: TactileButtonProps) {
   return (
     <button
-      className={`tactile-btn ${toneClass} ${className}`}
+      className={`tactile-btn ${className}`}
       {...rest}
     >
-      <span className="tactile-btn-face">{children}</span>
+      {/* The colour MUST live on the face: `.tactile-btn` sets
+          `background: transparent` in globals.css (it is only the edge
+          under the face), and that rule follows the Tailwind import, so
+          a bg-* class on the <button> itself is silently overridden and
+          the button renders colourless. That bug shipped once (PR #29)
+          and drained New Order / Settle Bill / Sign In to charcoal. */}
+      <span className={`tactile-btn-face ${toneClass}`}>{children}</span>
     </button>
   );
 }
