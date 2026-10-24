@@ -20,7 +20,19 @@ export const POST = secureRoute(async req => {
     throw new ApiError(401, "Invalid PIN");
   }
   const session = await activateUser(requestContext.getStore()!.tx, user);
-  await db.insert(auditLogs).values({ userId: current.id, userName: current.name, action: "pos_quick_pin_switch", entityType: "user", entityId: String(user.id) });
+  // Name the person who is NOW signed in: they are the actor for everything
+  // that follows, and a row that names the person who just left misleads
+  // anyone reading the audit trail (it complicated a real disputed-payment
+  // investigation in Oct 2026). The outgoing user stays traceable in the
+  // details and as the entity the switch acted on.
+  await db.insert(auditLogs).values({
+    userId: user.id,
+    userName: user.name,
+    action: "pos_quick_pin_switch",
+    entityType: "user",
+    entityId: String(current.id),
+    details: `Quick PIN switch at the till: ${current.name} handed over to ${user.name}`,
+  });
   const response = NextResponse.json({ success: true, user: publicUser(session) });
   response.cookies.set("pos_session", createToken(session), cookieOptions());
   return response;

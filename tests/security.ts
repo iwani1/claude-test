@@ -136,6 +136,8 @@ async function main() {
   check((await request(`/api/menu/${deletableId}`, "DELETE", {}, owner)).status === 200, "owner removes a sold menu item");
   check(!(await request("/api/menu", "GET", undefined, owner)).body.items.some((i: any) => i.id === deletableId), "removed item leaves the menu list");
   check((await request("/api/menu?includeArchived=1", "GET", undefined, owner)).body.items.some((i: any) => i.id === deletableId && i.isArchived === true), "removed item is archived, not erased");
+  check((await request("/api/menu?includeArchived=1", "GET", undefined, cashier)).status === 403, "cashier cannot fetch the deleted-items list");
+  check((await request("/api/menu?includeArchived=1", "GET", undefined, manager)).status === 200, "menu managers can fetch the deleted-items list");
   const soldHistory = await request(`/api/orders/${soldDish.body.order.id}`, "GET", undefined, owner);
   check(soldHistory.status === 200 && soldHistory.body.order.items.some((i: any) => i.itemName === "Delete Me Dish"), "a removed dish stays on the orders that sold it");
   // Removal is owner-only: a manager holds menu management, yet both the
@@ -175,6 +177,14 @@ async function main() {
   check((await request("/api/auth/switch-pin", "POST", { pin: "4455" }, pinLogin2.cookie)).status === 401, "old PIN rejected after update");
   const switch2 = await request("/api/auth/switch-pin", "POST", { pin: "6677" }, pinLogin2.cookie);
   check(switch2.status === 200 && switch2.body.user.id === pinStaff.body.employee.id, "updated PIN works for quick switch");
+  // The audit row for a switch must name the person who is NOW signed in —
+  // naming the person who left misread a real investigation (Oct 2026).
+  const switchTarget = await request("/api/staff", "POST", { action: "create_employee", name: "Switch Target", email: "switchtarget@test.invalid", role: "cashier", password: "Switch-target-123!", pin: "2211" }, owner);
+  check(switchTarget.status === 200, "owner creates a colleague to switch to");
+  const switch3 = await request("/api/auth/switch-pin", "POST", { pin: "2211" }, pinLogin2.cookie);
+  check(switch3.status === 200 && switch3.body.user.name === "Switch Target", "switching to a colleague works");
+  const lastSwitch = (await admin.query("SELECT user_name, entity_id, details FROM audit_logs WHERE action = 'pos_quick_pin_switch' ORDER BY id DESC LIMIT 1")).rows[0];
+  check(lastSwitch?.user_name === "Switch Target" && String(lastSwitch?.entity_id) === String(pinStaff.body.employee.id) && /PIN Test/.test(String(lastSwitch?.details || "")), "the PIN-switch audit row names the incoming user, outgoing user in details");
   const dup = await request("/api/staff", "POST", { action: "update_pin", userId: pwStaff.body.employee.id, pin: "6677" }, owner);
   check(dup.status === 409 && /already used/i.test(dup.body.error), "duplicate branch PIN rejected with clear message");
   const dupCreate = await request("/api/staff", "POST", { action: "create_employee", name: "Dup PIN", email: "duppin@test.invalid", role: "cashier", password: "Dup-pin-password-123!", pin: "6677" }, owner);
