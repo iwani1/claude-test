@@ -438,10 +438,33 @@ sudo ./scripts/deploy-vps.sh
 ```
 
 It takes the backup, pulls the branch, installs dependencies only if
-`package-lock.json` moved, builds, restarts the service, waits for
-`/api/health`, and prints the rollback for the commit it replaced. It is safe to
-re-run: if anything fails, the next run finishes the job instead of reporting
-"nothing to deploy".
+`package-lock.json` moved, then:
+
+- **builds while the app keeps serving.** The build goes into `.next-build`;
+  the running app reads only `.next`, so tills are not disturbed and a failed
+  build changes nothing;
+- **keeps the finished build** as `.next-release-<commit>-<time>`;
+- **switches over in one step**: `.next` becomes a link to the new release, the
+  service restarts (a few seconds), and the script waits for `/api/health`;
+- **switches straight back by itself** if the new release does not answer;
+- keeps the last three releases, so a rollback never needs a rebuild.
+
+It warns when shifts are open, because the restart briefly interrupts the tills;
+quiet hours are best. It is safe to re-run: if anything fails, the next run
+finishes the job instead of reporting "nothing to deploy".
+
+**Roll back** to the release that was live before (seconds, no rebuild):
+
+```sh
+sudo ./scripts/deploy-vps.sh --rollback
+```
+
+Run it again to return. The database is not rolled back: migrations here only
+add, so older code normally runs fine against the newer schema.
+
+The first deploy that *brings* this feature still runs the previous script and
+builds the old way; release folders start with the deploy after it, which also
+keeps the existing build as a release you can roll back to.
 
 | It refuses to run when | Why |
 |---|---|
@@ -468,8 +491,8 @@ Everything it needs can be overridden for a non-standard install:
 `POS_DB` (`pos`), `BACKUP_DIR` (`/var/backups/pos`).
 
 If a deploy fails after the checkout moved, the script leaves
-`/var/backups/pos/deploy-incomplete` and prints the exact commands to roll the
-code back to the previous commit. The database backup taken at the start of
+`/var/backups/pos/deploy-incomplete`; the live app keeps serving the release it
+had, and re-running the script finishes the job. The database backup taken at the start of
 that same run is named `pos-before-<commit>-<timestamp>.dump`.
 
 Ownership note: the script runs `git` as root and the app as `pos`, and it

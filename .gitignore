@@ -1,5 +1,11 @@
 node_modules/
-.next/
+# .next is a link to the live release on servers (scripts/deploy-vps.sh), so
+# ignore it as a file too, not only as a directory.
+.next
+# Deploy staging and release folders (scripts/deploy-vps.sh).
+.next-build/
+.next-release-*/
+.next-previous-release
 .env
 .env.*
 !.env.production.example

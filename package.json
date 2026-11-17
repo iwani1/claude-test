@@ -15,6 +15,7 @@
     "test:legacy-import": "tsx tests/legacy-import.ts",
     "test:security": "tsx tests/run-security.ts",
     "test:backup": "bash tests/backup-script.sh",
+    "test:deploy": "bash tests/deploy-releases.sh",
     "test": "npm run test:security",
     "db:bootstrap": "tsx src/db/seed.ts"
   },

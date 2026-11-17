@@ -10,8 +10,12 @@
 #   3. fetches the tracking branch and fast-forwards
 #   4. installs dependencies only when package-lock.json actually changed
 #   5. stops before building if there are migrations without a migration URL
-#   6. builds, restarts the service, and waits for /api/health to answer
-#   7. prints the exact rollback for the commit it replaced
+#   6. builds into .next-build while the live app keeps serving, keeps the
+#      finished build as .next-releases/<sha>-<time>, switches .next to it in one
+#      atomic step, restarts, and waits for /api/health. If the new release does
+#      not answer, it switches straight back to the previous one by itself.
+#   7. keeps the last 3 releases, so rollback never needs a rebuild:
+#        sudo ./scripts/deploy-vps.sh --rollback
 #
 # Every step says what it is doing. Nothing here touches the database schema
 # unless a new migration file arrived AND you provided MIGRATION_DATABASE_URL.
@@ -74,15 +78,68 @@ if [[ "${POS_DEPLOY_REEXEC:-0}" != "1" ]]; then
   esac
 fi
 
+# Sets HEALTHY=1 or BEHIND=1 (database behind this release), else neither.
+wait_for_health() {
+  printf '    Waiting for %s/api/health ' "$POS_URL"
+  HEALTHY=0; BEHIND=0
+  for _ in $(seq 1 30); do
+    # No -f: a 503 still carries a body, and that body says whether the
+    # database is simply behind this release (migrations not applied yet).
+    if curl -sS --max-time 5 "$POS_URL/api/health" -o /tmp/pos-health.json 2>/dev/null; then
+      if grep -q '"ok":true' /tmp/pos-health.json; then HEALTHY=1; printf ' ok\n'; return 0; fi
+      if grep -q 'schema-behind' /tmp/pos-health.json; then BEHIND=1; printf ' schema-behind\n'; return 0; fi
+    fi
+    printf '.'; sleep 2
+  done
+  printf '\n'
+}
+
+load_release_lib() {
+  # From the checkout, not this script's temporary copy.
+  [[ -f "$POS_DIR/scripts/lib/releases.sh" ]] || die "$POS_DIR/scripts/lib/releases.sh is missing; this checkout predates release folders"
+  # shellcheck source=lib/releases.sh
+  source "$POS_DIR/scripts/lib/releases.sh"
+}
+
+# ----------------------------------------------------------------- rollback --
+# Switch the live app back to the release that was live before the current one.
+# No rebuild, so it takes seconds. The database is NOT rolled back: if the
+# release being left applied migrations, the older code runs against the newer
+# schema (migrations here are additive, so that is normally safe).
+if [[ "${1:-}" == "--rollback" ]]; then
+  [[ "$(id -u)" -eq 0 ]] || die "Run this with sudo: sudo $POS_DIR/scripts/deploy-vps.sh --rollback"
+  load_release_lib
+  CURRENT="$(active_release)"; TARGET="$(previous_release)"
+  [[ -n "$TARGET" && -d "$(release_path "$TARGET")" ]] || die "There is no previous release to go back to."
+  step "Rolling back: $CURRENT -> $TARGET"
+  run activate_release "$TARGET"
+  # Keep the source checkout in step with what is served, so the next deploy
+  # compares against the right commit.
+  TARGET_SHA="$(release_commit "$TARGET")"
+  if git -C "$POS_DIR" rev-parse --verify -q "$TARGET_SHA^{commit}" >/dev/null; then
+    run as_user "$POS_USER" git -C "$POS_DIR" reset --hard -q "$TARGET_SHA"
+  else
+    warn "Commit $TARGET_SHA is not in the checkout; the build was switched but the source was left as it is."
+  fi
+  run systemctl restart "$POS_SERVICE"
+  if [[ "$DRY_RUN" != "1" ]]; then
+    wait_for_health
+    [[ "$HEALTHY" == "1" ]] || die "The rolled-back release did not answer on /api/health. Check: journalctl -u $POS_SERVICE -n 50"
+  fi
+  step "Rolled back to $TARGET"
+  info "To return to $CURRENT: sudo $POS_DIR/scripts/deploy-vps.sh --rollback"
+  exit 0
+fi
+
 if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
-  sed -n '3,30p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '3,28p' "$0" | sed 's/^# \{0,1\}//'
   exit 0
 fi
 
 # ---------------------------------------------------------------- preflight --
 step "Preflight"
 
-[[ "$(id -u)" -eq 0 ]] || die "Run this with sudo: sudo $0"
+[[ "$(id -u)" -eq 0 ]] || die "Run this with sudo: sudo $POS_DIR/scripts/deploy-vps.sh"
 [[ -d "$POS_DIR/.git" ]] || die "$POS_DIR is not a git checkout — is the app installed there?"
 [[ -f "$POS_DIR/.env" ]] || die "$POS_DIR/.env is missing; the app cannot start without it"
 command -v git >/dev/null || die "git is not installed"
@@ -115,6 +172,11 @@ info "Branch:       $POS_BRANCH"
 info "Currently at: $OLD_SHA"
 info "Service:      $POS_SERVICE   Health: $POS_URL/api/health"
 [[ "$DRY_RUN" == "1" ]] && warn "DRY RUN — no changes will be made"
+OPEN_SHIFTS="$(as_user postgres psql -XAtq -d "$POS_DB" -c "select count(*) from shifts where status = 'open'" 2>/dev/null || echo unknown)"
+if [[ "$OPEN_SHIFTS" != "0" ]]; then
+  warn "Open shifts: $OPEN_SHIFTS. Staff may be trading. Building does not disturb them, but the"
+  warn "switch-over restarts the app: tills show 'try again' for a few seconds. Prefer quiet hours."
+fi
 
 # ------------------------------------------------------------- 1. backup ----
 step "1/6  Database backup (before anything else)"
@@ -207,37 +269,40 @@ else
 fi
 
 # ------------------------------------------------------------- 5. build -----
-step "5/6  Build"
-# The service runs as $POS_USER with ProtectSystem=full and WritePaths=.next,
-# so .next must belong to that user before the build writes into it.
-if [[ -d "$POS_DIR/.next" && "$(stat -c '%U' "$POS_DIR/.next")" != "$POS_USER" ]]; then
-  run chown -R "$POS_USER":"$POS_USER" "$POS_DIR/.next"
+step "5/6  Build (the live app keeps serving while this runs)"
+load_release_lib
+# Builds go to .next-build, never to the .next the running app serves (P3).
+if [[ -e "$POS_DIR/.next-build" ]]; then
+  info "Removing an unfinished build left by an earlier attempt"
+  run rm -rf -- "$POS_DIR/.next-build"
 fi
-( cd "$POS_DIR" && run as_user "$POS_USER" npm run build ) \
-  || die "Build failed — the running service is untouched (the old build is still what is being served).
-    Fix the error, then run this script again: it will see the unfinished deploy marker and continue.
-    To go back to the previous release instead:
-      cd $POS_DIR && git reset --hard $OLD_SHA && sudo -u $POS_USER npm run build && systemctl restart $POS_SERVICE"
-info "Build finished."
+# Reuse the live release's compiler cache, so the build is not from scratch.
+if [[ -d "$POS_DIR/.next/cache" ]]; then
+  run mkdir -p "$POS_DIR/.next-build"
+  run cp -a "$POS_DIR/.next/cache" "$POS_DIR/.next-build/cache"
+  run chown -R "$POS_USER":"$POS_USER" "$POS_DIR/.next-build"
+fi
+( cd "$POS_DIR" && run as_user "$POS_USER" env NEXT_DIST_DIR=.next-build npm run build ) \
+  || die "Build failed. The live app is untouched: it is still serving $(active_release || true)$([[ -L "$POS_DIR/.next" ]] || echo 'its existing build').
+    Fix the error, then run this script again: it will see the unfinished deploy marker and continue."
+RELEASE="${NEW_SHA:0:7}-$(date -u +%Y%m%dT%H%M%SZ)"
+if [[ "$DRY_RUN" != "1" ]]; then
+  store_build "$RELEASE" || die "The build finished but could not be kept as a release. The live app is untouched."
+fi
+info "Build kept as release $RELEASE."
 
-# --------------------------------------------------- 6. restart + verify ----
-step "6/6  Restart and verify"
-run systemctl restart "$POS_SERVICE"
-
+# --------------------------------------------------- 6. switch + verify -----
+step "6/6  Switch over, restart and verify"
 if [[ "$DRY_RUN" == "1" ]]; then
-  info "[dry-run] would wait for $POS_URL/api/health"
+  info "[dry-run] would switch .next to .next-releases/$RELEASE, restart $POS_SERVICE and wait for $POS_URL/api/health"
 else
-  printf '    Waiting for %s/api/health ' "$POS_URL"
-  HEALTHY=0; BEHIND=0
-  for _ in $(seq 1 30); do
-    # No -f: a 503 still carries a body, and that body says whether the
-    # database is simply behind this release (migrations not applied yet).
-    if curl -sS --max-time 5 "$POS_URL/api/health" -o /tmp/pos-health.json 2>/dev/null; then
-      if grep -q '"ok":true' /tmp/pos-health.json; then HEALTHY=1; printf ' ok\n'; break; fi
-      if grep -q 'schema-behind' /tmp/pos-health.json; then BEHIND=1; printf ' schema-behind\n'; break; fi
-    fi
-    printf '.'; sleep 2
-  done
+  # An install from before release folders serves a plain .next: keep it as a
+  # release too, so this first switch can still be rolled back.
+  adopt_plain_build "${OLD_SHA:0:7}-previous"
+  PREVIOUS_RELEASE="$(active_release)"
+  activate_release "$RELEASE"
+  systemctl restart "$POS_SERVICE"
+  wait_for_health
   if [[ "$BEHIND" == "1" ]]; then
     info "Health: $(cat /tmp/pos-health.json)"
     die "The app is up but the database is behind this release — do not roll the code back.
@@ -246,19 +311,27 @@ else
       sudo systemctl restart $POS_SERVICE
     the service log names the missing piece. Backup from this run: $DUMP"
   fi
-  [[ "$HEALTHY" == "1" ]] || {
-    printf '\n'
+  if [[ "$HEALTHY" != "1" ]]; then
     systemctl --no-pager --lines=30 status "$POS_SERVICE" || true
-    die "The service did not answer on /api/health. Roll back with:
-      cd $POS_DIR && git reset --hard $OLD_SHA && sudo -u $POS_USER npm run build && systemctl restart $POS_SERVICE
-    Database backup taken before this deploy: $DUMP"
-  }
+    if [[ -n "$PREVIOUS_RELEASE" ]]; then
+      warn "Release $RELEASE did not answer. Switching back to $PREVIOUS_RELEASE automatically."
+      activate_release "$PREVIOUS_RELEASE"
+      as_user "$POS_USER" git -C "$POS_DIR" reset --hard -q "$OLD_SHA" || true
+      systemctl restart "$POS_SERVICE"
+      wait_for_health
+      [[ "$HEALTHY" == "1" ]] && die "Release $RELEASE failed its health check; the app is back on $PREVIOUS_RELEASE and answering.
+    Investigate with: journalctl -u $POS_SERVICE -n 100. Database backup from this run: $DUMP"
+    fi
+    die "The service did not answer on /api/health, and switching back did not help either.
+    Check: journalctl -u $POS_SERVICE -n 100. Database backup taken before this deploy: $DUMP"
+  fi
   info "Health: $(cat /tmp/pos-health.json)"
   if curl -fsS --max-time 5 -o /dev/null "$POS_URL/sw.js"; then
     info "Offline app shell (/sw.js) is being served."
   else
     warn "/sw.js did not answer — offline shell will not install on devices."
   fi
+  prune_releases | sed 's/^/    /' || true
 fi
 
 # -------------------------------------------------------------- summary -----
@@ -271,7 +344,7 @@ else
   step "Deployed"
 fi
 info "$([[ "$DRY_RUN" == "1" ]] && echo 'Would be at:' || echo 'Now at:  ') $NEW_SHA  ($(git -C "$POS_DIR" log --oneline -1 "$NEW_SHA" | cut -c1-60))"
+info "Release: $RELEASE"
 info "Backup:  $DUMP"
-info "Rollback:
-      cd $POS_DIR && git reset --hard $OLD_SHA && sudo -u $POS_USER npm run build && systemctl restart $POS_SERVICE"
+info "Rollback (seconds, no rebuild):  sudo $POS_DIR/scripts/deploy-vps.sh --rollback"
 info "Logs:    journalctl -u $POS_SERVICE -f"
