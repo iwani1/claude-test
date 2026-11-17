@@ -26,13 +26,13 @@ the VPS is **not** fixed: it is lost on the next deploy and invisible to audits.
 | Severity | Open | Owner action | Fixed | Accepted |
 |---|---|---|---|---|
 | Critical | 0 | 1 | 1 | 0 |
-| High | 5 | 0 | 0 | 0 |
+| High | 1 | 0 | 4 | 0 |
 | Medium | 9 | 0 | 0 | 0 |
 | Low / Info | 11 | 0 | 3 | 0 |
 
 ## Go-live blockers
 
-N2 (owner action; owner has deferred making the repo private, see its row), N3, N4, N5, P1, P2. See the go-live checklist in
+N2 (owner action; owner has deferred making the repo private, see its row) and P1. N3, N4, N5 and P2 are fixed in PR #37. See the go-live checklist in
 [`PRODUCTION_READINESS_2026-11-17.md`](PRODUCTION_READINESS_2026-11-17.md).
 
 ## Application findings — [`AUDIT_2026-11-17.md`](AUDIT_2026-11-17.md)
@@ -41,11 +41,11 @@ N2 (owner action; owner has deferred making the repo private, see its row), N3, 
 |---|---|---|---|---|---|---|
 | N1 | Critical | Next.js 16.4.2 vulnerable (GHSA-mfr8-8qww-v76h); build and CI blocked | **Fixed** | PR #34 (`84e2b77`): `next` and `eslint-config-next` ^16.4.6 | 2026-11-17: `next` 16.4.6 installed, `npm audit --omit=dev` 0 vulnerabilities, `npm run build` passes | `package.json` |
 | N2 | Critical | Repo public; `2026-10-12_restpos.db`, `2026-10-15_restpos.db`, `11claude.zip` retrievable from history | **Owner action** | **Owner decision 2026-11-17: keep the repository public for now; making it private is deferred, not declined.** This is not *Accepted*: the finding stays open and remains a go-live blocker. Interim: rotate legacy credentials reused in the new system (staff passwords/PINs, `pos_owner`); push nothing sensitive. When going private, also purge the blobs from history. | 2026-11-17: repo still `public`; blobs present in history | GitHub settings; history at `ad6e134^`, `be3524e^`, `4cbbc90^` |
-| N3 | High | Till staff can remove or swap items on an open bill; no approval, no audit | Open | — | 2026-11-17 @ `06126e9` | `src/app/api/orders/[id]/edit/route.ts` (till carve-out; no audit insert) |
-| N4 | High | Any till user can cancel an unpaid order; audit row has no actor; stock returned | Open | — | 2026-11-17 @ `06126e9` | `src/app/api/orders/[id]/route.ts` `handlePATCH` |
-| N5 | High | PIN-collision message lets a manager enumerate PINs, then quick-switch to the owner | Open | — | 2026-11-17 @ `06126e9` | `src/app/api/staff/route.ts` (`update_pin`), `src/app/api/auth/switch-pin/route.ts` |
+| N3 | High | Till staff can remove or swap items on an open bill; no approval, no audit | **Fixed** | PR #37 (`3410660`): removing or reducing lines on a kitchen order needs a manager PIN from till staff; every removal logged as `order_items_removed` with actor, approver and items | `tests/security.ts` N3 checks (refused without PIN and unchanged; non-manager PIN refused and counted; manager PIN approves; logged; additions need no PIN; drafts need no PIN but are logged) | `src/app/api/orders/[id]/edit/route.ts`, `src/lib/manager-approval.ts`, `src/components/ManagerApprovalModal.tsx` |
+| N4 | High | Any till user can cancel an unpaid order; audit row has no actor; stock returned | **Fixed** | PR #37 (`3410660`): cancelling a kitchen order needs a manager PIN (owner/order-editors exempt); `order_cancelled` row records actor, approver, items and stock return; all order status rows name the actor | `tests/security.ts` N4 checks (refused without PIN and order stays open; manager PIN approves; logged with cashier and manager; draft cancel needs no PIN; owner cancel logged) | `src/app/api/orders/[id]/route.ts` `handlePATCH` |
+| N5 | High | PIN-collision message lets a manager enumerate PINs, then quick-switch to the owner | **Fixed** | PR #37 (`888630f`): quick PIN switch refuses the owner account; PIN collisions limited to 3 per 15 min per person setting PINs, counted outside the transaction and logged (`pin_collision`) | `tests/security.ts` N5 checks (collisions counted despite rollback; 4th attempt 429; limit is per person; owner's correct PIN does not switch) | `src/app/api/auth/switch-pin/route.ts`, `src/app/api/staff/route.ts` |
 | N6 | Medium | Refund approver and discount checks use role, not effective permissions | Open | — | 2026-11-17 @ `06126e9` | `src/app/api/orders/[id]/refund/route.ts`, `src/lib/create-order.ts` |
-| N7 | Medium | Ten audit-log inserts record no `userId` or `userName` | Open | — | 2026-11-17 @ `06126e9` | `grep -rn "insert(auditLogs)" src` |
+| N7 | Medium | Ten audit-log inserts record no `userId` or `userName` | Open | Partly addressed in PR #37: `order_updated`/`order_cancelled` now record the actor. 9 sites remain (menu, inventory, recipes, stock counts, purchasing, suppliers) | 2026-11-17 @ `06126e9` | `grep -rn "insert(auditLogs)" src` |
 | N8 | Medium | Photo data URLs overflow the `localStorage` menu cache; offline till keeps stale menu | Open | — | 2026-11-17 @ `06126e9` | `src/lib/offline-storage.ts`, `src/components/MenuManager.tsx` |
 | N9 | Low | Order GET uses `SELECT … FOR UPDATE` | Open | — | 2026-11-17 | `src/app/api/orders/[id]/route.ts` `handleGET` |
 | N10 | Low | Order status can move backwards; malformed id becomes a 500 | Open | — | 2026-11-17 | `src/app/api/orders/[id]/route.ts` `handlePATCH` |
@@ -59,7 +59,7 @@ N2 (owner action; owner has deferred making the repo private, see its row), N3, 
 | ID | Sev | Title | Status | Fixed by / decision | Verified | Where to look |
 |---|---|---|---|---|---|---|
 | P1 | High | No automated off-site backups (only at deploy time) | Open | — | 2026-11-17 | `docs/VPS_DEPLOYMENT.md` Phase 10; no backup script in `scripts/` |
-| P2 | High | Global login-failure counter lets anyone lock out all sign-ins | Open | — | 2026-11-17 | `src/app/api/auth/login/route.ts` (`login:global`) |
+| P2 | High | Global login-failure counter lets anyone lock out all sign-ins | **Fixed** | PR #37 (`16da35e`): no site-wide lock; limits per address (30), per account per address (10), per account (50); site-wide count only logs `login_failure_surge`; nginx `auth_limit` zone and `limit_req_status 429` in the deployment guide | `tests/security.ts` P2 checks (flood never refuses a correct login; locks stay with the guessing address; per-address spray refused; account backstop) | `src/app/api/auth/login/route.ts`, `src/lib/api.ts` `clientAddress`, `docs/VPS_DEPLOYMENT.md` Phase 8 |
 | P3 | Medium | Deploy builds in place over the live `.next`; slow rollback | Open | — | 2026-11-17 | `scripts/deploy-vps.sh` step 5 |
 | P4 | Medium | 8-hour sessions, never renewed | Open | — | 2026-11-17 | `src/lib/auth.ts` `SESSION_SECONDS` |
 | P5 | Medium | No DB statement, lock or idle-in-transaction timeouts; pool has no connect timeout | Open | — | 2026-11-17 | `src/db/index.ts`, `src/lib/api.ts` |
