@@ -279,7 +279,7 @@ async function main() {
   const n3StockBefore = (await admin.query("SELECT current_stock FROM ingredients WHERE id=1")).rows[0].current_stock;
   const lastAudit = async (action: string, orderId: number) => (await admin.query(
     "SELECT user_id, user_name, details FROM audit_logs WHERE action=$1 AND entity_id=$2 ORDER BY id DESC LIMIT 1", [action, String(orderId)])).rows[0];
-  const sent = await request("/api/orders", "POST", order("n3-sent", { items: [{ menuItemId: 1, quantity: 2 }] }), cashier);
+  const sent = await request("/api/orders", "POST", order("n3-removal-sent", { items: [{ menuItemId: 1, quantity: 2 }] }), cashier);
   check(sent.status === 200, "cashier rings up a kitchen order");
   const sentId = sent.body.order.id;
   const shrink = { items: [{ menuItemId: 1, quantity: 1 }] };
@@ -294,7 +294,7 @@ async function main() {
   check(removalRow?.user_id === 3 && /removed 1×/.test(removalRow?.details) && /Approved by manager Test manager/.test(removalRow?.details), "N3: the removal is logged with the cashier, what went, and the approving manager");
   check((await request(`/api/orders/${sentId}/edit`, "PATCH", { items: [{ menuItemId: 1, quantity: 3 }] }, cashier)).status === 200, "N3: adding items to a kitchen order needs no PIN");
   check((await lastAudit("order_items_removed", sentId))?.details === removalRow?.details, "N3: adding items writes no removal entry");
-  const draft = await request("/api/orders", "POST", order("n3-draft", { items: [{ menuItemId: 1, quantity: 2 }], sendToKitchen: false }), cashier);
+  const draft = await request("/api/orders", "POST", order("n3-removal-draft", { items: [{ menuItemId: 1, quantity: 2 }], sendToKitchen: false }), cashier);
   const draftId = draft.body.order.id;
   check((await request(`/api/orders/${draftId}/edit`, "PATCH", shrink, cashier)).status === 200, "N3: an order never sent to the kitchen can be reduced without a PIN");
   check(/Not yet sent to the kitchen/.test((await lastAudit("order_items_removed", draftId))?.details || ""), "N3: that removal is still logged");
@@ -305,7 +305,7 @@ async function main() {
   const cancelRow = await lastAudit("order_cancelled", sentId);
   check(cancelRow?.user_id === 3 && cancelRow?.user_name && /Approved by manager Test manager/.test(cancelRow?.details), "N4: the cancel is logged with the cashier and the approving manager");
   check((await request(`/api/orders/${draftId}`, "PATCH", { status: "cancelled" }, cashier)).status === 200 && (await lastAudit("order_cancelled", draftId))?.user_id === 3, "N4: a draft can be cancelled without a PIN, and the actor is still recorded");
-  const ownerCancel = await request("/api/orders", "POST", order("n4-owner"), cashier);
+  const ownerCancel = await request("/api/orders", "POST", order("n4-owner-cancel"), cashier);
   check((await request(`/api/orders/${ownerCancel.body.order.id}`, "PATCH", { status: "cancelled" }, owner)).status === 200
     && /order-editing permission/.test((await lastAudit("order_cancelled", ownerCancel.body.order.id))?.details || ""), "N4: the owner cancels a kitchen order without a PIN, and it is logged");
   await admin.query("DELETE FROM auth_attempts WHERE key LIKE 'manager-approval:%'");
