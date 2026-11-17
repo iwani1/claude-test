@@ -3,7 +3,16 @@ import { eq, and, asc, isNull, sql } from "drizzle-orm";
 import { db, requestContext } from "@/db";
 import { users, shifts, auditLogs } from "@/db/schema";
 import { effectivePermissions, hashPassword, permissionOverridesFor, pinDigest, PERMISSION_KEYS, ROLE_PERMISSIONS, sanitizePermissionOverrides, UserRole, type PermissionKey } from "@/lib/auth";
-import { ApiError, secureRoute } from "@/lib/api";
+import { ApiError, assertNotThrottled, recordFailedAttempt, secureRoute } from "@/lib/api";
+
+// PINs are unique per branch, so choosing a PIN that is taken has to be refused,
+// and saying so is what lets the person fix it. It also tells them that someone
+// holds that PIN. Unlimited, that let a manager try every 4-digit PIN on a
+// cashier's account and learn every PIN in use, the owner's included (N5 in
+// docs/FINDINGS.md). Collisions are now limited per person setting PINs; the
+// counter lives outside the request transaction, so a refused attempt still counts.
+const PIN_COLLISION_LIMIT = 3;
+const pinCollisionKey = (actorId: number) => `pin-collision:actor:${actorId}`;
 import { columnExists } from "@/lib/schema-guard";
 const fields = { id: users.id, restaurantId: users.restaurantId, branchId: users.branchId, name: users.name, email: users.email, role: users.role,
   phone: users.phone, avatarUrl: users.avatarUrl, isActive: users.isActive, lastLogin: users.lastLogin, createdAt: users.createdAt };
@@ -68,6 +77,8 @@ export const POST = secureRoute(async req => {
   let employee;
   let note: string | null = null;
   let permissionAudit = "";
+  const setsPin = (action === "create_employee" && body.pin) || action === "update_pin";
+  if (setsPin) await assertNotThrottled(pinCollisionKey(actor.id), PIN_COLLISION_LIMIT);
   try {
   if (action === "create_employee") {
     const { name, email, password, pin, role, phone } = body;
@@ -150,7 +161,11 @@ export const POST = secureRoute(async req => {
     const driver = err?.code ? err : err?.cause?.code ? err.cause : {};
     const detail = String(driver.constraint || err?.message || err?.cause?.message || "");
     if (driver.code === "23505" || /duplicate key/i.test(detail)) {
-      if (/pin/i.test(detail)) throw new ApiError(409, "That PIN is already used by another staff member in this branch. Choose a different PIN.");
+      if (/pin/i.test(detail)) {
+        const collisions = await recordFailedAttempt(pinCollisionKey(actor.id));
+        console.error(JSON.stringify({ level: "warn", event: "pin_collision", actorId: actor.id, collisionsInWindow: collisions }));
+        throw new ApiError(409, "That PIN is already used by another staff member in this branch. Choose a different PIN.");
+      }
       if (/email/i.test(detail)) throw new ApiError(409, "That email is already registered.");
       throw new ApiError(409, "That record already exists.");
     }

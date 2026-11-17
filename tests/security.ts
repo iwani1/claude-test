@@ -256,6 +256,19 @@ async function main() {
   check(dup.status === 409 && /already used/i.test(dup.body.error), "duplicate branch PIN rejected with clear message");
   const dupCreate = await request("/api/staff", "POST", { action: "create_employee", name: "Dup PIN", email: "duppin@test.invalid", role: "cashier", password: "Dup-pin-password-123!", pin: "6677" }, owner);
   check(dupCreate.status === 409 && /already used/i.test(dupCreate.body.error), "employee creation rejects duplicate PIN with clear message");
+  // N5: the "already used" answer cannot be farmed to learn everyone's PIN.
+  await admin.query("DELETE FROM auth_attempts WHERE key LIKE 'pin-collision:%'");
+  let collisionStatuses: number[] = [];
+  for (let i = 0; i < 3; i++) collisionStatuses.push((await request("/api/staff", "POST", { action: "update_pin", userId: pwStaff.body.employee.id, pin: "6677" }, manager)).status);
+  check(collisionStatuses.every(s => s === 409) && (await counter("pin-collision:actor:2")) === 3, "N5: each PIN collision counts against the person setting PINs, despite rollback");
+  check((await request("/api/staff", "POST", { action: "update_pin", userId: pwStaff.body.employee.id, pin: "8080" }, manager)).status === 429, "N5: after three collisions that person cannot keep probing PINs");
+  check((await request("/api/staff", "POST", { action: "update_pin", userId: pwStaff.body.employee.id, pin: "8080" }, owner)).status === 200, "N5: the limit is per person; others can still set PINs");
+  await admin.query("DELETE FROM auth_attempts WHERE key LIKE 'pin-collision:%'");
+  collisionStatuses = [];
+  // N5: the owner is never reachable by quick PIN switch, even with the right PIN
+  // (the fixture owner's PIN is 1111; it still approves refunds below).
+  const ownerSwitch = await request("/api/auth/switch-pin", "POST", { pin: "1111" }, pinLogin2.cookie);
+  check(ownerSwitch.status === 403 && !ownerSwitch.cookie, "N5: the owner's correct PIN does not switch a till into the owner account");
   const dupEmail = await request("/api/staff", "POST", { action: "create_employee", name: "Dup Email", email: "pintest@test.invalid", role: "cashier", password: "Dup-email-password-123!" }, owner);
   check(dupEmail.status === 409 && /already registered/i.test(dupEmail.body.error), "duplicate email rejected with clear message");
   // --- Owner-selected per-user permissions ----------------------------------

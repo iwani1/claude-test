@@ -19,6 +19,10 @@ export const POST = secureRoute(async req => {
     await recordFailedAttempt(pinKey);
     throw new ApiError(401, "Invalid PIN");
   }
+  // The owner account is never reachable by a PIN alone: a PIN is short, and a
+  // manager who learned the owner's PIN could otherwise switch into full owner
+  // powers (N5). The owner signs in with email and password.
+  if (user.role === "super_admin") throw new ApiError(403, "The owner account signs in with email and password, not quick PIN switch.");
   const session = await activateUser(requestContext.getStore()!.tx, user);
   // Name the person who is NOW signed in: they are the actor for everything
   // that follows, and a row that names the person who just left misleads
