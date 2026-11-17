@@ -9,13 +9,18 @@ import { getSessionUser } from "@/lib/guard";
 import { hideCost, maySeeCost } from "@/lib/cost-visibility";
 import { describeLines, orderSentToKitchen, verifyManagerApproval } from "@/lib/manager-approval";
 
+/** Fulfilment stages, in the only order they may happen. */
+const FULFILMENT_ORDER = ["draft", "confirmed", "preparing", "ready", "served", "completed"];
+
 async function handleGET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const user = await getSessionUser();
     const { id } = await params;
     const orderId = Number(id);
 
-    const [order] = await db.select().from(orders).where(eq(orders.id, orderId)).limit(1).for("update");
+    if (!Number.isSafeInteger(orderId) || orderId <= 0) throw new ApiError(400, "Invalid order id");
+    // A read: no row lock, so viewing a receipt never holds up a payment (N9).
+    const [order] = await db.select().from(orders).where(eq(orders.id, orderId)).limit(1);
     if (!order) {
       return NextResponse.json({ error: "Order not found" }, { status: 404 });
     }
@@ -57,7 +62,7 @@ async function handleGET(req: Request, { params }: { params: Promise<{ id: strin
 
     return NextResponse.json({ order: { ...order, userName: creator?.name || "Unknown", items, refundedAmount: fromCents(refundedCents), paymentBreakdown } });
   } catch (err: any) {
-    if (isDatabaseFailure(err)) throw err;
+    if (isDatabaseFailure(err) || err instanceof ApiError) throw err;
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
@@ -66,6 +71,7 @@ async function handlePATCH(req: Request, { params }: { params: Promise<{ id: str
   try {
     const { id } = await params;
     const orderId = Number(id);
+    if (!Number.isSafeInteger(orderId) || orderId <= 0) throw new ApiError(400, "Invalid order id");
     const body = await req.json();
     const { status, discountAmount, discountReason, tipAmount, notes, returnStockOnCancel } = body;
 
@@ -78,6 +84,11 @@ async function handlePATCH(req: Request, { params }: { params: Promise<{ id: str
     if (status !== undefined && !["confirmed", "preparing", "ready", "served", "cancelled"].includes(status)) return NextResponse.json({ error: "Invalid fulfillment status" }, { status: 400 });
     if (["cancelled", "refunded"].includes(existingOrder.status) || existingOrder.paymentStatus.includes("refunded")) return NextResponse.json({ error: "Order is closed" }, { status: 409 });
     if (status === "cancelled" && Number(existingOrder.paidAmount) > 0) return NextResponse.json({ error: "Refund collected payments before cancellation" }, { status: 409 });
+    // Fulfilment only moves forward (N10): a served or completed order cannot be
+    // put back to "preparing". Cancelling is handled above and below.
+    if (status !== undefined && status !== "cancelled" && FULFILMENT_ORDER.indexOf(status) < FULFILMENT_ORDER.indexOf(existingOrder.status)) {
+      return NextResponse.json({ error: `This order is already ${existingOrder.status}; its status cannot go back to ${status}.` }, { status: 409 });
+    }
     // Cancelling food the kitchen already has is the classic way to make a cash
     // sale disappear, so it needs a manager's PIN (N4 in docs/FINDINGS.md).
     // An order that never left the till may still be cancelled by the cashier,
@@ -143,7 +154,7 @@ async function handlePATCH(req: Request, { params }: { params: Promise<{ id: str
 
     return NextResponse.json({ success: true, order: updatedOrder });
   } catch (err: any) {
-    if (isDatabaseFailure(err)) throw err;
+    if (isDatabaseFailure(err) || err instanceof ApiError) throw err;
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }

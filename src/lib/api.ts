@@ -90,8 +90,18 @@ function checkRequest(req: Request) {
   if (["GET", "HEAD", "OPTIONS"].includes(req.method)) return;
   const origin = req.headers.get("origin");
   const host = req.headers.get("host") || new URL(req.url).host;
-  if (origin && new URL(origin).host !== host && origin !== process.env.APP_ORIGIN) throw new ApiError(403, "Cross-origin request rejected");
+  if (origin && origin !== process.env.APP_ORIGIN) {
+    // "null" (sandboxed frames, some redirects) or anything unparsable is not
+    // this site: refuse it plainly rather than fail the request (N11).
+    let originHost: string | null = null;
+    try { originHost = new URL(origin).host; } catch { /* audit-ok: unparsable origin is refused just below */ }
+    if (originHost !== host) throw new ApiError(403, "Cross-origin request rejected");
+  }
   if (!req.headers.get("content-type")?.toLowerCase().startsWith("application/json")) throw new ApiError(415, "Use application/json");
+  // The 1 MB limit is checked against the declared length, so a body sent in
+  // chunks without one could slip past it: refuse those (N11). Browsers always
+  // declare the length of a JSON body.
+  if (req.headers.get("transfer-encoding") && !req.headers.get("content-length")) throw new ApiError(411, "Request body length required");
   if (Number(req.headers.get("content-length") || 0) > 1_000_000) throw new ApiError(413, "Request too large");
 }
 // Every business handler runs inside a branch-scoped transaction. Error responses
@@ -206,6 +216,11 @@ function rateDb(): ReturnType<typeof drizzle> {
   }
   return rateDbInstance;
 }
+/** Branch-wide ceiling on wrong PINs (switch, refund approval, manager
+ *  approval). Each person is limited to 10 first; this backstop still bounds
+ *  guessing across many people in one branch (N13). */
+export const BRANCH_PIN_BACKSTOP = 40;
+
 /** Refuses when `key` has already failed `maximum` times in the current window.
  *  Successful attempts are never counted, so a correct PIN or password is never
  *  throttled by earlier successes. */

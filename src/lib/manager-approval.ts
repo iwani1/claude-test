@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { db, requestContext } from "@/db";
 import { users, kitchenTickets, orders } from "@/db/schema";
 import { effectivePermissions, pinDigest, verifyPasswordAsync, type UserRole } from "./auth";
-import { assertNotThrottled, recordFailedAttempt } from "./api";
+import { assertNotThrottled, BRANCH_PIN_BACKSTOP, recordFailedAttempt } from "./api";
 
 /** Error codes the till recognises: it asks for a manager's PIN and retries. */
 export const APPROVAL_REQUIRED = "manager_approval_required";
@@ -23,14 +23,18 @@ export type ManagerApproval =
  * can tell "ask for a PIN" apart from any other refusal.
  */
 export async function verifyManagerApproval(managerPin: unknown, reason: string): Promise<ManagerApproval> {
-  const branchId = requestContext.getStore()!.user!.branchId;
-  const key = `manager-approval:branch:${branchId}`;
+  const actor = requestContext.getStore()!.user!;
+  // Wrong PINs count against the person asking (N13) and a branch-wide backstop.
+  const key = `manager-approval:user:${actor.id}`;
+  const branchKey = `manager-approval:branch:${actor.branchId}`;
   if (managerPin === undefined || managerPin === null || managerPin === "") {
     return { ok: false, response: NextResponse.json({ error: `${reason} needs a manager's PIN.`, code: APPROVAL_REQUIRED }, { status: 403 }) };
   }
   await assertNotThrottled(key);
+  await assertNotThrottled(branchKey, BRANCH_PIN_BACKSTOP);
   const refuse = async () => {
     await recordFailedAttempt(key);
+    await recordFailedAttempt(branchKey);
     return { ok: false as const, response: NextResponse.json({ error: "That PIN cannot approve this. Ask a manager to enter theirs.", code: APPROVAL_INVALID }, { status: 403 }) };
   };
   if (typeof managerPin !== "string" || !/^\d{4,8}$/.test(managerPin)) return refuse();

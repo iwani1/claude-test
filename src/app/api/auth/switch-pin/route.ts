@@ -3,20 +3,26 @@ import { eq } from "drizzle-orm";
 import { db, requestContext } from "@/db";
 import { users, auditLogs } from "@/db/schema";
 import { cookieOptions, createToken, pinDigest, publicUser, verifyPasswordAsync } from "@/lib/auth";
-import { ApiError, activateUser, assertNotThrottled, recordFailedAttempt, secureRoute } from "@/lib/api";
+import { ApiError, activateUser, assertNotThrottled, BRANCH_PIN_BACKSTOP, recordFailedAttempt, secureRoute } from "@/lib/api";
 export const POST = secureRoute(async req => {
   const current = requestContext.getStore()!.user!;
   // Quick switches are routine on a shared till; only wrong PINs are counted.
-  const pinKey = `pin:branch:${current.branchId}`;
+  // They count against the person typing (so one mistyping cashier does not lock
+  // the whole branch out, N13) and against a higher branch-wide backstop.
+  const pinKey = `pin:user:${current.id}`;
+  const branchKey = `pin:branch:${current.branchId}`;
   await assertNotThrottled(pinKey);
+  await assertNotThrottled(branchKey, BRANCH_PIN_BACKSTOP);
   const { pin } = await req.json();
   if (typeof pin !== "string" || !/^\d{4,8}$/.test(pin)) {
     await recordFailedAttempt(pinKey);
+    await recordFailedAttempt(branchKey);
     throw new ApiError(400, "Invalid PIN");
   }
   const [user] = await db.select().from(users).where(eq(users.pinLookup, pinDigest(pin)));
   if (!user?.pin || !(await verifyPasswordAsync(pin, user.pin))) {
     await recordFailedAttempt(pinKey);
+    await recordFailedAttempt(branchKey);
     throw new ApiError(401, "Invalid PIN");
   }
   // The owner account is never reachable by a PIN alone: a PIN is short, and a

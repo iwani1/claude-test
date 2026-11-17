@@ -356,9 +356,40 @@ async function main() {
     await holder.query("ROLLBACK");
     holder.release();
   }
+  // N9: reading an order never waits for, or takes, a row lock.
+  const readHolder = await admin.connect();
+  try {
+    await readHolder.query("BEGIN");
+    await readHolder.query("SELECT id FROM orders WHERE id=$1 FOR UPDATE", [lockTargetId]);
+    const readStarted = Date.now();
+    const readWhileLocked = await request(`/api/orders/${lockTargetId}`, "GET", undefined, owner);
+    check(readWhileLocked.status === 200 && Date.now() - readStarted < 1000, "N9: viewing an order while another session holds it answers at once");
+  } finally {
+    await readHolder.query("ROLLBACK");
+    readHolder.release();
+  }
   const unblocked = await request(`/api/orders/${lockTargetId}`, "PATCH", { notes: "lock probe" }, owner);
   check(unblocked.status === 200 && unblocked.body.order.notes === "lock probe", "P5: the same request succeeds once the lock is released");
-  // Later checks assert exact stock levels; give back what the probe order used.
+  // N10: fulfilment only moves forward; malformed ids are a 400, not a 500.
+  check((await request(`/api/orders/${lockTargetId}`, "PATCH", { status: "served" }, owner)).status === 200, "N10: an order can move forward to served");
+  const backwards = await request(`/api/orders/${lockTargetId}`, "PATCH", { status: "preparing" }, owner);
+  check(backwards.status === 409 && /cannot go back/.test(backwards.body.error), "N10: a served order cannot be put back to preparing");
+  check((await request("/api/orders/abc", "PATCH", { notes: "x" }, owner)).status === 400 && (await request("/api/orders/abc", "GET", undefined, owner)).status === 400, "N10: a malformed order id is a 400");
+  // N11: an Origin of "null" is refused plainly; a body of undeclared length is refused.
+  check((await request("/api/orders", "POST", order("n11-null-origin"), cashier, { Origin: "null" })).status === 403, "N11: Origin null is refused with 403, not a server error");
+  const chunked = await fetch(base + "/api/orders", {
+    method: "POST", headers: { "Content-Type": "application/json", Cookie: cashier },
+    body: new ReadableStream({ start(c) { c.enqueue(new TextEncoder().encode(JSON.stringify(order("n11-chunked")))); c.close(); } }),
+    duplex: "half",
+  } as RequestInit);
+  check(chunked.status === 411, `N11: a body sent without a declared length is refused (${chunked.status})`);
+  // N12: an items-only edit keeps the discount and tip already on the bill.
+  const discounted = await request("/api/orders", "POST", order("n12-discounted", { items: [{ menuItemId: 1, quantity: 2 }], discountAmount: "3.00", tipAmount: "2.00" }), owner);
+  const discountedId = discounted.body.order.id;
+  check((await request(`/api/orders/${discountedId}/edit`, "PATCH", { items: [{ menuItemId: 1, quantity: 3 }] }, owner)).status === 200, "N12: an items-only edit succeeds");
+  const afterEdit = (await admin.query("SELECT discount_amount, tip_amount FROM orders WHERE id=$1", [discountedId])).rows[0];
+  check(afterEdit.discount_amount === "3.00" && afterEdit.tip_amount === "2.00", `N12: the discount and tip survive an items-only edit (${afterEdit.discount_amount}, ${afterEdit.tip_amount})`);
+  // Later checks assert exact stock levels; give back what the probe orders used.
   await admin.query("UPDATE ingredients SET current_stock=$1 WHERE id=1", [p5StockBefore]);
   const { databaseTimeouts } = await import("../src/db/timeouts");
   process.env.POS_DB_STATEMENT_TIMEOUT_MS = "0";
@@ -498,9 +529,25 @@ async function main() {
   const partial = await request(`/api/orders/${id}/refund`, "POST", { amount: "4", reason: "Partial", managerPin: "2222" }, manager);
   check(partial.status === 200, "partial refund succeeds");
   check((await counter("refund:branch:1")) === 1, "an approved refund is not counted against the refund key");
-  await admin.query("UPDATE auth_attempts SET count=10, reset_at=now()+interval '15 minutes' WHERE key='refund:branch:1'");
-  check((await request(`/api/orders/${id}/refund`, "POST", { amount: "1", reason: "Test", managerPin: "2222" }, manager)).status === 429, "a locked refund key refuses even a valid manager approval");
-  await admin.query("DELETE FROM auth_attempts WHERE key='refund:branch:1'");
+  // N13: wrong approver PINs lock out the person asking, not the whole branch.
+  const lockKey = (key: string, count: number) => admin.query(
+    "INSERT INTO auth_attempts (key, count, reset_at) VALUES ($1, $2, now()+interval '15 minutes') ON CONFLICT (key) DO UPDATE SET count=$2, reset_at=now()+interval '15 minutes'", [key, count]);
+  check((await counter("refund:user:2")) === 1, "N13: the wrong PIN also counted against the person asking");
+  await lockKey("refund:user:2", 10);
+  check((await request(`/api/orders/${id}/refund`, "POST", { amount: "1", reason: "Test", managerPin: "2222" }, manager)).status === 429, "a person locked out by wrong approver PINs is refused even with a valid one");
+  // 999 passes approval and is then refused for exceeding the balance (409), so no money moves.
+  check((await request(`/api/orders/${id}/refund`, "POST", { amount: "999", reason: "Test", managerPin: "2222" }, owner)).status === 409, "N13: a colleague can still get refunds approved");
+  await lockKey("refund:branch:1", 40);
+  check((await request(`/api/orders/${id}/refund`, "POST", { amount: "999", reason: "Test", managerPin: "2222" }, owner)).status === 429, "N13: the branch-wide backstop still stops guessing across many people");
+  await admin.query("DELETE FROM auth_attempts WHERE key LIKE 'refund:%'");
+  // N13 (quick switch): same rule. pinStaff's PIN is 6677.
+  check((await request("/api/auth/switch-pin", "POST", { pin: "0000" }, cashier)).status === 401 && (await counter("pin:user:3")) >= 1, "N13: a wrong switch PIN counts against the person typing");
+  await lockKey("pin:user:3", 10);
+  check((await request("/api/auth/switch-pin", "POST", { pin: "6677" }, cashier)).status === 429, "N13: that person is locked out of quick switch");
+  check((await request("/api/auth/switch-pin", "POST", { pin: "6677" }, manager)).status === 200, "N13: other people at the branch can still switch");
+  await lockKey("pin:branch:1", 40);
+  check((await request("/api/auth/switch-pin", "POST", { pin: "6677" }, manager)).status === 429, "N13: the branch-wide switch backstop still applies");
+  await admin.query("DELETE FROM auth_attempts WHERE key LIKE 'pin:%'");
   check((await admin.query("SELECT payment_status FROM orders WHERE id=$1", [id])).rows[0].payment_status === "partially_refunded", "partial refund preserves distinct state");
   // Change recipe after sale: restoration must use original ledger.
   await admin.query("UPDATE recipe_ingredients SET quantity=9 WHERE recipe_id=1");

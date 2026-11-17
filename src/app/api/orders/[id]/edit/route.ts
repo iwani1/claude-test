@@ -214,9 +214,11 @@ async function handlePATCH(req: Request, { params }: { params: Promise<{ id: str
         quantity: l.quantity,
       })),
       orderType,
-      discountCents: body.discountAmount !== undefined ? Math.round(Number(body.discountAmount || 0) * 100) : 0,
+      // Omitted means unchanged (N12): an items-only edit must not silently
+      // drop a manager-approved discount or the guest's tip.
+      discountCents: body.discountAmount !== undefined ? Math.round(Number(body.discountAmount || 0) * 100) : toCents(order.discountAmount),
       discountPercent: Number(body.discountPercent || 0),
-      tipCents: Math.round(Number(body.tipAmount || 0) * 100),
+      tipCents: body.tipAmount !== undefined ? Math.round(Number(body.tipAmount || 0) * 100) : toCents(order.tipAmount),
       isComplimentary: isComp,
       config,
     });
