@@ -28,7 +28,7 @@ the VPS is **not** fixed: it is lost on the next deploy and invisible to audits.
 | Critical | 0 | 1 | 1 | 0 |
 | High | 0 | 1 | 4 | 0 |
 | Medium | 1 | 1 | 7 | 0 |
-| Low / Info | 12 | 0 | 3 | 0 |
+| Low / Info | 11 | 0 | 4 | 0 |
 
 ## Go-live blockers
 
@@ -53,7 +53,7 @@ N2 (owner action; owner has deferred making the repo private, see its row) and P
 | N12 | Low | Re-price without discount or tip fields zeroes them (latent) | Open | — | 2026-11-17 | `src/app/api/orders/[id]/edit/route.ts` |
 | N13 | Low | PIN throttles are branch-wide (one person can block everyone) | Open | — | 2026-11-17 | `src/app/api/auth/switch-pin/route.ts`, refund route |
 | N14 | Info | Dev-only dependency advisories: full-tree `npm audit` reports 21 (12 moderate, 9 high), including **high-severity `picomatch`**, plus `esbuild` and `minimatch`. The production tree is clean (`npm audit --omit=dev`: 0) | Open (tracked) | Standing policy: no `--force`; review the dev-tool upgrades separately | 2026-11-17 @ `06126e9`: full `npm audit` 21 (12 moderate, 9 high); `--omit=dev` 0 | `npm audit` |
-| N15 | Low | Closing or editing another person's shift is gated by job title (`manager`/`super_admin`), not a permission the owner can set | Open | Found while fixing N6 (2026-11-17). Same pattern as N6: add an owner-selectable permission (e.g. `canManageOthersShifts`) and use it in the route and the drawer screen | 2026-11-17 | `src/app/api/shifts/route.ts` (two checks), `src/components/ShiftCashDrawer.tsx` |
+| N15 | Low | Closing or editing another person's shift is gated by job title (`manager`/`super_admin`), not a permission the owner can set | **Fixed** | PR #37: owner-selectable `canManageOthersShifts` (default manager and owner) gates payouts on and closing a colleague's shift, in the route and on the drawer screen; the payout audit row now records the actor (it fell back to user 1 with no name). No role-name checks remain outside the documented owner rules in the staff route | `tests/security.ts` N15 checks (default manager allowed, cashier refused; barred manager refused for payouts and closing; allowed cashier permitted; screen sees the permission; no money moved) | `src/app/api/shifts/route.ts`, `src/components/ShiftCashDrawer.tsx`, `src/lib/permissions.ts` |
 
 ## Production findings — [`PRODUCTION_READINESS_2026-11-17.md`](PRODUCTION_READINESS_2026-11-17.md)
 

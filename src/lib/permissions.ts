@@ -43,6 +43,9 @@ export interface RolePermissionSet {
   /** This person's PIN can authorise removing items from, or cancelling, an
    *  order the kitchen already has (the till's manager-approval prompt). */
   canApproveVoids: boolean;
+  /** Record payouts on, and close, a shift someone else opened (supervising
+   *  colleagues' drawers). Everyone may manage their own shift. */
+  canManageOthersShifts: boolean;
 }
 
 // Permissions Matrix
@@ -66,6 +69,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissionSet> = {
     canApplyDiscounts: true,
     canApproveRefunds: true,
     canApproveVoids: true,
+    canManageOthersShifts: true,
   },
   manager: {
     label: "Restaurant Manager",
@@ -86,6 +90,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissionSet> = {
     canApplyDiscounts: true,
     canApproveRefunds: true,
     canApproveVoids: true,
+    canManageOthersShifts: true,
   },
   cashier: {
     label: "Cashier / Front-of-House",
@@ -107,6 +112,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissionSet> = {
     canApplyDiscounts: false,
     canApproveRefunds: false,
     canApproveVoids: false,
+    canManageOthersShifts: false,
   },
   cook: {
     label: "Kitchen Staff (No Terminal Access)",
@@ -128,6 +134,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissionSet> = {
     canApplyDiscounts: false,
     canApproveRefunds: false,
     canApproveVoids: false,
+    canManageOthersShifts: false,
   },
   inventory_officer: {
     label: "Inventory Officer",
@@ -150,6 +157,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissionSet> = {
     canApplyDiscounts: false,
     canApproveRefunds: false,
     canApproveVoids: false,
+    canManageOthersShifts: false,
   },
   accountant: {
     terminalAccess: true,
@@ -176,6 +184,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissionSet> = {
     canApplyDiscounts: false,
     canApproveRefunds: false,
     canApproveVoids: false,
+    canManageOthersShifts: false,
   },
 };
 
@@ -195,6 +204,7 @@ export const PERMISSION_DEFINITIONS: readonly PermissionDefinition[] = [
   { key: "terminalAccess", group: "Terminal & Till", label: "Terminal sign-in", description: "May sign in to the POS application at all." },
   { key: "canAccessPos", group: "Terminal & Till", label: "POS till & tables", description: "Take orders, open shifts, record payments and operate the drawer." },
   { key: "canAccessKds", group: "Terminal & Till", label: "Kitchen display", description: "See kitchen dockets and update their progress." },
+  { key: "canManageOthersShifts", group: "Terminal & Till", label: "Manage others' shifts", description: "Record payouts on, and close, a shift someone else opened. Everyone can manage their own." },
   { key: "canViewDrawerHistory", group: "Terminal & Till", label: "Cash drawer history", description: "Read shift and drawer history. Operating the drawer still needs POS till access." },
   { key: "canViewOrderHistory", group: "Orders & Money", label: "Order history", description: "Read the order list and individual order details." },
   { key: "canIssueRefunds", group: "Orders & Money", label: "Request refunds", description: "Start a refund. A PIN from someone who may approve refunds still authorises it." },

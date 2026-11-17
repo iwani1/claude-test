@@ -411,6 +411,23 @@ async function main() {
   const ingredient = await request("/api/inventory", "POST", { action: "create_ingredient", name: "N7 Salt", unit: "kg", currentStock: 1, minStockLevel: 0, costPerUnit: 1 }, inventory);
   const ingredientActor = ingredient.status === 200 ? await actorOf("ingredient_created", ingredient.body.ingredient?.id ?? ingredient.body.id) : null;
   check(ingredientActor?.user_id === 5, "N7: a new ingredient is logged with the person who added it");
+  // --- N15: supervising a colleague's shift follows a permission -------------
+  // No money moves: the permission check runs before the amount check, so an
+  // invalid amount answers 403 when refused and 400 when allowed.
+  const ownerShiftId = (await admin.query("SELECT id FROM shifts WHERE branch_id=1 AND user_id=1 AND status='open' ORDER BY id DESC LIMIT 1")).rows[0]?.id;
+  check(ownerShiftId, "the owner has an open shift to supervise");
+  const n15Before = (await admin.query("SELECT id, permission_overrides FROM users WHERE id IN (2,3) ORDER BY id")).rows;
+  const payoutOnOwnerShift = (cookieValue: string) => request("/api/shifts", "POST", { action: "cash_payout", shiftId: ownerShiftId, amount: "-1", reason: "N15 probe" }, cookieValue);
+  check((await payoutOnOwnerShift(manager)).status === 400, "N15: by default a manager may supervise a colleague's shift");
+  check((await payoutOnOwnerShift(cashier)).status === 403, "N15: by default a cashier may not touch a colleague's shift");
+  await admin.query("UPDATE users SET permission_overrides=$1 WHERE id=2", [JSON.stringify({ canManageOthersShifts: false })]);
+  check((await payoutOnOwnerShift(manager)).status === 403, "N15: a manager the owner barred cannot record payouts on a colleague's shift");
+  check((await request("/api/shifts", "POST", { action: "close_shift", shiftId: ownerShiftId, actualClosingCash: "0" }, manager)).status === 403, "N15: nor close it");
+  await admin.query("UPDATE users SET permission_overrides=$1 WHERE id=3", [JSON.stringify({ canManageOthersShifts: true })]);
+  check((await payoutOnOwnerShift(cashier)).status === 400, "N15: a cashier the owner allowed may supervise a colleague's shift");
+  check((await request("/api/auth/me", "GET", undefined, cashier)).body.permissions?.canManageOthersShifts === true, "N15: the drawer screen sees the same permission");
+  for (const row of n15Before) await admin.query("UPDATE users SET permission_overrides=$1 WHERE id=$2", [JSON.stringify(row.permission_overrides), row.id]);
+  check((await admin.query("SELECT status FROM shifts WHERE id=$1", [ownerShiftId])).rows[0].status === "open", "N15: the probes left the owner's shift open and untouched");
   const pinPad = await request("/api/auth/login", "POST", { pin: "6677" });
   check(pinPad.status === 400 && /email and password/i.test(pinPad.body.error), "login-screen PIN pad explains email/password is required when PIN login is disabled");
   const menu = await request("/api/menu", "GET", undefined, other);
