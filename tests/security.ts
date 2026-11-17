@@ -319,6 +319,7 @@ async function main() {
   // The test server's lock limit is 1.5 s (tests/run-security.ts). A request that
   // needs a row another session holds must give up promptly with a clear answer,
   // not hang, and work again as soon as the lock is released.
+  const p5StockBefore = (await admin.query("SELECT current_stock FROM ingredients WHERE id=1")).rows[0].current_stock;
   const lockTarget = await request("/api/orders", "POST", order("p5-lock-target"), owner);
   const lockTargetId = lockTarget.body.order.id;
   const holder = await admin.connect();
@@ -337,6 +338,8 @@ async function main() {
   }
   const unblocked = await request(`/api/orders/${lockTargetId}`, "PATCH", { notes: "lock probe" }, owner);
   check(unblocked.status === 200 && unblocked.body.order.notes === "lock probe", "P5: the same request succeeds once the lock is released");
+  // Later checks assert exact stock levels; give back what the probe order used.
+  await admin.query("UPDATE ingredients SET current_stock=$1 WHERE id=1", [p5StockBefore]);
   const { databaseTimeouts } = await import("../src/db/timeouts");
   process.env.POS_DB_STATEMENT_TIMEOUT_MS = "0";
   check((() => { try { databaseTimeouts(); return false; } catch { return true; } })(), "P5: a timeout set to 0 (no limit) is refused, not silently accepted");
