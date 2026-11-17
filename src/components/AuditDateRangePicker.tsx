@@ -7,9 +7,14 @@ import { notify } from "@/lib/notify";
 export type AuditDateRange = { from: string; to: string } | null;
 
 /** Draft dates are applied together; a half-typed range never changes results. */
-export function AuditDateRangePicker({ label, onApply }: { label: string; onApply: (range: AuditDateRange) => void }) {
-  const [from, setFrom] = useState("");
-  const [to, setTo] = useState("");
+export function AuditDateRangePicker({ label, onApply, initialRange = null }: {
+  label: string;
+  onApply: (range: AuditDateRange) => void;
+  initialRange?: AuditDateRange;
+}) {
+  // A picker inside a tab can remount while its parent keeps the applied range.
+  const [from, setFrom] = useState(initialRange?.from ?? "");
+  const [to, setTo] = useState(initialRange?.to ?? "");
 
   function apply(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

@@ -2,8 +2,9 @@
 
 import { LoadFailure } from "./LoadFailure";
 import { StockCountHistory } from "./StockCountHistory";
+import { AuditDateRangePicker, type AuditDateRange } from "./AuditDateRangePicker";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   Boxes,
   AlertTriangle,
@@ -12,6 +13,7 @@ import {
   ArrowUpDown,
   History,
   ClipboardList,
+  RefreshCw,
   Search,
   Filter,
   CheckCircle,
@@ -21,9 +23,17 @@ import {
 import { apiErrorMessage, apiFetch } from "@/lib/api-client";
 import { notify } from "@/lib/notify";
 
+const MOVEMENT_PAGE_SIZE = 50;
+const movementTime = (date: string) => new Date(date).toLocaleString("en-GH", { timeZone: "Africa/Accra" });
+
 export const InventoryManager: React.FC = () => {
   const [ingredients, setIngredients] = useState<any[]>([]);
   const [movements, setMovements] = useState<any[]>([]);
+  const [movementRange, setMovementRange] = useState<AuditDateRange>(null);
+  const [movementHasMore, setMovementHasMore] = useState(false);
+  const [movementLoading, setMovementLoading] = useState(true);
+  const [movementError, setMovementError] = useState<string | null>(null);
+  const movementRequestId = useRef(0);
   const [totalValuation, setTotalValuation] = useState("0.00");
   const [lowStockCount, setLowStockCount] = useState(0);
   const [searchQuery, setSearchQuery] = useState("");
@@ -60,7 +70,6 @@ export const InventoryManager: React.FC = () => {
     setLoadError(null);
       if (data.ingredients) {
         setIngredients(data.ingredients);
-        setMovements(data.movements || []);
         setTotalValuation(data.totalValuation || "0.00");
         setLowStockCount(data.lowStockCount || 0);
       }
@@ -70,6 +79,45 @@ export const InventoryManager: React.FC = () => {
   useEffect(() => {
     fetchInventory();
   }, [fetchInventory]);
+
+  // The ledger has its own server-side date filter and pagination. Inventory's
+  // initial 50-row snapshot is not enough to find movements from older dates.
+  const fetchMovements = useCallback(async (offset = 0, append = false) => {
+    const id = ++movementRequestId.current;
+    setMovementLoading(true);
+    const params = new URLSearchParams({ limit: String(MOVEMENT_PAGE_SIZE), offset: String(offset) });
+    if (movementRange) { params.set("from", movementRange.from); params.set("to", movementRange.to); }
+    try {
+      const response = await fetch(`/api/inventory/movements?${params}`);
+      if (!response.ok) throw new Error(`Request failed (${response.status})`);
+      const data = await response.json();
+      if (id !== movementRequestId.current) return;
+      setMovements((previous) => append ? [...previous, ...data.movements] : data.movements);
+      setMovementHasMore(data.hasMore === true);
+      setMovementError(null);
+    } catch {
+      if (id === movementRequestId.current) setMovementError("Stock movements could not be loaded. Results may be out of date.");
+    } finally {
+      if (id === movementRequestId.current) setMovementLoading(false);
+    }
+  }, [movementRange]);
+
+  useEffect(() => {
+    if (activeSubTab !== "ledger") return;
+    movementRequestId.current++; // discard results for a previous range or tab visit
+    const kick = setTimeout(() => { void fetchMovements(); }, 0);
+    return () => { clearTimeout(kick); };
+  }, [activeSubTab, fetchMovements]);
+
+  const applyMovementRange = (next: AuditDateRange) => {
+    movementRequestId.current++;
+    setMovements([]);
+    setMovementHasMore(false);
+    setMovementError(null);
+    setMovementLoading(true);
+    setMovementRange(next);
+    if (!next && !movementRange) void fetchMovements();
+  };
 
   const [adjusting, setAdjusting] = useState(false);
 
@@ -451,17 +499,33 @@ export const InventoryManager: React.FC = () => {
         {/* VIEW 2: Movement Ledger */}
         {activeSubTab === "ledger" && (
           <div className="bg-neutral-900 border border-neutral-800 rounded-2xl overflow-hidden shadow-xl">
-            <div className="p-3 bg-neutral-850 border-b border-neutral-800 flex justify-between items-center text-xs">
-              <span className="font-semibold text-neutral-200">
-                Audit Trail of Automatic & Manual Stock Deductions
-              </span>
-              <span className="text-neutral-400">Showing latest 50 movements</span>
+            <div className="p-3 bg-neutral-850 border-b border-neutral-800 space-y-3 text-xs">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="font-semibold text-neutral-200">Stock Movement Ledger · automatic &amp; manual changes</span>
+                <button type="button" onClick={() => { void fetchMovements(); }}
+                  aria-label="Refresh stock movements" title="Refresh stock movements"
+                  className="min-h-11 min-w-11 flex items-center justify-center rounded-xl border border-neutral-700 bg-neutral-800 hover:bg-neutral-700 text-neutral-200">
+                  <RefreshCw className="w-4 h-4" />
+                </button>
+              </div>
+              <AuditDateRangePicker label="Stock movement ledger" initialRange={movementRange} onApply={applyMovementRange} />
+              <p className="text-amber-200" aria-live="polite">
+                {movementRange ? `Showing ${movementRange.from} to ${movementRange.to} (Ghana time)` : "Showing recent movements (all dates)"}
+                {` · ${movements.length} loaded`}{movementHasMore ? " · older movements available" : ""}
+                {movementLoading ? " · Loading…" : ""}
+              </p>
             </div>
+            <LoadFailure message={movementError} onRetry={() => { void fetchMovements(); }} />
             <div className="md:hidden divide-y divide-neutral-800/70">
-              {movements.length === 0 ? (
-                <div className="p-8 text-center text-neutral-500 text-sm">No stock movements yet.</div>
-              ) : (
-                movements.map((m) => {
+              {movements.length === 0 && movementLoading && (
+                <div className="p-8 text-center text-neutral-400 text-sm">Loading stock movements…</div>
+              )}
+              {movements.length === 0 && !movementLoading && !movementError && (
+                <div className="p-8 text-center text-neutral-500 text-sm">
+                  {movementRange ? "No stock movements in this date range." : "No stock movements yet."}
+                </div>
+              )}
+              {movements.map((m) => {
                   const delta = Number(m.quantityDelta);
                   const isPositive = delta > 0;
                   return (
@@ -472,7 +536,7 @@ export const InventoryManager: React.FC = () => {
                             {ingredients.find((i) => i.id === m.ingredientId)?.name || `#${m.ingredientId}`}
                           </div>
                           <div className="text-[0.6875rem] text-neutral-400">
-                            {new Date(m.createdAt).toLocaleString()}
+                            {movementTime(m.createdAt)}
                           </div>
                         </div>
                         <div
@@ -509,15 +573,14 @@ export const InventoryManager: React.FC = () => {
                       )}
                     </div>
                   );
-                })
-              )}
+              })}
             </div>
 
             <div className="hidden md:block overflow-x-auto">
               <table className="w-full text-left text-xs">
                 <thead className="bg-neutral-850 text-neutral-400 uppercase text-[0.625rem] tracking-wider border-b border-neutral-800">
                   <tr>
-                    <th className="px-4 py-3">Timestamp</th>
+                    <th className="px-4 py-3">Timestamp (Ghana)</th>
                     <th className="px-4 py-3">Ingredient</th>
                     <th className="px-4 py-3">Type</th>
                     <th className="px-4 py-3 text-right">Change</th>
@@ -527,13 +590,21 @@ export const InventoryManager: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-neutral-800/60 text-neutral-300 font-mono">
+                  {movements.length === 0 && movementLoading && (
+                    <tr><td colSpan={7} className="px-4 py-8 text-center text-neutral-400 font-sans">Loading stock movements…</td></tr>
+                  )}
+                  {movements.length === 0 && !movementLoading && !movementError && (
+                    <tr><td colSpan={7} className="px-4 py-8 text-center text-neutral-500 font-sans">
+                      {movementRange ? "No stock movements in this date range." : "No stock movements yet."}
+                    </td></tr>
+                  )}
                   {movements.map((m) => {
                     const delta = Number(m.quantityDelta);
                     const isPositive = delta > 0;
                     return (
                       <tr key={m.id} className="hover:bg-neutral-850/50">
-                        <td className="px-4 py-2.5 text-neutral-400 text-[0.6875rem]">
-                          {new Date(m.createdAt).toLocaleString()}
+                        <td className="px-4 py-2.5 text-neutral-400 text-[0.6875rem] whitespace-nowrap">
+                          {movementTime(m.createdAt)}
                         </td>
                         <td className="px-4 py-2.5 font-sans font-semibold text-white">
                           {ingredients.find((i) => i.id === m.ingredientId)?.name || `#${m.ingredientId}`}
@@ -576,6 +647,13 @@ export const InventoryManager: React.FC = () => {
                 </tbody>
               </table>
             </div>
+            {movementHasMore && (
+              <button type="button" disabled={movementLoading}
+                onClick={() => { void fetchMovements(movements.length, true); }}
+                className="min-h-11 w-full border-t border-neutral-700 bg-neutral-800 hover:bg-neutral-700 text-amber-200 text-sm font-semibold disabled:opacity-50">
+                {movementLoading ? "Loading…" : `Load ${MOVEMENT_PAGE_SIZE} older movements`}
+              </button>
+            )}
           </div>
         )}
 

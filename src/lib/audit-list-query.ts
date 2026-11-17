@@ -1,8 +1,8 @@
 import { ApiError } from "./api";
 import { reportWindow } from "./collection-report";
 
-/** Both audit histories use the same whole-day Ghana (UTC) dates and bounded
- * pages. No dates means the newest records, with older pages available. */
+/** Server-backed history lists use the same whole-day Ghana (UTC) dates and
+ * bounded pages. No dates means the newest records, with older pages available. */
 export function auditListQuery(params: URLSearchParams, defaultLimit: number, maxLimit: number) {
   const requested = Number(params.get("limit") || defaultLimit);
   const limit = Number.isSafeInteger(requested) && requested > 0

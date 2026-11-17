@@ -116,6 +116,40 @@ async function main() {
     (await request("/api/inventory/counts?from=2025-04-11&to=2025-04-10", "GET", undefined, inventory)).status === 400 &&
     (await request("/api/inventory/counts?offset=abc", "GET", undefined, inventory)).status === 400, "stock count range and pagination reject invalid input");
   check((await request(`/api/inventory/counts${countDay}`, "GET", undefined, accountant)).status === 403, "finance cannot read private stock count history");
+  // The movement ledger must search beyond the latest 50 rows, include the
+  // whole selected Ghana day, and never show another branch's stock history.
+  const movementIds: number[] = [];
+  for (const date of auditDates) {
+    const movement = await admin.query("INSERT INTO stock_movements(branch_id,ingredient_id,movement_type,quantity_delta,previous_stock,new_stock,reason,created_at) VALUES(1,1,'adjustment',0.001,100,100.001,'Ledger date test',$1::timestamp) RETURNING id", [date]);
+    movementIds.push(movement.rows[0].id);
+  }
+  const otherBranchMovement = await admin.query("INSERT INTO stock_movements(branch_id,ingredient_id,movement_type,quantity_delta,previous_stock,new_stock,created_at) VALUES(2,2,'adjustment',0.001,100,100.001,'2025-04-10 12:00:00'::timestamp) RETURNING id");
+  const otherTenantMovement = await admin.query("INSERT INTO stock_movements(branch_id,ingredient_id,movement_type,quantity_delta,previous_stock,new_stock,created_at) VALUES(3,3,'adjustment',0.001,100,100.001,'2025-04-10 12:00:00'::timestamp) RETURNING id");
+  // All 51 have identical timestamps to exercise the ID tie-break across pages.
+  const newerMovements = await admin.query("INSERT INTO stock_movements(branch_id,ingredient_id,movement_type,quantity_delta,previous_stock,new_stock,created_at) SELECT 1,1,'adjustment',0.001,100,100.001,'2025-05-01 12:00:00'::timestamp FROM generate_series(1,51) RETURNING id");
+  const movementDay = "?from=2025-04-10&to=2025-04-10&limit=1";
+  const movementFirst = await request(`/api/inventory/movements${movementDay}`, "GET", undefined, owner);
+  const movementSecond = await request(`/api/inventory/movements${movementDay}&offset=1`, "GET", undefined, inventory);
+  check(movementFirst.status === 200 && movementFirst.body.movements.length === 1 && movementFirst.body.movements[0].id === movementIds[2] && movementFirst.body.hasMore === true && movementFirst.headers.get("cache-control") === "no-store", "stock movement range includes the end day and has an uncacheable next page");
+  check(movementSecond.status === 200 && movementSecond.body.movements.length === 1 && movementSecond.body.movements[0].id === movementIds[1] && movementSecond.body.hasMore === false, "stock movement page two reaches start-day midnight without other branches");
+  check((await request(`/api/inventory/movements${movementDay}&offset=2`, "GET", undefined, owner)).body.movements.length === 0, "stock movement range excludes the preceding and following day");
+  const allMovementDates = await request("/api/inventory/movements?from=2025-04-09&to=2025-04-11&limit=10", "GET", undefined, owner);
+  check(allMovementDates.status === 200 && JSON.stringify(allMovementDates.body.movements.map((m: any) => m.id)) === JSON.stringify([...movementIds].reverse()), "stock movement range includes both boundary days and only this branch");
+  const recentMovements = await request("/api/inventory/movements?limit=50", "GET", undefined, owner);
+  check(recentMovements.status === 200 && recentMovements.body.movements.length === 50 && recentMovements.body.hasMore === true && recentMovements.body.movements.every((m: any) => !movementIds.includes(m.id)), "older stock movements fall outside the initial latest-50 page");
+  const newerFirst = await request("/api/inventory/movements?from=2025-05-01&to=2025-05-01&limit=50", "GET", undefined, owner);
+  const newerSecond = await request("/api/inventory/movements?from=2025-05-01&to=2025-05-01&limit=50&offset=50", "GET", undefined, owner);
+  check(newerFirst.status === 200 && newerFirst.body.movements.length === 50 && newerFirst.body.movements[0].id === newerMovements.rows[50].id && newerFirst.body.hasMore === true, "movement pages sort newest first with a stable ID tie-break");
+  check(newerSecond.status === 200 && newerSecond.body.movements.length === 1 && newerSecond.body.movements[0].id === newerMovements.rows[0].id && newerSecond.body.hasMore === false, "load-more reaches movement 51 without duplicate rows");
+  check((await request(`/api/inventory/movements${movementDay}`, "GET", undefined, otherOwner)).body.movements[0]?.id === otherBranchMovement.rows[0].id &&
+    (await request(`/api/inventory/movements${movementDay}`, "GET", undefined, otherTenant)).body.movements[0]?.id === otherTenantMovement.rows[0].id, "each branch and tenant reads only its own movement ledger");
+  check((await request(`/api/inventory/movements${movementDay}`, "GET", undefined, cashier)).status === 403 &&
+    (await request(`/api/inventory/movements${movementDay}`, "GET", undefined, accountant)).status === 403, "cashier and finance cannot read private stock movement history");
+  check((await request("/api/inventory/movements?from=2025-04-10", "GET", undefined, owner)).status === 400 &&
+    (await request("/api/inventory/movements?from=2025-02-30&to=2025-02-30", "GET", undefined, inventory)).status === 400 &&
+    (await request("/api/inventory/movements?from=2025-04-11&to=2025-04-10", "GET", undefined, owner)).status === 400 &&
+    (await request("/api/inventory/movements?offset=-1", "GET", undefined, owner)).status === 400 &&
+    (await request("/api/inventory/movements?offset=abc", "GET", undefined, inventory)).status === 400, "stock movement dates and pagination reject incomplete, impossible, reversed and invalid input");
   // Cost price belongs to whoever runs the menu or the books. Cashiers see sale prices only.
   const hasCost = (rows: any[]) => rows.some(r => "costPrice" in r);
   const cashierMenu = await request("/api/menu", "GET", undefined, cashier);
