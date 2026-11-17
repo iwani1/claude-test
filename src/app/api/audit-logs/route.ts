@@ -1,9 +1,10 @@
-import { secureRoute, isDatabaseFailure } from "@/lib/api";
+import { secureRoute, ApiError, isDatabaseFailure } from "@/lib/api";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { auditLogs } from "@/db/schema";
+import { auditListQuery } from "@/lib/audit-list-query";
 import { requirePermission } from "@/lib/guard";
-import { desc } from "drizzle-orm";
+import { and, desc, gte, lt } from "drizzle-orm";
 
 async function handleGET(req: Request) {
   try {
@@ -12,16 +13,16 @@ async function handleGET(req: Request) {
     const guard = await requirePermission("canViewTransactionTrail", "GET /api/audit-logs");
     if (!guard.ok) return guard.response;
 
-    const { searchParams } = new URL(req.url);
-    // A page is at most 500 rows; a malformed or missing value falls back to 100.
-    const requested = Number(searchParams.get("limit") || 100);
-    const limit = Number.isInteger(requested) && requested > 0 ? Math.min(requested, 500) : 100;
-
-    const logs = await db.select().from(auditLogs).orderBy(desc(auditLogs.createdAt)).limit(limit);
-    return NextResponse.json({ logs });
-  } catch (err: any) {
-    if (isDatabaseFailure(err)) throw err;
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    const { limit, offset, window } = auditListQuery(new URL(req.url).searchParams, 100, 500);
+    const rows = await db.select().from(auditLogs)
+      .where(window ? and(gte(auditLogs.createdAt, window.start!), lt(auditLogs.createdAt, window.end)) : undefined)
+      .orderBy(desc(auditLogs.createdAt), desc(auditLogs.id))
+      .limit(limit + 1).offset(offset);
+    const hasMore = rows.length > limit;
+    return NextResponse.json({ logs: rows.slice(0, limit), hasMore });
+  } catch (err: unknown) {
+    if (err instanceof ApiError || isDatabaseFailure(err)) throw err;
+    return NextResponse.json({ error: "Could not load audit logs" }, { status: 500 });
   }
 }
 
