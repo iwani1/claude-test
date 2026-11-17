@@ -197,6 +197,25 @@ async function main() {
   // dish's history is untouched, and the Deleted view can bring it back.
   const deletable = await request("/api/menu", "POST", { name: "Delete Me Dish", categoryId: 1, price: "12.50" }, owner);
   check(deletable.status === 200 && deletable.body.item?.id > 0, "owner creates a menu item to remove");
+  // --- N8: photos travel as links, not inline in the menu list ---------------
+  const pngBase64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
+  const photoDataUrl = `data:image/png;base64,${pngBase64}`;
+  const photoDish = await request("/api/menu", "POST", { name: "Photo Dish", categoryId: 1, price: "9.00", imageUrl: photoDataUrl }, owner);
+  check(photoDish.status === 200, "owner adds a dish with an uploaded photo");
+  const photoId = photoDish.body.item.id;
+  const menuForTill = await request("/api/menu", "GET", undefined, cashier);
+  const listedPhoto = menuForTill.body.items.find((i: { id: number }) => i.id === photoId)?.imageUrl as string;
+  check(/^\/api\/menu\/\d+\/photo\?v=/.test(listedPhoto) && !JSON.stringify(menuForTill.body).includes("data:image"), "N8: the menu list links photos instead of carrying them inline");
+  const photoRes = await fetch(base + listedPhoto, { headers: { Cookie: cashier } });
+  const photoBytes = Buffer.from(await photoRes.arrayBuffer());
+  check(photoRes.status === 200 && photoRes.headers.get("content-type") === "image/png" && photoBytes.equals(Buffer.from(pngBase64, "base64")) && /immutable/.test(photoRes.headers.get("cache-control") || ""),
+    "N8: the link serves the exact image, and the browser may keep it");
+  check((await fetch(base + listedPhoto)).status === 401, "N8: photos need a signed-in session");
+  check((await request(`/api/menu/${photoId}`, "PUT", { name: "Photo Dish renamed", imageUrl: listedPhoto }, owner)).status === 200
+    && (await admin.query("SELECT image_url FROM menu_items WHERE id=$1", [photoId])).rows[0].image_url === photoDataUrl, "N8: saving with the unchanged photo link keeps the stored photo");
+  await admin.query("UPDATE menu_items SET image_url=$1 WHERE id=$2", ["data:text/html;base64,PHNjcmlwdD5hbGVydCgxKTwvc2NyaXB0Pg==", photoId]);
+  check((await fetch(`${base}/api/menu/${photoId}/photo`, { headers: { Cookie: cashier } })).status === 404, "N8: something that is not an image is never served as a photo");
+  await admin.query("DELETE FROM menu_items WHERE id=$1", [photoId]);
   const deletableId = deletable.body.item.id;
   const soldDish = await request("/api/orders", "POST", order("menu-delete-history", { items: [{ menuItemId: deletableId, quantity: 1 }] }), cashier);
   check(soldDish.status === 200, "the dish sells before it is removed");

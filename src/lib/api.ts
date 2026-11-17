@@ -126,7 +126,9 @@ export function secureRoute(handler: Handler, permission: Permission | "session"
         const params = (await context?.params) || {};
         const response = await handler(req, { params: Promise.resolve({ id: params.id || "" }) });
         if (response.status >= 400) throw new RollbackResponse(response);
-        response.headers.set("Cache-Control", "no-store");
+        // Uncacheable unless the route chose otherwise (only the dish-photo
+        // route does, with a versioned, private, immutable image).
+        if (!response.headers.has("Cache-Control")) response.headers.set("Cache-Control", "no-store");
         // Keep an active session alive (P4). Routes that set the session cookie
         // themselves (login, PIN switch, logout) are left alone.
         const user = requestContext.getStore()?.user;

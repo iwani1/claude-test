@@ -30,6 +30,13 @@ export async function testOfflineStorage() {
     saveMenuToCache({ items: [2] }, 2);
     assert.deepEqual(getCachedMenu(1), { items: [1] });
     assert.deepEqual(getCachedMenu(2), { items: [2] });
+    // N8: photos stay out of the offline copy, and a failed save is reported.
+    assert.equal(saveMenuToCache({ items: [{ id: 5, imageUrl: "data:image/png;base64,AAAA" }, { id: 6, imageUrl: "/api/menu/6/photo?v=abc" }] }, 3), true);
+    assert.deepEqual(getCachedMenu(3).items.map((i: { imageUrl: string | null }) => i.imageUrl), [null, "/api/menu/6/photo?v=abc"]);
+    const menuSetItem = (globalThis as any).localStorage.setItem;
+    (globalThis as any).localStorage.setItem = () => { throw new Error("QuotaExceededError"); };
+    assert.equal(saveMenuToCache({ items: [7] }, 4), false);
+    (globalThis as any).localStorage.setItem = menuSetItem;
     const fixture = (branchId: number, idempotencyKey: string) => ({ branchId, idempotencyKey } as OfflineOrder);
     queueOfflineOrder(fixture(1, "old-one"));
     queueOfflineOrder(fixture(2, "other-branch"));

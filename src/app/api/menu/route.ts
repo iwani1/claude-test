@@ -1,4 +1,5 @@
 import { secureRoute, isDatabaseFailure } from "@/lib/api";
+import { photoLink } from "@/lib/menu-photo";
 import { auditActor } from "@/lib/audit";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
@@ -60,6 +61,8 @@ async function handleGET(req: Request) {
 
       return hideCost({
         ...item,
+        // An uploaded photo travels as a short link, not ~380 KB inline (N8).
+        imageUrl: item.imageUrl?.startsWith("data:") ? photoLink(item.id, item.imageUrl) : item.imageUrl,
         modifiers: itemMods,
       }, showCost);
     });
