@@ -141,7 +141,7 @@ step "Preflight"
 
 [[ "$(id -u)" -eq 0 ]] || die "Run this with sudo: sudo $POS_DIR/scripts/deploy-vps.sh"
 [[ -d "$POS_DIR/.git" ]] || die "$POS_DIR is not a git checkout — is the app installed there?"
-[[ -f "$POS_DIR/.env" ]] || die "$POS_DIR/.env is missing; the app cannot start without it"
+[[ -f /etc/pos/app.env || -f "$POS_DIR/.env" ]] || die "Neither /etc/pos/app.env nor $POS_DIR/.env exists; the app cannot start without its settings"
 command -v git >/dev/null || die "git is not installed"
 command -v pg_dump >/dev/null || die "pg_dump is not installed (postgresql-client)"
 command -v npm >/dev/null || die "npm is not on this shell's PATH (see Phase 2 of docs/VPS_DEPLOYMENT.md)"
@@ -255,7 +255,7 @@ else
   info "Applying migrations as the schema owner…"
   as_user "$POS_USER" env MIGRATION_DATABASE_URL="$MIGRATION_DATABASE_URL" \
     npm --prefix "$POS_DIR" run db:migrate
-  warn "A migration was applied: re-apply the pos_runtime table grants from Phase 6 of docs/VPS_DEPLOYMENT.md if it created tables."
+  info "New tables are granted to pos_runtime automatically (migration 0011). If the app reports 'permission denied', re-apply the Phase 6 grants in docs/VPS_DEPLOYMENT.md."
 fi
 
 # -------------------------------------------------------- 4. dependencies ---

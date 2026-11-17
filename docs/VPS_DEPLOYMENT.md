@@ -34,6 +34,12 @@ timedatectl set-timezone Africa/Accra
 # 4. Create a daily-updates safety net
 apt install -y unattended-upgrades fail2ban
 dpkg-reconfigure -plow unattended-upgrades   # answer Yes
+# ...that never restarts PostgreSQL or reboots during service: install updates
+# at 03:00, and reboot (when an update needs it) at 03:30.
+mkdir -p /etc/systemd/system/apt-daily-upgrade.timer.d
+printf '[Timer]\nOnCalendar=\nOnCalendar=*-*-* 03:00\nRandomizedDelaySec=0\n' > /etc/systemd/system/apt-daily-upgrade.timer.d/quiet-hours.conf
+printf 'Unattended-Upgrade::Automatic-Reboot "true";\nUnattended-Upgrade::Automatic-Reboot-Time "03:30";\n' > /etc/apt/apt.conf.d/52pos-reboot
+systemctl daemon-reload
 
 # 5. Firewall: only SSH, HTTP, HTTPS
 apt install -y ufw
@@ -88,6 +94,15 @@ ss -lntp | grep 5432
 
 ## Phase 3 — Create the database and roles
 
+PostgreSQL must listen on this server only, and use password hashing that
+cannot be replayed. Ubuntu's PostgreSQL 16 does both by default; confirm it:
+
+```sh
+sudo -u postgres psql -Atc "SHOW listen_addresses"     # expect: localhost
+sudo -u postgres psql -Atc "SHOW password_encryption"  # expect: scram-sha-256
+ss -ltnp | grep 5432                                   # expect 127.0.0.1 / ::1 only
+```
+
 The app needs **two** database logins: a maintenance owner (migrations/bootstrap)
 and a restricted runtime login (the web app). The API refuses superuser or
 `BYPASSRLS` runtime connections — this is intentional.
@@ -138,15 +153,23 @@ Later updates are one command — `sudo ./scripts/deploy-vps.sh` — see
 
 ## Phase 5 — Configure the environment
 
+Secrets live in `/etc/pos/app.env`, outside the code checkout, readable by the
+app but not changeable by it:
+
 ```sh
-cd /opt/pos
-cp .env.production.example .env
+mkdir -p /etc/pos && chmod 755 /etc/pos
+cp /opt/pos/.env.production.example /etc/pos/app.env
 openssl rand -hex 48        # generate AUTH_SECRET — copy the output
-nano .env                   # or vim
-chmod 600 .env
+nano /etc/pos/app.env       # or vim
+chown root:pos /etc/pos/app.env && chmod 640 /etc/pos/app.env
 ```
 
-Fill `.env` like this (placeholders only):
+(Run `chown` after Phase 7 creates the `pos` user, or create the user first.)
+An older install with `/opt/pos/.env` keeps working; to move it, copy it to
+`/etc/pos/app.env` with the ownership above, check the app restarts healthy, then
+delete `/opt/pos/.env`.
+
+Fill it like this (placeholders only):
 
 ```env
 DATABASE_URL=postgresql://pos_runtime:RUNTIME_PASSWORD_HERE@127.0.0.1:5432/pos
@@ -187,6 +210,11 @@ GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO pos_runtime;
 REVOKE ALL ON schema_migrations FROM pos_runtime;
 REVOKE INSERT, UPDATE, DELETE ON security_meta FROM pos_runtime;
 REVOKE CREATE ON SCHEMA public FROM PUBLIC;
+-- Tables and sequences that later migrations create are usable at once, so a
+-- new release never needs this step repeated (migration 0011 sets the same
+-- when pos_runtime exists before migrating).
+ALTER DEFAULT PRIVILEGES FOR ROLE pos_owner IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO pos_runtime;
+ALTER DEFAULT PRIVILEGES FOR ROLE pos_owner IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO pos_runtime;
 SQL
 ```
 
@@ -225,29 +253,13 @@ useradd --system --home /opt/pos --shell /usr/sbin/nologin pos
 chown -R pos:pos /opt/pos
 ```
 
-Create `/etc/systemd/system/pos.service`:
+Install the service unit from the repository (`deploy/systemd/pos.service`). It
+runs Node directly, binds the app to `127.0.0.1` only (nginx is the one way in),
+reads secrets from `/etc/pos/app.env`, and applies systemd hardening (read-only
+system, no access to home directories or devices, a memory ceiling):
 
-```ini
-[Unit]
-Description=Restaurant POS
-After=network-online.target postgresql.service
-Wants=network-online.target
-
-[Service]
-Type=simple
-User=pos
-WorkingDirectory=/opt/pos
-EnvironmentFile=/opt/pos/.env
-ExecStart=/usr/bin/npm start
-Restart=on-failure
-RestartSec=5
-NoNewPrivileges=true
-PrivateTmp=true
-ProtectSystem=full
-ReadWritePaths=/opt/pos/.next
-
-[Install]
-WantedBy=multi-user.target
+```sh
+cp /opt/pos/deploy/systemd/pos.service /etc/systemd/system/pos.service
 ```
 
 ```sh
@@ -272,7 +284,7 @@ server {
     server_name pos.example.com;
 
     client_max_body_size 1m;
-    limit_req zone=req_limit burst=20 nodelay;
+    limit_req zone=req_limit burst=60 nodelay;
     limit_req_status 429;
 
     # Sign-in gets a much tighter per-address limit. The app also throttles
@@ -303,7 +315,9 @@ server {
 Add the rate-limit zone at the top of `/etc/nginx/nginx.conf` inside `http {}`:
 
 ```nginx
-limit_req_zone $binary_remote_addr zone=req_limit:10m rate=10r/s;
+# Every till in the restaurant usually reaches the server from the venue's one
+# public address, so the general limit is sized for the whole venue, not one device.
+limit_req_zone $binary_remote_addr zone=req_limit:10m rate=30r/s;
 limit_req_zone $binary_remote_addr zone=auth_limit:10m rate=1r/s;
 ```
 
@@ -320,7 +334,7 @@ rm -f /etc/nginx/sites-enabled/default
 nginx -t && systemctl reload nginx
 
 apt install -y certbot python3-certbot-nginx
-certbot --nginx -d pos.example.com
+certbot --nginx --redirect -d pos.example.com   # --redirect: plain HTTP always goes to HTTPS
 # certbot renews automatically; verify: certbot renew --dry-run
 ```
 
@@ -617,7 +631,7 @@ Notes
   restart, health) and prints the rollback line. Add
   `git config --system --add safe.directory /opt/pos` once if root's git ever
   reports "detected dubious ownership".
-- If a new migration created tables, re-apply the `pos_runtime` grants (Phase 6).
+- New tables are granted to `pos_runtime` automatically (migration 0011 / Phase 6 default privileges). Only an install set up before that, without the Phase 6 `ALTER DEFAULT PRIVILEGES` lines, needs the grants re-applied.
 
 ---
 
