@@ -5,6 +5,8 @@ The original `11claude.zip` is kept on the owner's machine only and is not in Gi
 
 - [Deployment and database setup](GREENGEEKS_DEPLOYMENT_GUIDE.md)
 - [Security model, tests, and remaining release work](SECURITY.md)
+- **[Audit findings — current status](docs/FINDINGS.md)** (start here; dated reports in `docs/` are snapshots)
+- [Guide for AI builders and auditors](AGENTS.md)
 - [One-branch pilot and sign-off checklist](docs/PILOT_RUNBOOK.md)
 - [Development dependency advisory review](docs/DEPENDENCY_REVIEW.md)
 

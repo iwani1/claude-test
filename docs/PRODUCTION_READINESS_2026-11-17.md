@@ -1,5 +1,8 @@
 # Production Readiness Review — 2026-11-17
 
+> **Snapshot.** This report records the state on its date and is not updated.
+> Current status of every finding: [`docs/FINDINGS.md`](FINDINGS.md).
+
 Companion to [`AUDIT_2026-11-17.md`](AUDIT_2026-11-17.md), which covers application
 security and money integrity (findings **N1–N14**). This review covers what it takes to
 **run** the system in production at `main` `f71f93e`: deployment, configuration, the
