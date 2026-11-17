@@ -1,4 +1,5 @@
 import { secureRoute, isDatabaseFailure } from "@/lib/api";
+import { auditActor } from "@/lib/audit";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { menuItems, auditLogs } from "@/db/schema";
@@ -46,6 +47,7 @@ async function handlePUT(req: Request, { params }: { params: Promise<{ id: strin
       .returning();
 
     await db.insert(auditLogs).values({
+      ...auditActor(),
       action: "menu_item_updated",
       entityType: "menu",
       entityId: String(itemId),
@@ -90,6 +92,7 @@ async function handleDELETE(req: Request, { params }: { params: Promise<{ id: st
     }
 
     await db.insert(auditLogs).values({
+      ...auditActor(),
       action: "menu_item_deleted",
       entityType: "menu",
       entityId: String(itemId),

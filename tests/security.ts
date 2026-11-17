@@ -402,6 +402,15 @@ async function main() {
   for (const row of n6Before) await setOverrides(row.id, row.permission_overrides);
   await admin.query("UPDATE ingredients SET current_stock=$1 WHERE id=1", [n6Stock]);
   await admin.query("DELETE FROM auth_attempts WHERE key LIKE 'refund:%' OR key LIKE 'manager-approval:%'");
+  // --- N7: every activity-log row names who did it --------------------------
+  const actorOf = async (action: string, entityId: number) => (await admin.query(
+    "SELECT user_id, user_name FROM audit_logs WHERE action=$1 AND entity_id=$2 ORDER BY id DESC LIMIT 1", [action, String(entityId)])).rows[0];
+  const supplier = await request("/api/purchasing/suppliers", "POST", { name: "N7 Supplier", phone: "000" }, inventory);
+  const supplierActor = supplier.status === 200 ? await actorOf("supplier_created", supplier.body.supplier?.id ?? supplier.body.id) : null;
+  check(supplierActor?.user_id === 5 && supplierActor?.user_name === "Test inventory_officer", "N7: a new supplier is logged with the person who added it");
+  const ingredient = await request("/api/inventory", "POST", { action: "create_ingredient", name: "N7 Salt", unit: "kg", currentStock: 1, minStockLevel: 0, costPerUnit: 1 }, inventory);
+  const ingredientActor = ingredient.status === 200 ? await actorOf("ingredient_created", ingredient.body.ingredient?.id ?? ingredient.body.id) : null;
+  check(ingredientActor?.user_id === 5, "N7: a new ingredient is logged with the person who added it");
   const pinPad = await request("/api/auth/login", "POST", { pin: "6677" });
   check(pinPad.status === 400 && /email and password/i.test(pinPad.body.error), "login-screen PIN pad explains email/password is required when PIN login is disabled");
   const menu = await request("/api/menu", "GET", undefined, other);

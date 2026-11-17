@@ -1,4 +1,5 @@
 import { secureRoute, isDatabaseFailure } from "@/lib/api";
+import { auditActor } from "@/lib/audit";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import {
@@ -125,10 +126,11 @@ async function handlePOST(req: Request) {
     }
 
     await db.insert(auditLogs).values({
+      ...auditActor(),
       action: "menu_item_created",
       entityType: "menu",
       entityId: String(newItem.id),
-      details: `Created menu item "${newItem.name}" at $${newItem.price}`,
+      details: `Created menu item "${newItem.name}" at GH₵${newItem.price}`,
     });
 
     return NextResponse.json({ success: true, item: newItem });

@@ -1,4 +1,5 @@
 import { secureRoute, isDatabaseFailure } from "@/lib/api";
+import { auditActor } from "@/lib/audit";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { suppliers, auditLogs } from "@/db/schema";
@@ -37,6 +38,7 @@ async function handlePOST(req: Request) {
       .returning();
 
     await db.insert(auditLogs).values({
+      ...auditActor(),
       action: "supplier_created",
       entityType: "inventory",
       entityId: String(newSup.id),

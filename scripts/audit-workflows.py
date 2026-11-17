@@ -229,6 +229,21 @@ for path in sorted(list((SRC / "app").rglob("*.ts")) + list((SRC / "app").rglob(
     for match in BLOCKING_HASH.finditer(text):
         failures.append(f"{path.relative_to(ROOT)}:{line_of(text, match.start())} uses a blocking password hash; use hashPasswordAsync / verifyPasswordAsync")
 
+# 9. Every activity-log row names who did it (N7 in docs/FINDINGS.md). Rows for
+#    menu, stock, recipe and purchasing changes once had no actor, so the log could
+#    not answer "who changed this price?". An insert must spread auditActor()
+#    (src/lib/audit.ts) or set userId itself.
+for path in sorted(list((SRC / "app").rglob("*.ts")) + list((SRC / "lib").rglob("*.ts"))):
+    text = path.read_text()
+    for match in re.finditer(r"insert\(auditLogs\)\.values\(", text):
+        depth, end = 1, match.end()
+        while depth and end < len(text):
+            depth += {"(": 1, ")": -1}.get(text[end], 0)
+            end += 1
+        values = text[match.end():end]
+        if "userId" not in values and "auditActor()" not in values:
+            failures.append(f"{path.relative_to(ROOT)}:{line_of(text, match.start())} writes an activity-log row with no actor; spread auditActor()")
+
 # ---------------------------------------------------------------- report ----
 print(f"Workflow audit: {len(list(SRC.rglob('*.ts')))} TS + {len(list(SRC.rglob('*.tsx')))} TSX files")
 for finding in failures:
