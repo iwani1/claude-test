@@ -36,7 +36,12 @@ Managers cannot create owners/managers, modify those privileged accounts, or see
 PINs. PIN change/account toggle increments session version; logout revokes all
 sessions for the current user. Anonymous PIN login is disabled by default.
 Database-backed throttles survive failed-login transaction rollback and multiple
-Node workers. Protect login endpoints with edge controls as well.
+Node workers. Wrong passwords are limited per client address (30 per 15 minutes,
+across all accounts), per account from one address (10), and per account overall
+(50, a backstop against distributed guessing). There is deliberately no site-wide
+lock: a site-wide failure count only logs a `login_failure_surge` alert, so a
+stranger cannot lock the whole venue out. The client address comes from nginx's
+X-Real-IP header (see docs/VPS_DEPLOYMENT.md); keep the edge `auth_limit` zone too.
 
 ## Financial and offline integrity
 

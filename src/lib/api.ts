@@ -191,10 +191,23 @@ export async function assertNotThrottled(key: string, maximum = 10) {
   const result = await rateDb().execute(sql`select count from auth_attempts where key = ${key} and reset_at > now()`);
   if (result.rows[0] && Number(result.rows[0].count) >= maximum) throw new ApiError(429, "Too many attempts. Try again in 15 minutes.");
 }
-/** Records one failed attempt against `key`. Call it only for a wrong credential. */
-export async function recordFailedAttempt(key: string) {
-  await rateDb().execute(sql`insert into auth_attempts (key, count, reset_at) values (${key}, 1, now() + interval '15 minutes')
+/** Records one failed attempt against `key` and returns the count in the current
+ *  window. Call it only for a wrong credential. */
+export async function recordFailedAttempt(key: string): Promise<number> {
+  const result = await rateDb().execute(sql`insert into auth_attempts (key, count, reset_at) values (${key}, 1, now() + interval '15 minutes')
     on conflict (key) do update set
       count = case when auth_attempts.reset_at <= now() then 1 else auth_attempts.count + 1 end,
-      reset_at = case when auth_attempts.reset_at <= now() then now() + interval '15 minutes' else auth_attempts.reset_at end`);
+      reset_at = case when auth_attempts.reset_at <= now() then now() + interval '15 minutes' else auth_attempts.reset_at end
+    returning count`);
+  return Number(result.rows[0]?.count ?? 0);
+}
+
+/** The client address as the reverse proxy reports it. nginx sets X-Real-IP to
+ *  $remote_addr, overwriting anything the client sent (docs/VPS_DEPLOYMENT.md,
+ *  Phase 8), and the firewall keeps the app port closed, so the header cannot be
+ *  forged from outside. Without a proxy every request shares one "direct" bucket,
+ *  which is never worse than the account limits on their own. */
+export function clientAddress(req: Request): string {
+  const value = req.headers.get("x-real-ip")?.trim() || "";
+  return /^[0-9a-fA-F:.]{2,45}$/.test(value) ? value.toLowerCase() : "direct";
 }

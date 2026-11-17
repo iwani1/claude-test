@@ -273,6 +273,20 @@ server {
 
     client_max_body_size 1m;
     limit_req zone=req_limit burst=20 nodelay;
+    limit_req_status 429;
+
+    # Sign-in gets a much tighter per-address limit. The app also throttles
+    # wrong passwords per address and per account; this stops floods earlier.
+    location = /api/auth/login {
+        limit_req zone=auth_limit burst=5 nodelay;
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_read_timeout 60s;
+    }
 
     location / {
         proxy_pass http://127.0.0.1:3000;
@@ -290,7 +304,13 @@ Add the rate-limit zone at the top of `/etc/nginx/nginx.conf` inside `http {}`:
 
 ```nginx
 limit_req_zone $binary_remote_addr zone=req_limit:10m rate=10r/s;
+limit_req_zone $binary_remote_addr zone=auth_limit:10m rate=1r/s;
 ```
+
+`proxy_set_header X-Real-IP $remote_addr` is required, not optional: the app uses
+X-Real-IP to throttle wrong passwords per address. nginx overwrites whatever a
+client sends, and the firewall keeps port 3000 closed, so it cannot be forged.
+Never expose port 3000 directly.
 
 Point DNS `pos.example.com → YOUR_SERVER_IP` (A record), then:
 

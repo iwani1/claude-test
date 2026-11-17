@@ -467,10 +467,29 @@ async function main() {
   for (let i = 0; i < 12; i++) if ((await request("/api/auth/login", "POST", ownerLogin)).status === 200) successes++;
   check(successes === 12 && (await counter("email:user1@test.invalid")) === 0, "twelve successful sign-ins are never throttled or counted");
   check((await request("/api/auth/login", "POST", { ...ownerLogin, password: "wrong-password-123" })).status === 401 && (await counter("email:user1@test.invalid")) === 1, "a wrong password counts once");
-  await admin.query("UPDATE auth_attempts SET count=10, reset_at=now()+interval '15 minutes' WHERE key='email:user1@test.invalid'");
-  check((await request("/api/auth/login", "POST", ownerLogin)).status === 429, "a locked account refuses the right password");
-  await admin.query("DELETE FROM auth_attempts WHERE key='email:user1@test.invalid'");
+  check((await counter("email:user1@test.invalid:ip:direct")) === 1 && (await counter("login:ip:direct")) >= 1, "a wrong password also counts against the account-from-this-address and address keys");
+  const lock = (key: string, count: number) => admin.query(
+    "INSERT INTO auth_attempts (key, count, reset_at) VALUES ($1, $2, now()+interval '15 minutes') ON CONFLICT (key) DO UPDATE SET count=$2, reset_at=now()+interval '15 minutes'", [key, count]);
+  await lock("email:user1@test.invalid:ip:direct", 10);
+  check((await request("/api/auth/login", "POST", ownerLogin)).status === 429, "a locked account refuses the right password from the locked address");
+  await admin.query("DELETE FROM auth_attempts WHERE key LIKE 'email:user1@test.invalid%'");
   check((await request("/api/auth/login", "POST", ownerLogin)).status === 200, "the account opens again once the lock is cleared");
+  // P2: nobody can lock the whole restaurant out. A flood of failures site-wide,
+  // or against one account from somewhere else, must not stop staff signing in.
+  const venue = { "X-Real-IP": "198.51.100.7" }, attacker = { "X-Real-IP": "203.0.113.9" };
+  await lock("login:global", 100000);
+  check((await request("/api/auth/login", "POST", ownerLogin, "", venue)).status === 200, "P2: a site-wide failure flood never refuses a correct login");
+  await admin.query("DELETE FROM auth_attempts WHERE key='login:global'");
+  await lock("email:user1@test.invalid:ip:203.0.113.9", 10);
+  check((await request("/api/auth/login", "POST", ownerLogin, "", attacker)).status === 429, "P2: the address that guessed an account is locked out of it");
+  check((await request("/api/auth/login", "POST", ownerLogin, "", venue)).status === 200, "P2: that lock does not reach the same account from another address");
+  await lock("login:ip:203.0.113.9", 30);
+  check((await request("/api/auth/login", "POST", { email: "user2@test.invalid", password: "Test-password-only-123!" }, "", attacker)).status === 429, "P2: an address spraying many accounts is refused for every account");
+  check((await request("/api/auth/login", "POST", { email: "user2@test.invalid", password: "Test-password-only-123!" }, "", venue)).status === 200, "P2: other addresses keep signing in");
+  await lock("email:user1@test.invalid", 50);
+  check((await request("/api/auth/login", "POST", ownerLogin, "", venue)).status === 429, "an account guessed from many addresses hits its overall backstop");
+  await admin.query("DELETE FROM auth_attempts WHERE key LIKE 'email:user1@test.invalid%' OR key LIKE 'email:user2@test.invalid%' OR key LIKE 'login:%'");
+  check((await request("/api/auth/login", "POST", ownerLogin)).status === 200, "the account opens again once the backstop is cleared");
   const runtime = new Pool({ connectionString: process.env.DATABASE_URL });
   try { check((await runtime.query("SELECT * FROM orders")).rowCount === 0, "runtime DB connection without request scope sees no orders"); } finally { await runtime.end(); }
   // --- A database that has not been migrated must say so, not fail randomly --
