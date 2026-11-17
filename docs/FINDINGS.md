@@ -26,13 +26,13 @@ the VPS is **not** fixed: it is lost on the next deploy and invisible to audits.
 | Severity | Open | Owner action | Fixed | Accepted |
 |---|---|---|---|---|
 | Critical | 0 | 1 | 1 | 0 |
-| High | 1 | 0 | 4 | 0 |
+| High | 0 | 1 | 4 | 0 |
 | Medium | 9 | 0 | 0 | 0 |
 | Low / Info | 11 | 0 | 3 | 0 |
 
 ## Go-live blockers
 
-N2 (owner action; owner has deferred making the repo private, see its row) and P1. N3, N4, N5 and P2 are fixed in PR #37. See the go-live checklist in
+N2 (owner action; owner has deferred making the repo private, see its row) and P1 (owner action: install the backup job on the server, Phase 10). N3, N4, N5 and P2 are fixed in PR #37. See the go-live checklist in
 [`PRODUCTION_READINESS_2026-11-17.md`](PRODUCTION_READINESS_2026-11-17.md).
 
 ## Application findings — [`AUDIT_2026-11-17.md`](AUDIT_2026-11-17.md)
@@ -58,7 +58,7 @@ N2 (owner action; owner has deferred making the repo private, see its row) and P
 
 | ID | Sev | Title | Status | Fixed by / decision | Verified | Where to look |
 |---|---|---|---|---|---|---|
-| P1 | High | No automated off-site backups (only at deploy time) | Open | — | 2026-11-17 | `docs/VPS_DEPLOYMENT.md` Phase 10; no backup script in `scripts/` |
+| P1 | High | No automated off-site backups (only at deploy time) | **Owner action** | Code shipped in PR #37: `scripts/backup.sh` (hourly 07–23 + 03:00, `pg_restore -l` verified, 14 days + 12 monthly kept, `age`-encrypted off-site upload via `rclone`, refuses unencrypted upload, heartbeat on success and failure), `scripts/restore-check.sh` (weekly restore into a scratch DB), systemd units in `deploy/systemd/`. **Not in effect until installed on the server** per `docs/VPS_DEPLOYMENT.md` Phase 10 (encryption key, bucket, heartbeat URLs). Mark Fixed once the first off-site copy and restore check succeed on the VPS | `npm run test:backup` (7 checks, run in CI) | `scripts/backup.sh`, `scripts/restore-check.sh`, `deploy/`, `docs/VPS_DEPLOYMENT.md` Phase 10 |
 | P2 | High | Global login-failure counter lets anyone lock out all sign-ins | **Fixed** | PR #37 (`16da35e`): no site-wide lock; limits per address (30), per account per address (10), per account (50); site-wide count only logs `login_failure_surge`; nginx `auth_limit` zone and `limit_req_status 429` in the deployment guide | `tests/security.ts` P2 checks (flood never refuses a correct login; locks stay with the guessing address; per-address spray refused; account backstop) | `src/app/api/auth/login/route.ts`, `src/lib/api.ts` `clientAddress`, `docs/VPS_DEPLOYMENT.md` Phase 8 |
 | P3 | Medium | Deploy builds in place over the live `.next`; slow rollback | Open | — | 2026-11-17 | `scripts/deploy-vps.sh` step 5 |
 | P4 | Medium | 8-hour sessions, never renewed | Open | — | 2026-11-17 | `src/lib/auth.ts` `SESSION_SECONDS` |

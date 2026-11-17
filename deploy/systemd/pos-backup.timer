@@ -1,0 +1,13 @@
+# Hourly during trading hours, plus one overnight run. Ghana is UTC+0.
+# Persistent=true runs a missed backup as soon as the server is back up.
+[Unit]
+Description=Restaurant POS database backup schedule
+
+[Timer]
+OnCalendar=*-*-* 07..23:05:00
+OnCalendar=*-*-* 03:05:00
+RandomizedDelaySec=120
+Persistent=true
+
+[Install]
+WantedBy=timers.target

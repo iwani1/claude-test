@@ -342,22 +342,89 @@ over HTTPS; don't test logins over plain HTTP.
 
 ## Phase 10 — Backups (do this on day one)
 
+The repository ships the backup job; this phase installs it. Without it the only
+backups are the ones `deploy-vps.sh` takes before a deploy, on the same disk as
+the database.
+
+What it does (`scripts/backup.sh`, every hour 07:00–23:00 plus 03:00):
+- `pg_dump -Fc`, verified with `pg_restore -l` before it is kept;
+- keeps 14 days of dumps in `/var/backups/pos/recent` and one per month (12 months)
+  in `/var/backups/pos/monthly`, root-only;
+- encrypts a copy with `age` and uploads **only that** to object storage with `rclone`;
+- pings a heartbeat URL on success and `/fail` on failure.
+
+Every Monday, `scripts/restore-check.sh` restores the newest dump into a scratch
+database, checks that the core tables came back, and drops it.
+
+### 1. Install the tools and the schedule
+
 ```sh
-# Daily logical backup as the postgres user
-sudo -u postgres pg_dump -Fc pos > /root/backups/pos-$(date +%F).dump
+apt install -y age rclone
+mkdir -p /etc/pos && chmod 700 /etc/pos
+cp /opt/pos/deploy/backup.env.example /etc/pos/backup.env && chmod 600 /etc/pos/backup.env
+cp /opt/pos/deploy/systemd/pos-backup.* /opt/pos/deploy/systemd/pos-restore-check.* /etc/systemd/system/
+systemctl daemon-reload
+systemctl enable --now pos-backup.timer pos-restore-check.timer
 ```
 
-Automate with a cron/systemd timer, copy backups **off the server** (Contabo
-Object Storage or another host) with restricted access, and rehearse a restore
-into a new database (never over production):
+### 2. Encryption key: make it on YOUR computer, not the server
 
 ```sh
-sudo -u postgres createdb pos_restore_test
-sudo -u postgres pg_restore --exit-on-error --no-owner -d pos_restore_test /root/backups/pos-YYYY-MM-DD.dump
+age-keygen -o pos-backup.key
 ```
 
-Full restore acceptance criteria are in `docs/PILOT_RUNBOOK.md`. Also consider
-Contabo's VPS Auto Backup in the panel as a second layer.
+It prints a public key (`age1...`). Put that in `BACKUP_AGE_RECIPIENT` in
+`/etc/pos/backup.env`. Keep `pos-backup.key` somewhere safe and **off the server**,
+such as a password manager plus a printed copy in the office safe. Without it the
+off-site backups cannot be read, by an attacker or by you.
+
+### 3. Off-site storage
+
+Create a bucket in Contabo Object Storage (or any S3-compatible provider), with an
+access key limited to that bucket. Then on the server:
+
+```sh
+rclone config      # new remote, name it "contabo", type "s3", provider "Other",
+                   # endpoint from the Contabo panel, the bucket's access key/secret
+```
+
+Set `BACKUP_REMOTE=contabo:pos-backups` in `/etc/pos/backup.env`. The script refuses
+to upload unless the encryption key is set.
+
+### 4. Alerts
+
+Create two free checks at healthchecks.io: "POS backup", period 1 hour, grace
+2 hours; and "POS restore check", period 1 week. Put their ping URLs in
+`BACKUP_HEARTBEAT_URL` and `RESTORE_HEARTBEAT_URL`, and set the checks to alert
+you by SMS, WhatsApp or email. A failed run, or a run that never happens, then
+reaches you instead of being found at the till.
+
+### 5. Prove it works, now and after any change
+
+```sh
+systemctl start pos-backup.service && journalctl -u pos-backup.service -n 20 --no-pager
+systemctl start pos-restore-check.service && journalctl -u pos-restore-check.service -n 30 --no-pager
+systemctl list-timers 'pos-*'
+```
+
+Then download one `.dump.age` from the bucket to your own computer and decrypt it
+(`age -d -i pos-backup.key FILE.dump.age > test.dump`), so you know the key works.
+Contabo's VPS Auto Backup in the panel is a useful second layer, not a replacement.
+
+### Restoring for real
+
+Stop the app first (`systemctl stop pos`), and make one more dump of the current
+state before overwriting it. Then:
+
+```sh
+sudo -u postgres dropdb pos && sudo -u postgres createdb -O pos_owner pos
+sudo -u postgres pg_restore --exit-on-error -d pos < /var/backups/pos/recent/pos-YYYY-MM-DDTHHMMZ.dump
+# or, from off-site: age -d -i pos-backup.key FILE.dump.age | sudo -u postgres pg_restore --exit-on-error -d pos
+systemctl start pos && curl -sS http://127.0.0.1:3000/api/health
+```
+
+Re-apply the `pos_runtime` grants from Phase 6 if they are missing. Full restore
+acceptance criteria are in `docs/PILOT_RUNBOOK.md`.
 
 ---
 

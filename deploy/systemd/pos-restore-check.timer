@@ -1,0 +1,10 @@
+# Weekly, Monday early morning, after the overnight backup.
+[Unit]
+Description=Restaurant POS weekly restore check schedule
+
+[Timer]
+OnCalendar=Mon *-*-* 04:30:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target
