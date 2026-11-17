@@ -1,6 +1,7 @@
 "use client";
 
 import { LoadFailure } from "./LoadFailure";
+import { StockCountHistory } from "./StockCountHistory";
 
 import React, { useState, useEffect, useCallback } from "react";
 import {
@@ -49,6 +50,7 @@ export const InventoryManager: React.FC = () => {
   // Cycle count state
   const [auditItems, setAuditItems] = useState<Record<number, string>>({});
   const [auditNotes, setAuditNotes] = useState("");
+  const [countHistoryRevision, setCountHistoryRevision] = useState(0);
 
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -170,6 +172,7 @@ export const InventoryManager: React.FC = () => {
         notify(reconcile ? "Physical stock count reconciled and system stock updated!" : "Cycle count saved!", "ok");
         setAuditItems({});
         setAuditNotes("");
+        setCountHistoryRevision((revision) => revision + 1);
         fetchInventory();
       } else {
         notify(data.error || "Count was not saved", "error");
@@ -749,6 +752,7 @@ export const InventoryManager: React.FC = () => {
             </div>
           </div>
         )}
+        {activeSubTab === "audit" && <div className="mt-4"><StockCountHistory refreshKey={countHistoryRevision} /></div>}
       </div>
 
       {/* MODAL 1: Adjust Stock */}

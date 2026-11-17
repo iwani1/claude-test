@@ -1,16 +1,26 @@
-import { secureRoute, isDatabaseFailure } from "@/lib/api";
+import { secureRoute, ApiError, isDatabaseFailure } from "@/lib/api";
 import { NextResponse } from "next/server";
 import { db, requestContext } from "@/db";
-import { stockCounts, ingredients, stockMovements, auditLogs } from "@/db/schema";
-import { desc, eq } from "drizzle-orm";
+import { stockCounts, ingredients, stockMovements, auditLogs, users } from "@/db/schema";
+import { auditListQuery } from "@/lib/audit-list-query";
+import { and, desc, eq, gte, lt } from "drizzle-orm";
 
-async function handleGET() {
+async function handleGET(req: Request) {
   try {
-    const counts = await db.select().from(stockCounts).orderBy(desc(stockCounts.countDate)).limit(20);
-    return NextResponse.json({ counts });
-  } catch (err: any) {
-    if (isDatabaseFailure(err)) throw err;
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    const { limit, offset, window } = auditListQuery(new URL(req.url).searchParams, 20, 100);
+    const rows = await db.select({ count: stockCounts, conductedByName: users.name })
+      .from(stockCounts).leftJoin(users, eq(stockCounts.conductedBy, users.id))
+      .where(window ? and(gte(stockCounts.countDate, window.start!), lt(stockCounts.countDate, window.end)) : undefined)
+      .orderBy(desc(stockCounts.countDate), desc(stockCounts.id))
+      .limit(limit + 1).offset(offset);
+    const hasMore = rows.length > limit;
+    return NextResponse.json({
+      counts: rows.slice(0, limit).map(({ count, conductedByName }) => ({ ...count, conductedByName })),
+      hasMore,
+    });
+  } catch (err: unknown) {
+    if (err instanceof ApiError || isDatabaseFailure(err)) throw err;
+    return NextResponse.json({ error: "Could not load stock counts" }, { status: 500 });
   }
 }
 
