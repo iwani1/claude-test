@@ -40,6 +40,8 @@ jobs:
       - run: npm run test:backup
       # Release folders for deploys: switch-over, rollback, pruning, module links.
       - run: npm run test:deploy
+      # Server health check used for alerts (scripts/monitor.sh).
+      - run: npm run test:monitor
       - run: npm run test:security
       - run: npm audit --omit=dev
       - uses: actions/upload-artifact@v7

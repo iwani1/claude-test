@@ -27,7 +27,7 @@ the VPS is **not** fixed: it is lost on the next deploy and invisible to audits.
 |---|---|---|---|---|
 | Critical | 0 | 1 | 1 | 0 |
 | High | 0 | 1 | 4 | 0 |
-| Medium | 3 | 0 | 6 | 0 |
+| Medium | 2 | 1 | 6 | 0 |
 | Low / Info | 12 | 0 | 3 | 0 |
 
 ## Go-live blockers
@@ -66,7 +66,7 @@ N2 (owner action; owner has deferred making the repo private, see its row) and P
 | P5 | Medium | No DB statement, lock or idle-in-transaction timeouts; pool has no connect timeout | **Fixed** | PR #37: every app connection carries `statement_timeout` 15 s, `lock_timeout` 5 s, `idle_in_transaction_session_timeout` 30 s, plus a 5 s pool connect timeout (`src/db/timeouts.ts`, env-tunable, 0 refused). Timeouts answer 503 with a plain 'try again' message and `Retry-After` (`databaseBusyMessage`). Maintenance scripts are unaffected | `tests/security.ts` P5 checks: a row locked by another session makes an edit fail in under 5 s with the clear message, and the same edit succeeds after release; defaults and the refusal of 0 | `src/db/timeouts.ts`, `src/db/index.ts`, `src/lib/api.ts`, `src/lib/schema-guard.ts` |
 | P6 | Medium | `scryptSync` blocks the event loop on every login, PIN or refund | **Fixed** | PR #37: request handlers (login, PIN switch, refund and manager approvals, staff PIN/password changes) use `hashPasswordAsync` / `verifyPasswordAsync` (same scrypt parameters, on libuv worker threads); the login dummy hash is made lazily off-thread; blocking forms stay for scripts and tests. `audit:workflows` rule 8 refuses blocking hashes under `src/app` and `src/lib` | `tests/security.ts` P6 checks: async and blocking hashes interchangeable; wrong/oversized/malformed refused; legacy PBKDF2 verifies; a 10 ms timer keeps ticking during four concurrent checks. Rule 8 shown to fail on a reintroduced blocking call | `src/lib/auth.ts`, `scripts/audit-workflows.py` rule 8 |
 | P7 | Medium | Reports load the whole branch history every request | Open | — | 2026-11-17 | `src/app/api/reports/route.ts` |
-| P8 | Medium | No uptime, backup, disk or certificate alerting | Open | — | 2026-11-17 | ops |
+| P8 | Medium | No uptime, backup, disk or certificate alerting | **Owner action** | Code and steps shipped in PR #37: `scripts/monitor.sh` (every 10 min via `deploy/systemd/pos-monitor.timer`) checks local health, the service, disk space, certificate expiry, backup age and error bursts, and pings a heartbeat (`/fail` with the problem list on failure); backup and restore heartbeats came with P1; `docs/VPS_DEPLOYMENT.md` Phase 11 covers the outside uptime check, the monitor install, a journald size cap, and an alert drill. **Not in effect until set up on the server and the alert services.** Mark Fixed once the drill (stop the app, both alerts arrive, both recover) succeeds | `npm run test:monitor` (12 checks, in CI): each check alerts on its own problem with a clear message, healthy reports success, problems combine; mutation-checked; run once against real system tools | `scripts/monitor.sh`, `deploy/`, `docs/VPS_DEPLOYMENT.md` Phase 11 |
 | P9 | Low | nginx limit is per IP; tills share one NAT IP; 503 on throttle | Open | — | 2026-11-17 | `docs/VPS_DEPLOYMENT.md` Phase 8 |
 | P10 | Low | systemd and secret-file hardening gaps | Open | — | 2026-11-17 | `docs/VPS_DEPLOYMENT.md` Phases 5 and 7 |
 | P11 | Low | Manual grants step after migrations | Open | — | 2026-11-17 | `scripts/deploy-vps.sh` step 3 |

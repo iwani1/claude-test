@@ -1,0 +1,13 @@
+# Lush View POS: server health check for alerts (scripts/monitor.sh).
+# Installed to /etc/systemd/system/ — see docs/VPS_DEPLOYMENT.md, Phase 11.
+# Exits 1 when it finds a problem; the alert itself goes to MONITOR_HEARTBEAT_URL.
+[Unit]
+Description=Restaurant POS health check
+
+[Service]
+Type=oneshot
+EnvironmentFile=-/etc/pos/monitor.env
+ExecStart=/opt/pos/scripts/monitor.sh
+Nice=10
+PrivateTmp=true
+NoNewPrivileges=true

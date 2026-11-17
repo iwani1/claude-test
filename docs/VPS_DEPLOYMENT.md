@@ -428,6 +428,67 @@ acceptance criteria are in `docs/PILOT_RUNBOOK.md`.
 
 ---
 
+## Phase 11 — Alerts (so problems reach you, not the till)
+
+Three layers, all free at this size. Do them on day one with the backups.
+
+### 1. Outside check: is the till reachable?
+
+In any uptime monitor (for example UptimeRobot or Better Stack), add an
+**HTTP keyword** monitor:
+
+- URL: `https://pos.example.com/api/health`
+- keyword: `"ok":true`
+- interval: 1 minute; alert after 2 failures
+- alert contacts: SMS or WhatsApp to the owner, plus email
+
+This is the only check that notices the whole server being down or offline.
+
+### 2. Inside check: what only the server can see
+
+`scripts/monitor.sh` runs every 10 minutes and checks:
+- the app's health check, from the server itself;
+- the `pos` service is running;
+- disk space on `/` and on the backup disk;
+- days left on the HTTPS certificate;
+- the age of the newest backup;
+- a burst of server errors in the log.
+
+```sh
+cp /opt/pos/deploy/monitor.env.example /etc/pos/monitor.env && chmod 600 /etc/pos/monitor.env
+nano /etc/pos/monitor.env          # CERT_HOST and MONITOR_HEARTBEAT_URL
+cp /opt/pos/deploy/systemd/pos-monitor.* /etc/systemd/system/
+systemctl daemon-reload && systemctl enable --now pos-monitor.timer
+systemctl start pos-monitor.service && journalctl -u pos-monitor.service -n 20 --no-pager
+```
+
+At healthchecks.io create a check "POS server" with **period 10 minutes, grace
+20 minutes** and put its ping URL in `MONITOR_HEARTBEAT_URL`. All good pings it.
+A problem pings `/fail` with the list of what is wrong, which appears in the alert.
+A server that stops reporting alerts too. You are told once when a problem starts
+and once when it clears, not every 10 minutes.
+
+### 3. Backups
+
+The backup and restore-check heartbeats from Phase 10 alert on a failed or
+missed backup.
+
+### Keep logs from filling the disk
+
+```sh
+mkdir -p /etc/systemd/journald.conf.d
+printf '[Journal]\nSystemMaxUse=500M\n' > /etc/systemd/journald.conf.d/pos.conf
+systemctl restart systemd-journald
+```
+
+### Prove the alerts work
+
+Stop the app for two minutes (`systemctl stop pos`), confirm the outside check
+and the "POS server" check both alert, then `systemctl start pos` and confirm both
+report recovery. Do this once now, and again after changing phone numbers.
+
+---
+
 ## Updating the app later
 
 ### The short way — one command
