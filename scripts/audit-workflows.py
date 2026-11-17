@@ -216,6 +216,19 @@ for tab, api_path, clients in TAB_GATES:
         elif visible.group(1) != permission:
             failures.append(f"{client.relative_to(ROOT)} shows the {tab} tab on perms.{visible.group(1)} but the API requires {permission}")
 
+# 8. Password and PIN hashing in request code must not block the event loop
+#    (P6 in docs/FINDINGS.md). scrypt costs ~50-150 ms of CPU; the sync forms
+#    froze every till while one person signed in, switched or approved a refund.
+#    Request code uses hashPasswordAsync / verifyPasswordAsync; the blocking forms
+#    stay in src/lib/auth.ts for maintenance scripts, seeding and tests.
+BLOCKING_HASH = re.compile(r"\b(?:hashPassword|verifyPassword)\s*\(|\b(?:scryptSync|pbkdf2Sync)\b")
+for path in sorted(list((SRC / "app").rglob("*.ts")) + list((SRC / "app").rglob("*.tsx")) + list((SRC / "lib").rglob("*.ts"))):
+    if path == SRC / "lib/auth.ts":
+        continue
+    text = path.read_text()
+    for match in BLOCKING_HASH.finditer(text):
+        failures.append(f"{path.relative_to(ROOT)}:{line_of(text, match.start())} uses a blocking password hash; use hashPasswordAsync / verifyPasswordAsync")
+
 # ---------------------------------------------------------------- report ----
 print(f"Workflow audit: {len(list(SRC.rglob('*.ts')))} TS + {len(list(SRC.rglob('*.tsx')))} TSX files")
 for finding in failures:

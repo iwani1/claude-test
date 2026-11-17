@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { db, requestContext } from "@/db";
 import { users, auditLogs } from "@/db/schema";
-import { cookieOptions, createToken, pinDigest, publicUser, verifyPassword } from "@/lib/auth";
+import { cookieOptions, createToken, pinDigest, publicUser, verifyPasswordAsync } from "@/lib/auth";
 import { ApiError, activateUser, assertNotThrottled, recordFailedAttempt, secureRoute } from "@/lib/api";
 export const POST = secureRoute(async req => {
   const current = requestContext.getStore()!.user!;
@@ -15,7 +15,7 @@ export const POST = secureRoute(async req => {
     throw new ApiError(400, "Invalid PIN");
   }
   const [user] = await db.select().from(users).where(eq(users.pinLookup, pinDigest(pin)));
-  if (!user?.pin || !verifyPassword(pin, user.pin)) {
+  if (!user?.pin || !(await verifyPasswordAsync(pin, user.pin))) {
     await recordFailedAttempt(pinKey);
     throw new ApiError(401, "Invalid PIN");
   }

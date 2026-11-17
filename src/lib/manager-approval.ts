@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { db, requestContext } from "@/db";
 import { users, kitchenTickets, orders } from "@/db/schema";
-import { pinDigest, verifyPassword } from "./auth";
+import { pinDigest, verifyPasswordAsync } from "./auth";
 import { assertNotThrottled, recordFailedAttempt } from "./api";
 
 /** Error codes the till recognises: it asks for a manager's PIN and retries. */
@@ -35,7 +35,7 @@ export async function verifyManagerApproval(managerPin: unknown, reason: string)
   };
   if (typeof managerPin !== "string" || !/^\d{4,8}$/.test(managerPin)) return refuse();
   const [manager] = await db.select().from(users).where(eq(users.pinLookup, pinDigest(managerPin)));
-  if (!manager?.isActive || !["super_admin", "manager"].includes(manager.role) || !manager.pin || !verifyPassword(managerPin, manager.pin)) return refuse();
+  if (!manager?.isActive || !["super_admin", "manager"].includes(manager.role) || !manager.pin || !(await verifyPasswordAsync(managerPin, manager.pin))) return refuse();
   return { ok: true, manager: { id: manager.id, name: manager.name } };
 }
 

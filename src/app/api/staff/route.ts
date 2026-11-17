@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { eq, and, asc, isNull, sql } from "drizzle-orm";
 import { db, requestContext } from "@/db";
 import { users, shifts, auditLogs } from "@/db/schema";
-import { effectivePermissions, hashPassword, permissionOverridesFor, pinDigest, PERMISSION_KEYS, ROLE_PERMISSIONS, sanitizePermissionOverrides, UserRole, type PermissionKey } from "@/lib/auth";
+import { effectivePermissions, hashPasswordAsync, permissionOverridesFor, pinDigest, PERMISSION_KEYS, ROLE_PERMISSIONS, sanitizePermissionOverrides, UserRole, type PermissionKey } from "@/lib/auth";
 import { ApiError, assertNotThrottled, recordFailedAttempt, secureRoute } from "@/lib/api";
 
 // PINs are unique per branch, so choosing a PIN that is taken has to be refused,
@@ -94,7 +94,7 @@ export const POST = secureRoute(async req => {
       permissionOverrides = permissionOverridesFor(role as UserRole, selectedPermissions(body.permissions));
     }
     [employee] = await db.insert(users).values({ restaurantId: actor.restaurantId, branchId: actor.branchId, name: name.trim(), email: email.trim().toLowerCase(),
-      passwordHash: hashPassword(password), pin: pin ? hashPassword(pin) : null, pinLookup: pin ? pinDigest(pin) : null,
+      passwordHash: await hashPasswordAsync(password), pin: pin ? await hashPasswordAsync(pin) : null, pinLookup: pin ? pinDigest(pin) : null,
       role: role as UserRole, permissionOverrides, phone: typeof phone === "string" ? phone : null }).returning(fields);
     employee = withPermissions({ ...employee, permissionOverrides });
   } else if (["toggle_active", "update_pin", "reset_password", "delete_user", "update_permissions"].includes(action)) {
@@ -147,11 +147,11 @@ export const POST = secureRoute(async req => {
         [employee] = await db.update(users).set({ isActive: body.isActive, sessionVersion: sql`${users.sessionVersion} + 1` }).where(eq(users.id, target.id)).returning(fields);
       } else if (action === "update_pin") {
         if (typeof body.pin !== "string" || !/^\d{4,8}$/.test(body.pin)) throw new ApiError(400, "PIN must contain 4–8 digits");
-        [employee] = await db.update(users).set({ pin: hashPassword(body.pin), pinLookup: pinDigest(body.pin), sessionVersion: sql`${users.sessionVersion} + 1` }).where(eq(users.id, target.id)).returning(fields);
+        [employee] = await db.update(users).set({ pin: await hashPasswordAsync(body.pin), pinLookup: pinDigest(body.pin), sessionVersion: sql`${users.sessionVersion} + 1` }).where(eq(users.id, target.id)).returning(fields);
       } else {
         // Password reset (self or managed account) always revokes existing sessions.
         if (typeof body.password !== "string" || body.password.length < 12 || body.password.length > 256) throw new ApiError(400, "Password must be 12–256 characters");
-        [employee] = await db.update(users).set({ passwordHash: hashPassword(body.password), sessionVersion: sql`${users.sessionVersion} + 1` }).where(eq(users.id, target.id)).returning(fields);
+        [employee] = await db.update(users).set({ passwordHash: await hashPasswordAsync(body.password), sessionVersion: sql`${users.sessionVersion} + 1` }).where(eq(users.id, target.id)).returning(fields);
       }
     }
   } else throw new ApiError(400, "Invalid action");

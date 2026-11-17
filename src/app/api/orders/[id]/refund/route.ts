@@ -4,7 +4,7 @@ import { refundBalance } from "@/lib/refund-balance";
 import { eq, sql, and } from "drizzle-orm";
 import { db, requestContext } from "@/db";
 import { orders, refunds, auditLogs, users, diningTables, shifts, drawerMovements } from "@/db/schema";
-import { pinDigest, verifyPassword } from "@/lib/auth";
+import { pinDigest, verifyPasswordAsync } from "@/lib/auth";
 import { reverseStockForOrder } from "@/lib/inventory-deduction";
 import { ApiError, assertNotThrottled, recordFailedAttempt, secureRoute } from "@/lib/api";
 import { moneyCents } from "@/lib/money";
@@ -41,7 +41,7 @@ export const POST = secureRoute(async (req, { params }) => {
   }
   // RLS restricts approval to managers in the caller's branch.
   const [manager] = await db.select().from(users).where(eq(users.pinLookup, pinDigest(managerPin)));
-  if (!manager?.isActive || !["super_admin", "manager"].includes(manager.role) || !manager.pin || !verifyPassword(managerPin, manager.pin)) {
+  if (!manager?.isActive || !["super_admin", "manager"].includes(manager.role) || !manager.pin || !(await verifyPasswordAsync(managerPin, manager.pin))) {
     await recordFailedAttempt(refundKey);
     throw new ApiError(403, "Invalid manager approval");
   }

@@ -26,11 +26,51 @@ export function authSecret(): string {
   if (!value || value.length < 32) throw new Error("AUTH_SECRET must contain at least 32 random characters");
   return value;
 }
+const SCRYPT_OPTIONS = { N: 32768, r: 8, p: 1, maxmem: 64 * 1024 * 1024 };
+
+// Password and PIN hashing comes in two forms with identical output (P6 in
+// docs/FINDINGS.md). scrypt at these settings costs ~50-150 ms of CPU, and the
+// *Sync form does that on Node's only JavaScript thread, freezing every other
+// till's request meanwhile. Request handlers must use the async forms, which
+// run on libuv's worker threads; `npm run audit:workflows` refuses the sync
+// forms anywhere under src/app or src/lib. The sync forms remain for one-off
+// maintenance scripts, seeding and tests.
+
+function scryptAsync(password: string, salt: string): Promise<Buffer> {
+  return new Promise((resolve, reject) => crypto.scrypt(password, salt, 64, SCRYPT_OPTIONS, (err, key) => (err ? reject(err) : resolve(key))));
+}
+function pbkdf2Async(password: string, salt: string): Promise<Buffer> {
+  return new Promise((resolve, reject) => crypto.pbkdf2(password, salt, 10000, 64, "sha512", (err, key) => (err ? reject(err) : resolve(key))));
+}
+
+/** Hash a password or PIN without blocking the server. Use in request handlers. */
+export async function hashPasswordAsync(password: string): Promise<string> {
+  const salt = crypto.randomBytes(16).toString("hex");
+  return `scrypt:${salt}:${(await scryptAsync(password, salt)).toString("hex")}`;
+}
+
+/** Check a password or PIN without blocking the server. Use in request handlers. */
+export async function verifyPasswordAsync(password: string, stored: string): Promise<boolean> {
+  try {
+    if (typeof password !== "string" || password.length > 256) return false;
+    const parts = stored.split(":");
+    // Legacy passwords remain readable; successful login upgrades the hash.
+    const expected = Buffer.from(parts.at(-1)!, "hex");
+    const actual = parts[0] === "scrypt" ? await scryptAsync(password, parts[1]) : await pbkdf2Async(password, parts[0]);
+    return actual.length === expected.length && crypto.timingSafeEqual(actual, expected);
+  } catch {
+    /* audit-ok: fails closed — an unverifiable comparison is not a pass */
+    return false;
+  }
+}
+
+/** Blocking form, for maintenance scripts, seeding and tests only. */
 export function hashPassword(password: string): string {
   const salt = crypto.randomBytes(16).toString("hex");
-  const hash = crypto.scryptSync(password, salt, 64, { N: 32768, r: 8, p: 1, maxmem: 64 * 1024 * 1024 });
+  const hash = crypto.scryptSync(password, salt, 64, SCRYPT_OPTIONS);
   return `scrypt:${salt}:${hash.toString("hex")}`;
 }
+/** Blocking form, for maintenance scripts and tests only. */
 export function verifyPassword(password: string, stored: string): boolean {
   try {
     if (typeof password !== "string" || password.length > 256) return false;
@@ -38,7 +78,7 @@ export function verifyPassword(password: string, stored: string): boolean {
     // Legacy passwords remain readable; successful login upgrades the hash.
     const expected = Buffer.from(parts.at(-1)!, "hex");
     const actual = parts[0] === "scrypt"
-      ? crypto.scryptSync(password, parts[1], 64, { N: 32768, r: 8, p: 1, maxmem: 64 * 1024 * 1024 })
+      ? crypto.scryptSync(password, parts[1], 64, SCRYPT_OPTIONS)
       : crypto.pbkdf2Sync(password, parts[0], 10000, 64, "sha512");
     return actual.length === expected.length && crypto.timingSafeEqual(actual, expected);
   } catch {

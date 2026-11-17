@@ -27,7 +27,7 @@ the VPS is **not** fixed: it is lost on the next deploy and invisible to audits.
 |---|---|---|---|---|
 | Critical | 0 | 1 | 1 | 0 |
 | High | 0 | 1 | 4 | 0 |
-| Medium | 7 | 0 | 2 | 0 |
+| Medium | 6 | 0 | 3 | 0 |
 | Low / Info | 11 | 0 | 3 | 0 |
 
 ## Go-live blockers
@@ -63,7 +63,7 @@ N2 (owner action; owner has deferred making the repo private, see its row) and P
 | P3 | Medium | Deploy builds in place over the live `.next`; slow rollback | Open | — | 2026-11-17 | `scripts/deploy-vps.sh` step 5 |
 | P4 | Medium | 8-hour sessions, never renewed | **Fixed** | PR #37: a request from a session over 1 hour old gets a fresh 8-hour cookie (`renewedSessionCookie`, applied in `secureRoute`), so a device in use stays signed in; idle devices still sign out after 7–8 hours; tokens carry the original sign-in time (`auth`) and nothing is renewed or accepted past 16 hours from it. Older tokens without `auth` use their issue time | `tests/security.ts` P4 checks: fresh session not renewed; 2-hour-old session renewed with original sign-in time and secure flags; renewed cookie works; legacy token; renewal capped at 16 h; past-cap token refused | `src/lib/auth.ts`, `src/lib/api.ts` |
 | P5 | Medium | No DB statement, lock or idle-in-transaction timeouts; pool has no connect timeout | **Fixed** | PR #37: every app connection carries `statement_timeout` 15 s, `lock_timeout` 5 s, `idle_in_transaction_session_timeout` 30 s, plus a 5 s pool connect timeout (`src/db/timeouts.ts`, env-tunable, 0 refused). Timeouts answer 503 with a plain 'try again' message and `Retry-After` (`databaseBusyMessage`). Maintenance scripts are unaffected | `tests/security.ts` P5 checks: a row locked by another session makes an edit fail in under 5 s with the clear message, and the same edit succeeds after release; defaults and the refusal of 0 | `src/db/timeouts.ts`, `src/db/index.ts`, `src/lib/api.ts`, `src/lib/schema-guard.ts` |
-| P6 | Medium | `scryptSync` blocks the event loop on every login, PIN or refund | Open | — | 2026-11-17 | `src/lib/auth.ts` |
+| P6 | Medium | `scryptSync` blocks the event loop on every login, PIN or refund | **Fixed** | PR #37: request handlers (login, PIN switch, refund and manager approvals, staff PIN/password changes) use `hashPasswordAsync` / `verifyPasswordAsync` (same scrypt parameters, on libuv worker threads); the login dummy hash is made lazily off-thread; blocking forms stay for scripts and tests. `audit:workflows` rule 8 refuses blocking hashes under `src/app` and `src/lib` | `tests/security.ts` P6 checks: async and blocking hashes interchangeable; wrong/oversized/malformed refused; legacy PBKDF2 verifies; a 10 ms timer keeps ticking during four concurrent checks. Rule 8 shown to fail on a reintroduced blocking call | `src/lib/auth.ts`, `scripts/audit-workflows.py` rule 8 |
 | P7 | Medium | Reports load the whole branch history every request | Open | — | 2026-11-17 | `src/app/api/reports/route.ts` |
 | P8 | Medium | No uptime, backup, disk or certificate alerting | Open | — | 2026-11-17 | ops |
 | P9 | Low | nginx limit is per IP; tills share one NAT IP; 503 on throttle | Open | — | 2026-11-17 | `docs/VPS_DEPLOYMENT.md` Phase 8 |

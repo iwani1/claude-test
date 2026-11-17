@@ -3,7 +3,8 @@ import { Pool } from "pg";
 import { readFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { createHmac, randomUUID } from "node:crypto";
-import { createToken, verifyToken } from "../src/lib/auth";
+import { createToken, verifyToken, hashPassword, verifyPassword, hashPasswordAsync, verifyPasswordAsync } from "../src/lib/auth";
+import { pbkdf2Sync } from "node:crypto";
 import { databaseUnreachableMessage } from "../src/lib/schema-guard";
 const base = "http://127.0.0.1:3100";
 const admin = new Pool({ connectionString: process.env.TEST_ADMIN_URL });
@@ -531,6 +532,20 @@ async function main() {
   check((await request("/api/staff", "POST", { action: "create_employee", name: "Rehired Test", email: "removeme@test.invalid", role: "cashier", password: "Rehire-password-123!", pin: "8383" }, owner)).status === 200, "the freed email and PIN can be used by a new account");
   check((await request("/api/health")).status === 200, "public health endpoint works without scoped data access");
   check((await request("/api/orders", "POST", order("bad-origin"), cashier, { Origin: "https://attacker.invalid" })).status === 403, "cross-origin mutation rejected");
+  // --- P6: password and PIN checks must not freeze the server ----------------
+  const asyncHash = await hashPasswordAsync("Shift-change-1234");
+  check(verifyPassword("Shift-change-1234", asyncHash) && await verifyPasswordAsync("Shift-change-1234", hashPassword("Shift-change-1234")),
+    "P6: async and blocking hashes are interchangeable, so every stored password and PIN still verifies");
+  check(!(await verifyPasswordAsync("wrong-password", asyncHash)) && !(await verifyPasswordAsync("x".repeat(300), asyncHash)) && !(await verifyPasswordAsync("a", "not-a-hash")),
+    "P6: the async check refuses wrong, oversized and malformed input");
+  const legacySalt = "0123456789abcdef";
+  check(await verifyPasswordAsync("Legacy-pass-1", `${legacySalt}:${pbkdf2Sync("Legacy-pass-1", legacySalt, 10000, 64, "sha512").toString("hex")}`),
+    "P6: legacy PBKDF2 hashes still verify asynchronously");
+  let ticks = 0;
+  const ticker = setInterval(() => { ticks++; }, 10);
+  await Promise.all([1, 2, 3, 4].map(() => verifyPasswordAsync("Shift-change-1234", asyncHash)));
+  clearInterval(ticker);
+  check(ticks >= 2, `P6: other work keeps running while four password checks are in progress (${ticks} timer ticks)`);
   const signed = createToken({ id: 3, sessionVersion: 0 });
   check(verifyToken(signed)?.id === 3 && verifyToken(signed + "tampered") === null, "token verification rejects tampering");
   const data = Buffer.from(JSON.stringify({ id: 3, version: 0, iat: 1, exp: 2 })).toString("base64url");
