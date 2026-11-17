@@ -28,7 +28,7 @@ the VPS is **not** fixed: it is lost on the next deploy and invisible to audits.
 | Critical | 0 | 1 | 1 | 0 |
 | High | 5 | 0 | 0 | 0 |
 | Medium | 9 | 0 | 0 | 0 |
-| Low / Info | 11 | 0 | 2 | 1 |
+| Low / Info | 11 | 0 | 3 | 0 |
 
 ## Go-live blockers
 
@@ -52,7 +52,7 @@ N2 (owner action), N3, N4, N5, P1, P2. See the go-live checklist in
 | N11 | Low | `Origin: null` causes a 500; body cap trusts `Content-Length` | Open | — | 2026-11-17 | `src/lib/api.ts` `checkRequest` |
 | N12 | Low | Re-price without discount or tip fields zeroes them (latent) | Open | — | 2026-11-17 | `src/app/api/orders/[id]/edit/route.ts` |
 | N13 | Low | PIN throttles are branch-wide (one person can block everyone) | Open | — | 2026-11-17 | `src/app/api/auth/switch-pin/route.ts`, refund route |
-| N14 | Info | Dev-only advisories (esbuild, minimatch) | Open (tracked) | Standing policy: no `--force` | 2026-11-17 | `npm audit` |
+| N14 | Info | Dev-only dependency advisories: full-tree `npm audit` reports 21 (12 moderate, 9 high), including **high-severity `picomatch`**, plus `esbuild` and `minimatch`. The production tree is clean (`npm audit --omit=dev`: 0) | Open (tracked) | Standing policy: no `--force`; review the dev-tool upgrades separately | 2026-11-17 @ `06126e9`: full `npm audit` 21 (12 moderate, 9 high); `--omit=dev` 0 | `npm audit` |
 
 ## Production findings — [`PRODUCTION_READINESS_2026-11-17.md`](PRODUCTION_READINESS_2026-11-17.md)
 
@@ -80,11 +80,11 @@ listed here were recorded as closed in later audits. Status of the 2026-10-23 se
 |---|---|---|---|
 | F1 | Repo public with legacy DB in history | Superseded by **N2** | |
 | F2 | PIN-switch audit row named the outgoing user | **Fixed** | Verified 2026-11-17 in `src/app/api/auth/switch-pin/route.ts` |
-| F3 | Hold-to-confirm has no single-activation alternative | **Accepted** | Deliberate friction for permanent deletions (2026-10-23) |
+| F3 | Hold-to-confirm has no single-activation alternative | **Fixed** | PR #33 (`f76ed65`): `ConfirmDialog` offers a typed `DELETE` alternative to press-and-hold. Verified 2026-11-17 in `src/components/ConfirmDialog.tsx` (`confirmWord`, typed mode) |
 | F4 | Archived menu readable by any session | **Fixed** | Verified 2026-11-17: `includeArchived` requires `canManageMenu` |
 | F5 | Dev-only dependency advisories | Superseded by **N14** | |
 | F6 | Photo data URLs grow the menu payload | Superseded by **N8** | |
-| F7 | Live deploy state unconfirmed | Open (ops) | Confirm the VPS commit matches `main` after each deploy |
+| F7 | Live deploy state unconfirmed | Open (ops) | `/api/health` does **not** yet report the running commit: `APP_BUILD_COMMIT` appears only in server error logs, and a healthy response is just `{"ok":true}`. Until that changes, confirm the VPS commit by hand (`git -C /opt/pos rev-parse --short HEAD`) after each deploy |
 
 ## Rules
 

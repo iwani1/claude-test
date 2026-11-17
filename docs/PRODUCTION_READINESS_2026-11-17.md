@@ -197,7 +197,9 @@ permissions the `postgres` user can use, or document "run as a non-root user".
 - **Separated database roles:** the runtime login cannot bypass RLS or own the schema;
   migrations use a separate owner login supplied only at maintenance time.
 - **Health endpoint:** reports `schema-behind` and `database-unreachable` separately,
-  leaks no internals, and the build commit is baked in for "what is live?" questions.
+  leaks no internals. The build commit is baked in (`APP_BUILD_COMMIT`), but the endpoint does
+  **not yet report** it: it appears only in server error logs, and a healthy response is just
+  `{"ok":true}`. Confirm the live commit on the server until the endpoint exposes it.
 - **Edge basics:** firewall (`ufw`) allows SSH, 80 and 443 only; fail2ban; key-only SSH
   is recommended; certbot TLS with HSTS in production; strict CSP and frame denial.
 - **CI:** lint, typecheck, a build with no database, static audits, a security suite
