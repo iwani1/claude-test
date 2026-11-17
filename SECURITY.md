@@ -58,6 +58,16 @@ manager's PIN. Partial refunds retain their own payment state. Stock restoration
 uses original stock movements, not a mutable recipe; insufficient stock during
 order creation causes rollback rather than a clamped/inaccurate ledger.
 
+## Removals and voids
+
+Taking items off a bill the kitchen already has, or cancelling such an order,
+needs a manager's PIN at the till (`src/lib/manager-approval.ts`); wrong PINs are
+throttled per branch. Adding items and changing an order that never reached the
+kitchen need none. Holders of order-editing permission (the owner by default)
+are the approving authority and need no PIN. Every removal (`order_items_removed`)
+and cancel (`order_cancelled`) is written to the activity log with the person who
+did it, the approving manager, what was removed and whether stock went back.
+
 ## Tests
 
 `npm run test:security` starts a disposable PostgreSQL cluster, applies actual

@@ -2,7 +2,8 @@ import { secureRoute, ApiError } from "@/lib/api";
 
 import { NextResponse } from "next/server";
 import { db, requestContext } from "@/db";
-import { orders, orderItems, diningTables, kitchenTickets, menuItems, modifierOptions, refunds } from "@/db/schema";
+import { orders, orderItems, diningTables, kitchenTickets, menuItems, modifierOptions, refunds, auditLogs } from "@/db/schema";
+import { describeLines, orderSentToKitchen, removedLines, verifyManagerApproval } from "@/lib/manager-approval";
 import { eq, inArray, desc } from "drizzle-orm";
 import { resyncStockForOrder } from "@/lib/inventory-deduction";
 import { loadBillingConfig, priceOrder, fromCents } from "@/lib/pricing";
@@ -28,8 +29,11 @@ import { toCents } from "@/lib/pricing-core";
  *   - refunded orders cannot be re-priced (their refund ledger was settled
  *     against the old total) — notes and customer details still work.
  *
- * Per the owner's decision, an edit leaves no audit entry; the order itself
- * shows its new contents.
+ * Adding items leaves no audit entry (owner's decision); the order itself shows
+ * its new contents. Taking items away is different (N3 in docs/FINDINGS.md):
+ * removing or reducing lines on a bill the kitchen already has needs a
+ * manager's PIN from till staff, and every removal, approved or not, is written
+ * to the activity log with who did it, who approved it and what went.
  */
 async function handlePATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const actor = requestContext.getStore()!.user!;
@@ -168,6 +172,26 @@ async function handlePATCH(req: Request, { params }: { params: Promise<{ id: str
     });
   }
 
+  // --- Removals: approval and record (N3) ---------------------------------------
+  let removed: { name: string; quantity: number }[] = [];
+  let approver: { id: number; name: string } | null = null;
+  let sentToKitchen = false;
+  if (reprice && hasItems) {
+    const beforeLines = await db.select().from(orderItems).where(eq(orderItems.orderId, orderId));
+    removed = removedLines(
+      beforeLines.map((l) => ({ menuItemId: l.menuItemId, itemName: l.itemName, quantity: l.quantity, modifiers: l.modifiers })),
+      resolvedLines,
+    );
+    if (removed.length > 0) {
+      sentToKitchen = await orderSentToKitchen(order);
+      if (!perms?.canEditOrders && sentToKitchen) {
+        const approval = await verifyManagerApproval(body.managerPin, "Removing items from an order the kitchen already has");
+        if (!approval.ok) return approval.response;
+        approver = approval.manager;
+      }
+    }
+  }
+
   // --- Money ------------------------------------------------------------------
   const config = await loadBillingConfig();
   const isComp = order.isComplimentary === true;
@@ -266,6 +290,22 @@ async function handlePATCH(req: Request, { params }: { params: Promise<{ id: str
     })
     .where(eq(orders.id, orderId))
     .returning();
+
+  if (removed.length > 0) {
+    const how = approver
+      ? `Approved by manager ${approver.name}.`
+      : perms?.canEditOrders
+        ? "Made with order-editing permission; no PIN needed."
+        : "Not yet sent to the kitchen; no PIN needed.";
+    await db.insert(auditLogs).values({
+      userId: actor.id,
+      userName: actor.name,
+      action: "order_items_removed",
+      entityType: "order",
+      entityId: String(orderId),
+      details: `${actor.name} removed ${describeLines(removed)} from ${order.orderNumber}. Total GH₵${order.totalAmount} → GH₵${fromCents(totalCents)}. ${how}`,
+    });
+  }
 
   // --- Table transitions -------------------------------------------------------
   if (order.tableId && order.tableId !== nextTableId) {

@@ -271,6 +271,45 @@ async function main() {
   check(ownerSwitch.status === 403 && !ownerSwitch.cookie, "N5: the owner's correct PIN does not switch a till into the owner account");
   const dupEmail = await request("/api/staff", "POST", { action: "create_employee", name: "Dup Email", email: "pintest@test.invalid", role: "cashier", password: "Dup-email-password-123!" }, owner);
   check(dupEmail.status === 409 && /already registered/i.test(dupEmail.body.error), "duplicate email rejected with clear message");
+  // --- N3/N4: removing items from, or cancelling, a kitchen order -------------
+  // A cashier cannot quietly shrink or void a bill the kitchen already has: a
+  // manager's PIN is needed, and every removal or cancel names who did it.
+  await admin.query("DELETE FROM auth_attempts WHERE key LIKE 'manager-approval:%'");
+  // Later checks assert exact stock, so this block puts the shelf back as it found it.
+  const n3StockBefore = (await admin.query("SELECT current_stock FROM ingredients WHERE id=1")).rows[0].current_stock;
+  const lastAudit = async (action: string, orderId: number) => (await admin.query(
+    "SELECT user_id, user_name, details FROM audit_logs WHERE action=$1 AND entity_id=$2 ORDER BY id DESC LIMIT 1", [action, String(orderId)])).rows[0];
+  const sent = await request("/api/orders", "POST", order("n3-sent", { items: [{ menuItemId: 1, quantity: 2 }] }), cashier);
+  check(sent.status === 200, "cashier rings up a kitchen order");
+  const sentId = sent.body.order.id;
+  const shrink = { items: [{ menuItemId: 1, quantity: 1 }] };
+  const unapproved = await request(`/api/orders/${sentId}/edit`, "PATCH", shrink, cashier);
+  const sentQty = async () => Number((await admin.query("SELECT sum(quantity) AS q FROM order_items WHERE order_id=$1", [sentId])).rows[0].q);
+  check(unapproved.status === 403 && unapproved.body.code === "manager_approval_required" && (await sentQty()) === 2, "N3: removing items from a kitchen order without a manager PIN is refused and changes nothing");
+  const wrongPin = await request(`/api/orders/${sentId}/edit`, "PATCH", { ...shrink, managerPin: "3333" }, cashier);
+  check(wrongPin.status === 403 && wrongPin.body.code === "manager_approval_invalid" && (await counter("manager-approval:branch:1")) === 1, "N3: a non-manager PIN is refused and counted");
+  const approved = await request(`/api/orders/${sentId}/edit`, "PATCH", { ...shrink, managerPin: "2222" }, cashier);
+  const removalRow = await lastAudit("order_items_removed", sentId);
+  check(approved.status === 200 && (await sentQty()) === 1, "N3: a manager's PIN approves the removal");
+  check(removalRow?.user_id === 3 && /removed 1×/.test(removalRow?.details) && /Approved by manager Test manager/.test(removalRow?.details), "N3: the removal is logged with the cashier, what went, and the approving manager");
+  check((await request(`/api/orders/${sentId}/edit`, "PATCH", { items: [{ menuItemId: 1, quantity: 3 }] }, cashier)).status === 200, "N3: adding items to a kitchen order needs no PIN");
+  check((await lastAudit("order_items_removed", sentId))?.details === removalRow?.details, "N3: adding items writes no removal entry");
+  const draft = await request("/api/orders", "POST", order("n3-draft", { items: [{ menuItemId: 1, quantity: 2 }], sendToKitchen: false }), cashier);
+  const draftId = draft.body.order.id;
+  check((await request(`/api/orders/${draftId}/edit`, "PATCH", shrink, cashier)).status === 200, "N3: an order never sent to the kitchen can be reduced without a PIN");
+  check(/Not yet sent to the kitchen/.test((await lastAudit("order_items_removed", draftId))?.details || ""), "N3: that removal is still logged");
+  const cancelNoPin = await request(`/api/orders/${sentId}`, "PATCH", { status: "cancelled" }, cashier);
+  check(cancelNoPin.status === 403 && cancelNoPin.body.code === "manager_approval_required", "N4: cancelling a kitchen order without a manager PIN is refused");
+  check((await admin.query("SELECT status FROM orders WHERE id=$1", [sentId])).rows[0].status !== "cancelled", "N4: the refused cancel left the order open");
+  check((await request(`/api/orders/${sentId}`, "PATCH", { status: "cancelled", managerPin: "2222" }, cashier)).status === 200, "N4: a manager's PIN approves the cancel");
+  const cancelRow = await lastAudit("order_cancelled", sentId);
+  check(cancelRow?.user_id === 3 && cancelRow?.user_name && /Approved by manager Test manager/.test(cancelRow?.details), "N4: the cancel is logged with the cashier and the approving manager");
+  check((await request(`/api/orders/${draftId}`, "PATCH", { status: "cancelled" }, cashier)).status === 200 && (await lastAudit("order_cancelled", draftId))?.user_id === 3, "N4: a draft can be cancelled without a PIN, and the actor is still recorded");
+  const ownerCancel = await request("/api/orders", "POST", order("n4-owner"), cashier);
+  check((await request(`/api/orders/${ownerCancel.body.order.id}`, "PATCH", { status: "cancelled" }, owner)).status === 200
+    && /order-editing permission/.test((await lastAudit("order_cancelled", ownerCancel.body.order.id))?.details || ""), "N4: the owner cancels a kitchen order without a PIN, and it is logged");
+  await admin.query("DELETE FROM auth_attempts WHERE key LIKE 'manager-approval:%'");
+  await admin.query("UPDATE ingredients SET current_stock=$1 WHERE id=1", [n3StockBefore]);
   // --- Owner-selected per-user permissions ----------------------------------
   // A role is only the starting point: the owner may give one person a single
   // extra ability (or take one away) without changing their whole role, and
