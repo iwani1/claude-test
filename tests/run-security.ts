@@ -20,7 +20,11 @@ async function main() {
   const directory = await mkdtemp(join(tmpdir(), "pos-security-"));
   const password = randomBytes(24).toString("hex");
   const port = 15432;
-  const pg = new EmbeddedPostgres({ databaseDir: directory, user: "postgres", password, port, persistent: false,
+  // PostgreSQL refuses to run as root. As root (containers, some CI images) the
+  // library runs it as the system "postgres" user and hands it the data folder
+  // (P12 in docs/FINDINGS.md); as a normal user nothing changes.
+  const asRoot = process.getuid?.() === 0;
+  const pg = new EmbeddedPostgres({ databaseDir: directory, user: "postgres", password, port, persistent: false, createPostgresUser: asRoot,
     postgresFlags: ["-h", "127.0.0.1"], onLog: () => {}, onError: msg => { if (String(msg).includes("FATAL")) console.error(msg); } });
   let app: ReturnType<typeof spawn> | undefined;
   let admin: Pool | undefined;

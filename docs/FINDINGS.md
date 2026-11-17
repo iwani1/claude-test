@@ -28,7 +28,7 @@ the VPS is **not** fixed: it is lost on the next deploy and invisible to audits.
 | Critical | 0 | 1 | 1 | 0 |
 | High | 0 | 1 | 4 | 0 |
 | Medium | 0 | 1 | 8 | 0 |
-| Low / Info | 11 | 0 | 4 | 0 |
+| Low / Info | 10 | 0 | 5 | 0 |
 
 ## Go-live blockers
 
@@ -70,7 +70,7 @@ N2 (owner action; owner has deferred making the repo private, see its row) and P
 | P9 | Low | nginx limit is per IP; tills share one NAT IP; 503 on throttle | Open | — | 2026-11-17 | `docs/VPS_DEPLOYMENT.md` Phase 8 |
 | P10 | Low | systemd and secret-file hardening gaps | Open | — | 2026-11-17 | `docs/VPS_DEPLOYMENT.md` Phases 5 and 7 |
 | P11 | Low | Manual grants step after migrations | Open | — | 2026-11-17 | `scripts/deploy-vps.sh` step 3 |
-| P12 | Low | DB test suites cannot run as root | Open | — | 2026-11-17 | `tests/run-security.ts` |
+| P12 | Low | DB test suites cannot run as root | **Fixed** | PR #37: as root, both test runners ask embedded-postgres to run PostgreSQL as the system `postgres` user (`createPostgresUser`) and make the legacy-import temp folder enterable; unchanged for normal users | 2026-11-17: `test:security` (380 security + 85 pilot + 52 accounting checks) and `test:legacy-import` pass as root in the audit sandbox, where both failed before | `tests/run-security.ts`, `tests/legacy-import.ts` |
 
 ## Earlier audits (carried forward)
 

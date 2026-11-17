@@ -43,8 +43,9 @@ npm run typecheck
 npm run build                  # with DATABASE_URL and AUTH_SECRET empty
 npm run audit:workflows        # static guards: swallowed errors, money idempotency, menu/API gate parity
 npm run audit:responsive
-npm run test:legacy-import     # needs a non-root user (embedded PostgreSQL)
-npm run test:security          # needs a non-root user; ports 15432 and 3100 free
+npm run test:legacy-import     # embedded PostgreSQL; works as root or not
+npm run test:security          # embedded PostgreSQL; ports 15432 and 3100 free
+npm run test:backup && npm run test:deploy && npm run test:monitor   # ops scripts
 npm audit --omit=dev           # must report 0 vulnerabilities
 ```
 
