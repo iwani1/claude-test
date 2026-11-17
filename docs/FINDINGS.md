@@ -32,7 +32,7 @@ the VPS is **not** fixed: it is lost on the next deploy and invisible to audits.
 
 ## Go-live blockers
 
-N2 (owner action), N3, N4, N5, P1, P2. See the go-live checklist in
+N2 (owner action; owner has deferred making the repo private, see its row), N3, N4, N5, P1, P2. See the go-live checklist in
 [`PRODUCTION_READINESS_2026-11-17.md`](PRODUCTION_READINESS_2026-11-17.md).
 
 ## Application findings — [`AUDIT_2026-11-17.md`](AUDIT_2026-11-17.md)
@@ -40,7 +40,7 @@ N2 (owner action), N3, N4, N5, P1, P2. See the go-live checklist in
 | ID | Sev | Title | Status | Fixed by / decision | Verified | Where to look |
 |---|---|---|---|---|---|---|
 | N1 | Critical | Next.js 16.4.2 vulnerable (GHSA-mfr8-8qww-v76h); build and CI blocked | **Fixed** | PR #34 (`84e2b77`): `next` and `eslint-config-next` ^16.4.6 | 2026-11-17: `next` 16.4.6 installed, `npm audit --omit=dev` 0 vulnerabilities, `npm run build` passes | `package.json` |
-| N2 | Critical | Repo public; `2026-10-12_restpos.db`, `2026-10-15_restpos.db`, `11claude.zip` retrievable from history | **Owner action** | — | 2026-11-17: repo still `public`; blobs present in history | GitHub settings; history at `ad6e134^`, `be3524e^`, `4cbbc90^` |
+| N2 | Critical | Repo public; `2026-10-12_restpos.db`, `2026-10-15_restpos.db`, `11claude.zip` retrievable from history | **Owner action** | **Owner decision 2026-11-17: keep the repository public for now; making it private is deferred, not declined.** This is not *Accepted*: the finding stays open and remains a go-live blocker. Interim: rotate legacy credentials reused in the new system (staff passwords/PINs, `pos_owner`); push nothing sensitive. When going private, also purge the blobs from history. | 2026-11-17: repo still `public`; blobs present in history | GitHub settings; history at `ad6e134^`, `be3524e^`, `4cbbc90^` |
 | N3 | High | Till staff can remove or swap items on an open bill; no approval, no audit | Open | — | 2026-11-17 @ `06126e9` | `src/app/api/orders/[id]/edit/route.ts` (till carve-out; no audit insert) |
 | N4 | High | Any till user can cancel an unpaid order; audit row has no actor; stock returned | Open | — | 2026-11-17 @ `06126e9` | `src/app/api/orders/[id]/route.ts` `handlePATCH` |
 | N5 | High | PIN-collision message lets a manager enumerate PINs, then quick-switch to the owner | Open | — | 2026-11-17 @ `06126e9` | `src/app/api/staff/route.ts` (`update_pin`), `src/app/api/auth/switch-pin/route.ts` |
