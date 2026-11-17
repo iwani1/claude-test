@@ -34,6 +34,15 @@ export interface RolePermissionSet {
    *  a guest was charged after the fact is sensitive, so only the owner has
    *  it by default; the owner may deliberately grant it per user. */
   canEditOrders: boolean;
+  /** Ring up an order with a discount or as complimentary. */
+  canApplyDiscounts: boolean;
+  /** This person's PIN can authorise a refund someone else requests. Separate
+   *  from canIssueRefunds, so a person who may request refunds (finance) cannot
+   *  approve their own. */
+  canApproveRefunds: boolean;
+  /** This person's PIN can authorise removing items from, or cancelling, an
+   *  order the kitchen already has (the till's manager-approval prompt). */
+  canApproveVoids: boolean;
 }
 
 // Permissions Matrix
@@ -54,6 +63,9 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissionSet> = {
     canViewTransactionTrail: true,
     canDeleteOrders: true,
     canEditOrders: true,
+    canApplyDiscounts: true,
+    canApproveRefunds: true,
+    canApproveVoids: true,
   },
   manager: {
     label: "Restaurant Manager",
@@ -71,6 +83,9 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissionSet> = {
     canViewTransactionTrail: true,
     canDeleteOrders: false,
     canEditOrders: false,
+    canApplyDiscounts: true,
+    canApproveRefunds: true,
+    canApproveVoids: true,
   },
   cashier: {
     label: "Cashier / Front-of-House",
@@ -89,6 +104,9 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissionSet> = {
     canViewTransactionTrail: false,
     canDeleteOrders: false,
     canEditOrders: false,
+    canApplyDiscounts: false,
+    canApproveRefunds: false,
+    canApproveVoids: false,
   },
   cook: {
     label: "Kitchen Staff (No Terminal Access)",
@@ -107,6 +125,9 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissionSet> = {
     canViewTransactionTrail: false,
     canDeleteOrders: false,
     canEditOrders: false,
+    canApplyDiscounts: false,
+    canApproveRefunds: false,
+    canApproveVoids: false,
   },
   inventory_officer: {
     label: "Inventory Officer",
@@ -126,6 +147,9 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissionSet> = {
     canViewTransactionTrail: false,
     canDeleteOrders: false,
     canEditOrders: false,
+    canApplyDiscounts: false,
+    canApproveRefunds: false,
+    canApproveVoids: false,
   },
   accountant: {
     terminalAccess: true,
@@ -149,6 +173,9 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissionSet> = {
     canViewTransactionTrail: true,
     canDeleteOrders: false,
     canEditOrders: false,
+    canApplyDiscounts: false,
+    canApproveRefunds: false,
+    canApproveVoids: false,
   },
 };
 
@@ -170,7 +197,10 @@ export const PERMISSION_DEFINITIONS: readonly PermissionDefinition[] = [
   { key: "canAccessKds", group: "Terminal & Till", label: "Kitchen display", description: "See kitchen dockets and update their progress." },
   { key: "canViewDrawerHistory", group: "Terminal & Till", label: "Cash drawer history", description: "Read shift and drawer history. Operating the drawer still needs POS till access." },
   { key: "canViewOrderHistory", group: "Orders & Money", label: "Order history", description: "Read the order list and individual order details." },
-  { key: "canIssueRefunds", group: "Orders & Money", label: "Request refunds", description: "Start a refund. A manager or owner PIN still authorises it." },
+  { key: "canIssueRefunds", group: "Orders & Money", label: "Request refunds", description: "Start a refund. A PIN from someone who may approve refunds still authorises it." },
+  { key: "canApproveRefunds", group: "Orders & Money", label: "Approve refunds (PIN)", description: "This person's PIN can authorise a refund someone else requests." },
+  { key: "canApplyDiscounts", group: "Orders & Money", label: "Discounts & complimentary", description: "Ring up an order with a discount, or as complimentary." },
+  { key: "canApproveVoids", group: "Orders & Money", label: "Approve removals & cancels (PIN)", description: "This person's PIN can authorise removing items from, or cancelling, an order the kitchen already has." },
   { key: "canEditOrders", group: "Orders & Money", label: "Edit saved orders", description: "Re-price a saved order's items, discount or tip after the fact." },
   { key: "canDeleteOrders", group: "Orders & Money", label: "Delete orders", description: "Permanently delete an order and its financial trail. Sensitive." },
   { key: "canViewTransactionTrail", group: "Orders & Money", label: "Audit & transaction trail", description: "Read audit logs, individual payments and the accounting export." },

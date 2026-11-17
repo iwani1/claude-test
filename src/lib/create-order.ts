@@ -90,7 +90,8 @@ export async function createOrder(req: Request) {
     for (const value of [discountAmount, discountPercent, tipAmount]) {
       if (value !== undefined && (!Number.isFinite(Number(value)) || Number(value) < 0)) throw new ApiError(400, "Invalid discount or tip");
     }
-    if ((isComplimentary || Number(discountAmount) > 0 || Number(discountPercent) > 0) && !["manager", "super_admin"].includes(guard.user.role)) throw new ApiError(403, "Manager approval required for discounts and complimentary orders");
+    // Who may give money away is the owner's per-person choice (N6), not a job title.
+    if ((isComplimentary || Number(discountAmount) > 0 || Number(discountPercent) > 0) && !guard.user.permissions?.canApplyDiscounts) throw new ApiError(403, "You are not allowed to give discounts or complimentary orders. Ask a manager.");
     const fingerprint = createHash("sha256").update(JSON.stringify({ items, tableId: tableId || null, orderType: normalizedOrderType, roomNumber, customerName, customerPhone, discountAmount, discountPercent, tipAmount, isComplimentary, sendToKitchen })).digest("hex");
     if (idempotencyKey !== undefined && (typeof idempotencyKey !== "string" || idempotencyKey.length < 8 || idempotencyKey.length > 128)) throw new ApiError(400, "Idempotency key must contain 8–128 characters");
     if (idempotencyKey) {

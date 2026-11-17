@@ -27,8 +27,8 @@ the VPS is **not** fixed: it is lost on the next deploy and invisible to audits.
 |---|---|---|---|---|
 | Critical | 0 | 1 | 1 | 0 |
 | High | 0 | 1 | 4 | 0 |
-| Medium | 6 | 0 | 3 | 0 |
-| Low / Info | 11 | 0 | 3 | 0 |
+| Medium | 5 | 0 | 4 | 0 |
+| Low / Info | 12 | 0 | 3 | 0 |
 
 ## Go-live blockers
 
@@ -44,7 +44,7 @@ N2 (owner action; owner has deferred making the repo private, see its row) and P
 | N3 | High | Till staff can remove or swap items on an open bill; no approval, no audit | **Fixed** | PR #37 (`3410660`): removing or reducing lines on a kitchen order needs a manager PIN from till staff; every removal logged as `order_items_removed` with actor, approver and items | `tests/security.ts` N3 checks (refused without PIN and unchanged; non-manager PIN refused and counted; manager PIN approves; logged; additions need no PIN; drafts need no PIN but are logged) | `src/app/api/orders/[id]/edit/route.ts`, `src/lib/manager-approval.ts`, `src/components/ManagerApprovalModal.tsx` |
 | N4 | High | Any till user can cancel an unpaid order; audit row has no actor; stock returned | **Fixed** | PR #37 (`3410660`): cancelling a kitchen order needs a manager PIN (owner/order-editors exempt); `order_cancelled` row records actor, approver, items and stock return; all order status rows name the actor | `tests/security.ts` N4 checks (refused without PIN and order stays open; manager PIN approves; logged with cashier and manager; draft cancel needs no PIN; owner cancel logged) | `src/app/api/orders/[id]/route.ts` `handlePATCH` |
 | N5 | High | PIN-collision message lets a manager enumerate PINs, then quick-switch to the owner | **Fixed** | PR #37 (`888630f`): quick PIN switch refuses the owner account; PIN collisions limited to 3 per 15 min per person setting PINs, counted outside the transaction and logged (`pin_collision`) | `tests/security.ts` N5 checks (collisions counted despite rollback; 4th attempt 429; limit is per person; owner's correct PIN does not switch) | `src/app/api/auth/switch-pin/route.ts`, `src/app/api/staff/route.ts` |
-| N6 | Medium | Refund approver and discount checks use role, not effective permissions | Open | — | 2026-11-17 @ `06126e9` | `src/app/api/orders/[id]/refund/route.ts`, `src/lib/create-order.ts` |
+| N6 | Medium | Refund approver and discount checks use role, not effective permissions | **Fixed** | PR #37: three owner-selectable permissions, default on for manager and owner only: `canApplyDiscounts` (discounts/complimentary at order creation), `canApproveRefunds` (whose PIN authorises a refund; separate from requesting, so finance cannot self-approve), `canApproveVoids` (whose PIN works in the till's removal/cancel prompt). Refund, create-order and manager-approval checks read effective permissions | `tests/security.ts` N6 checks: default manager approves; barred manager refused for refunds and removals; allowed cashier approves both; finance cannot approve by default; allowed cashier can discount; barred manager cannot | `src/lib/permissions.ts`, `src/app/api/orders/[id]/refund/route.ts`, `src/lib/create-order.ts`, `src/lib/manager-approval.ts` |
 | N7 | Medium | Ten audit-log inserts record no `userId` or `userName` | Open | Partly addressed in PR #37: `order_updated`/`order_cancelled` now record the actor. 9 sites remain (menu, inventory, recipes, stock counts, purchasing, suppliers) | 2026-11-17 @ `06126e9` | `grep -rn "insert(auditLogs)" src` |
 | N8 | Medium | Photo data URLs overflow the `localStorage` menu cache; offline till keeps stale menu | Open | — | 2026-11-17 @ `06126e9` | `src/lib/offline-storage.ts`, `src/components/MenuManager.tsx` |
 | N9 | Low | Order GET uses `SELECT … FOR UPDATE` | Open | — | 2026-11-17 | `src/app/api/orders/[id]/route.ts` `handleGET` |
@@ -53,6 +53,7 @@ N2 (owner action; owner has deferred making the repo private, see its row) and P
 | N12 | Low | Re-price without discount or tip fields zeroes them (latent) | Open | — | 2026-11-17 | `src/app/api/orders/[id]/edit/route.ts` |
 | N13 | Low | PIN throttles are branch-wide (one person can block everyone) | Open | — | 2026-11-17 | `src/app/api/auth/switch-pin/route.ts`, refund route |
 | N14 | Info | Dev-only dependency advisories: full-tree `npm audit` reports 21 (12 moderate, 9 high), including **high-severity `picomatch`**, plus `esbuild` and `minimatch`. The production tree is clean (`npm audit --omit=dev`: 0) | Open (tracked) | Standing policy: no `--force`; review the dev-tool upgrades separately | 2026-11-17 @ `06126e9`: full `npm audit` 21 (12 moderate, 9 high); `--omit=dev` 0 | `npm audit` |
+| N15 | Low | Closing or editing another person's shift is gated by job title (`manager`/`super_admin`), not a permission the owner can set | Open | Found while fixing N6 (2026-11-17). Same pattern as N6: add an owner-selectable permission (e.g. `canManageOthersShifts`) and use it in the route and the drawer screen | 2026-11-17 | `src/app/api/shifts/route.ts` (two checks), `src/components/ShiftCashDrawer.tsx` |
 
 ## Production findings — [`PRODUCTION_READINESS_2026-11-17.md`](PRODUCTION_READINESS_2026-11-17.md)
 

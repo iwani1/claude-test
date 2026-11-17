@@ -371,6 +371,37 @@ async function main() {
   const createdWithPermissions = await request("/api/staff", "POST", { action: "create_employee", name: "Tailored Test", email: "tailored@test.invalid", role: "cashier", password: "Tailored-password-123!", pin: "3434", permissions: { canViewReports: true } }, owner);
   check(createdWithPermissions.status === 200 && createdWithPermissions.body.employee.permissions.canViewReports === true, "the owner can select permissions when creating an employee");
   check((await request("/api/staff", "POST", { action: "create_employee", name: "Manager Tailored", email: "mgrtailored@test.invalid", role: "cashier", password: "Tailored-password-123!", pin: "5656", permissions: { canViewReports: true } }, manager)).status === 403, "a manager cannot select permissions at creation either");
+  // --- N6: approvals follow the owner's per-person choices, not job titles ---
+  // Set directly so nobody's session is revoked mid-suite; restored below.
+  const n6Before = (await admin.query("SELECT id, permission_overrides FROM users WHERE id IN (2,3) ORDER BY id")).rows;
+  const n6Stock = (await admin.query("SELECT current_stock FROM ingredients WHERE id=1")).rows[0].current_stock;
+  const setOverrides = (id: number, value: object) => admin.query("UPDATE users SET permission_overrides=$1 WHERE id=$2", [JSON.stringify(value), id]);
+  await admin.query("DELETE FROM auth_attempts WHERE key LIKE 'refund:%' OR key LIKE 'manager-approval:%'");
+  // The refund route checks the approver before the order, so an unpaid order
+  // shows the verdict without moving money: 403 = PIN refused, 409 = PIN accepted
+  // (then stopped by the empty refundable balance).
+  const unpaid = await request("/api/orders", "POST", order("n6-unpaid-probe"), owner);
+  const refundWith = (pin: string) => request(`/api/orders/${unpaid.body.order.id}/refund`, "POST", { amount: "1.00", reason: "N6 probe", managerPin: pin }, owner);
+  check((await refundWith("2222")).status === 409, "N6: by default a manager's PIN can approve a refund");
+  await setOverrides(2, { canApproveRefunds: false });
+  check((await refundWith("2222")).status === 403, "N6: a manager the owner barred from approving refunds cannot approve one with their PIN");
+  await setOverrides(3, { canApproveRefunds: true });
+  check((await refundWith("3333")).status === 409, "N6: a cashier the owner allowed to approve refunds can approve one");
+  check((await request("/api/auth/me", "GET", undefined, accountant)).body.permissions?.canApproveRefunds === false, "N6: finance may request refunds but cannot approve them by default");
+  const n6Kitchen = await request("/api/orders", "POST", order("n6-void-probe", { items: [{ menuItemId: 1, quantity: 2 }] }), cashier);
+  const removeWith = (pin: string) => request(`/api/orders/${n6Kitchen.body.order.id}/edit`, "PATCH", { items: [{ menuItemId: 1, quantity: 1 }], managerPin: pin }, cashier);
+  await setOverrides(2, { canApproveVoids: false });
+  const barredVoid = await removeWith("2222");
+  check(barredVoid.status === 403 && barredVoid.body.code === "manager_approval_invalid", "N6: a manager barred from approving removals is refused at the till prompt");
+  await setOverrides(3, { canApproveVoids: true });
+  check((await removeWith("3333")).status === 200, "N6: someone allowed to approve removals can approve one");
+  await setOverrides(3, { canApplyDiscounts: true });
+  check((await request("/api/orders", "POST", order("n6-discount-cashier", { discountAmount: "1.00" }), cashier)).status === 200, "N6: a cashier allowed to give discounts can ring one up");
+  await setOverrides(2, { canApplyDiscounts: false });
+  check((await request("/api/orders", "POST", order("n6-discount-manager", { discountAmount: "1.00" }), manager)).status === 403, "N6: a manager barred from discounts cannot ring one up");
+  for (const row of n6Before) await setOverrides(row.id, row.permission_overrides);
+  await admin.query("UPDATE ingredients SET current_stock=$1 WHERE id=1", [n6Stock]);
+  await admin.query("DELETE FROM auth_attempts WHERE key LIKE 'refund:%' OR key LIKE 'manager-approval:%'");
   const pinPad = await request("/api/auth/login", "POST", { pin: "6677" });
   check(pinPad.status === 400 && /email and password/i.test(pinPad.body.error), "login-screen PIN pad explains email/password is required when PIN login is disabled");
   const menu = await request("/api/menu", "GET", undefined, other);

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { db, requestContext } from "@/db";
 import { users, kitchenTickets, orders } from "@/db/schema";
-import { pinDigest, verifyPasswordAsync } from "./auth";
+import { effectivePermissions, pinDigest, verifyPasswordAsync, type UserRole } from "./auth";
 import { assertNotThrottled, recordFailedAttempt } from "./api";
 
 /** Error codes the till recognises: it asks for a manager's PIN and retries. */
@@ -31,11 +31,12 @@ export async function verifyManagerApproval(managerPin: unknown, reason: string)
   await assertNotThrottled(key);
   const refuse = async () => {
     await recordFailedAttempt(key);
-    return { ok: false as const, response: NextResponse.json({ error: "That is not a manager's PIN. Ask a manager to enter theirs.", code: APPROVAL_INVALID }, { status: 403 }) };
+    return { ok: false as const, response: NextResponse.json({ error: "That PIN cannot approve this. Ask a manager to enter theirs.", code: APPROVAL_INVALID }, { status: 403 }) };
   };
   if (typeof managerPin !== "string" || !/^\d{4,8}$/.test(managerPin)) return refuse();
   const [manager] = await db.select().from(users).where(eq(users.pinLookup, pinDigest(managerPin)));
-  if (!manager?.isActive || !["super_admin", "manager"].includes(manager.role) || !manager.pin || !(await verifyPasswordAsync(managerPin, manager.pin))) return refuse();
+  // Whose PIN may approve is the owner's per-person choice (canApproveVoids, N6).
+  if (!manager?.isActive || !effectivePermissions(manager.role as UserRole, manager.permissionOverrides).canApproveVoids || !manager.pin || !(await verifyPasswordAsync(managerPin, manager.pin))) return refuse();
   return { ok: true, manager: { id: manager.id, name: manager.name } };
 }
 

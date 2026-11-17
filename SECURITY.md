@@ -65,8 +65,12 @@ order creation causes rollback rather than a clamped/inaccurate ledger.
 ## Removals and voids
 
 Taking items off a bill the kitchen already has, or cancelling such an order,
-needs a manager's PIN at the till (`src/lib/manager-approval.ts`); wrong PINs are
-throttled per branch. Adding items and changing an order that never reached the
+needs the PIN of someone allowed to approve it (`canApproveVoids`) at the till
+(`src/lib/manager-approval.ts`); wrong PINs are throttled per branch. Refunds
+need a PIN from someone with `canApproveRefunds` (separate from requesting a
+refund, so finance cannot approve its own), and discounts or complimentary
+orders need `canApplyDiscounts`. All three default to managers and the owner,
+and the owner can change them per person. Adding items and changing an order that never reached the
 kitchen need none. Holders of order-editing permission (the owner by default)
 are the approving authority and need no PIN. Every removal (`order_items_removed`)
 and cancel (`order_cancelled`) is written to the activity log with the person who
