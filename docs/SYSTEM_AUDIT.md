@@ -1,5 +1,8 @@
 # System audit — 12 October 2026
 
+> **Snapshot.** This report records the state on its date and is not updated.
+> Current status of every finding: [`docs/FINDINGS.md`](FINDINGS.md).
+
 A full pass over the running system: every API route, every screen, the money
 paths, the stock paths, the offline layer and the deployment tooling. It is
 written to be checkable rather than reassuring — each claim below names the

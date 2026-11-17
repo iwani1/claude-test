@@ -1,0 +1,100 @@
+# Findings register
+
+**This is the single source of truth for audit status.** Dated audit reports in
+`docs/AUDIT_*.md` and `docs/PRODUCTION_READINESS_*.md` are point-in-time snapshots; they
+are never edited to say something was fixed. This file is.
+
+- **Last full verification:** 2026-11-17 against `main` @ `06126e9` (after PR #35).
+- **How a status changes:** see [Rules](#rules). A row says *Fixed* only when the fix is
+  merged to `main` and the row names the PR and how it was verified.
+
+## Status key
+
+| Status | Meaning |
+|---|---|
+| **Open** | Confirmed problem, not fixed on `main` |
+| **In progress** | A PR exists (linked) but is not merged |
+| **Fixed** | Merged to `main`; PR and verification recorded |
+| **Accepted** | Owner decided to keep the behaviour; decision and date recorded |
+| **Owner action** | Cannot be fixed in code (repository settings, credentials, server) |
+
+A fix that exists only in someone's local copy, an AI builder's sandbox, or directly on
+the VPS is **not** fixed: it is lost on the next deploy and invisible to audits.
+
+## Summary (2026-11-17)
+
+| Severity | Open | Owner action | Fixed | Accepted |
+|---|---|---|---|---|
+| Critical | 0 | 1 | 1 | 0 |
+| High | 5 | 0 | 0 | 0 |
+| Medium | 9 | 0 | 0 | 0 |
+| Low / Info | 11 | 0 | 3 | 0 |
+
+## Go-live blockers
+
+N2 (owner action), N3, N4, N5, P1, P2. See the go-live checklist in
+[`PRODUCTION_READINESS_2026-11-17.md`](PRODUCTION_READINESS_2026-11-17.md).
+
+## Application findings — [`AUDIT_2026-11-17.md`](AUDIT_2026-11-17.md)
+
+| ID | Sev | Title | Status | Fixed by / decision | Verified | Where to look |
+|---|---|---|---|---|---|---|
+| N1 | Critical | Next.js 16.4.2 vulnerable (GHSA-mfr8-8qww-v76h); build and CI blocked | **Fixed** | PR #34 (`84e2b77`): `next` and `eslint-config-next` ^16.4.6 | 2026-11-17: `next` 16.4.6 installed, `npm audit --omit=dev` 0 vulnerabilities, `npm run build` passes | `package.json` |
+| N2 | Critical | Repo public; `2026-10-12_restpos.db`, `2026-10-15_restpos.db`, `11claude.zip` retrievable from history | **Owner action** | — | 2026-11-17: repo still `public`; blobs present in history | GitHub settings; history at `ad6e134^`, `be3524e^`, `4cbbc90^` |
+| N3 | High | Till staff can remove or swap items on an open bill; no approval, no audit | Open | — | 2026-11-17 @ `06126e9` | `src/app/api/orders/[id]/edit/route.ts` (till carve-out; no audit insert) |
+| N4 | High | Any till user can cancel an unpaid order; audit row has no actor; stock returned | Open | — | 2026-11-17 @ `06126e9` | `src/app/api/orders/[id]/route.ts` `handlePATCH` |
+| N5 | High | PIN-collision message lets a manager enumerate PINs, then quick-switch to the owner | Open | — | 2026-11-17 @ `06126e9` | `src/app/api/staff/route.ts` (`update_pin`), `src/app/api/auth/switch-pin/route.ts` |
+| N6 | Medium | Refund approver and discount checks use role, not effective permissions | Open | — | 2026-11-17 @ `06126e9` | `src/app/api/orders/[id]/refund/route.ts`, `src/lib/create-order.ts` |
+| N7 | Medium | Ten audit-log inserts record no `userId` or `userName` | Open | — | 2026-11-17 @ `06126e9` | `grep -rn "insert(auditLogs)" src` |
+| N8 | Medium | Photo data URLs overflow the `localStorage` menu cache; offline till keeps stale menu | Open | — | 2026-11-17 @ `06126e9` | `src/lib/offline-storage.ts`, `src/components/MenuManager.tsx` |
+| N9 | Low | Order GET uses `SELECT … FOR UPDATE` | Open | — | 2026-11-17 | `src/app/api/orders/[id]/route.ts` `handleGET` |
+| N10 | Low | Order status can move backwards; malformed id becomes a 500 | Open | — | 2026-11-17 | `src/app/api/orders/[id]/route.ts` `handlePATCH` |
+| N11 | Low | `Origin: null` causes a 500; body cap trusts `Content-Length` | Open | — | 2026-11-17 | `src/lib/api.ts` `checkRequest` |
+| N12 | Low | Re-price without discount or tip fields zeroes them (latent) | Open | — | 2026-11-17 | `src/app/api/orders/[id]/edit/route.ts` |
+| N13 | Low | PIN throttles are branch-wide (one person can block everyone) | Open | — | 2026-11-17 | `src/app/api/auth/switch-pin/route.ts`, refund route |
+| N14 | Info | Dev-only dependency advisories: full-tree `npm audit` reports 21 (12 moderate, 9 high), including **high-severity `picomatch`**, plus `esbuild` and `minimatch`. The production tree is clean (`npm audit --omit=dev`: 0) | Open (tracked) | Standing policy: no `--force`; review the dev-tool upgrades separately | 2026-11-17 @ `06126e9`: full `npm audit` 21 (12 moderate, 9 high); `--omit=dev` 0 | `npm audit` |
+
+## Production findings — [`PRODUCTION_READINESS_2026-11-17.md`](PRODUCTION_READINESS_2026-11-17.md)
+
+| ID | Sev | Title | Status | Fixed by / decision | Verified | Where to look |
+|---|---|---|---|---|---|---|
+| P1 | High | No automated off-site backups (only at deploy time) | Open | — | 2026-11-17 | `docs/VPS_DEPLOYMENT.md` Phase 10; no backup script in `scripts/` |
+| P2 | High | Global login-failure counter lets anyone lock out all sign-ins | Open | — | 2026-11-17 | `src/app/api/auth/login/route.ts` (`login:global`) |
+| P3 | Medium | Deploy builds in place over the live `.next`; slow rollback | Open | — | 2026-11-17 | `scripts/deploy-vps.sh` step 5 |
+| P4 | Medium | 8-hour sessions, never renewed | Open | — | 2026-11-17 | `src/lib/auth.ts` `SESSION_SECONDS` |
+| P5 | Medium | No DB statement, lock or idle-in-transaction timeouts; pool has no connect timeout | Open | — | 2026-11-17 | `src/db/index.ts`, `src/lib/api.ts` |
+| P6 | Medium | `scryptSync` blocks the event loop on every login, PIN or refund | Open | — | 2026-11-17 | `src/lib/auth.ts` |
+| P7 | Medium | Reports load the whole branch history every request | Open | — | 2026-11-17 | `src/app/api/reports/route.ts` |
+| P8 | Medium | No uptime, backup, disk or certificate alerting | Open | — | 2026-11-17 | ops |
+| P9 | Low | nginx limit is per IP; tills share one NAT IP; 503 on throttle | Open | — | 2026-11-17 | `docs/VPS_DEPLOYMENT.md` Phase 8 |
+| P10 | Low | systemd and secret-file hardening gaps | Open | — | 2026-11-17 | `docs/VPS_DEPLOYMENT.md` Phases 5 and 7 |
+| P11 | Low | Manual grants step after migrations | Open | — | 2026-11-17 | `scripts/deploy-vps.sh` step 3 |
+| P12 | Low | DB test suites cannot run as root | Open | — | 2026-11-17 | `tests/run-security.ts` |
+
+## Earlier audits (carried forward)
+
+Findings from `AUDIT_2026-10-13.md`, `AUDIT_2026-10-19.md` and `SYSTEM_AUDIT.md` not
+listed here were recorded as closed in later audits. Status of the 2026-10-23 set:
+
+| ID | Title | Status | Notes |
+|---|---|---|---|
+| F1 | Repo public with legacy DB in history | Superseded by **N2** | |
+| F2 | PIN-switch audit row named the outgoing user | **Fixed** | Verified 2026-11-17 in `src/app/api/auth/switch-pin/route.ts` |
+| F3 | Hold-to-confirm has no single-activation alternative | **Fixed** | PR #33 (`f76ed65`): `ConfirmDialog` offers a typed `DELETE` alternative to press-and-hold. Verified 2026-11-17 in `src/components/ConfirmDialog.tsx` (`confirmWord`, typed mode) |
+| F4 | Archived menu readable by any session | **Fixed** | Verified 2026-11-17: `includeArchived` requires `canManageMenu` |
+| F5 | Dev-only dependency advisories | Superseded by **N14** | |
+| F6 | Photo data URLs grow the menu payload | Superseded by **N8** | |
+| F7 | Live deploy state unconfirmed | Open (ops) | `/api/health` does **not** yet report the running commit: `APP_BUILD_COMMIT` appears only in server error logs, and a healthy response is just `{"ok":true}`. Until that changes, confirm the VPS commit by hand (`git -C /opt/pos rev-parse --short HEAD`) after each deploy |
+
+## Rules
+
+1. **Fix → PR → register, in the same PR.** A PR that fixes a finding names it in the
+   title or body (`Fixes N3`) and updates the row here: status **Fixed**, the PR number,
+   and one line saying how it was verified (test name, command, or manual check).
+2. **Never mark Fixed from a claim.** "The builder said it's done" is not verification.
+   Check the code on `main`, and run the relevant test or command.
+3. **Partial fixes stay Open**, with a note on what remains.
+4. **Accepted** needs the owner's decision and the date. It is not a way to close a hard fix.
+5. **New findings** get the next ID in their series (N15, P13, …). Never reuse or renumber IDs.
+6. **Every audit** re-verifies each Open and In progress row and updates the
+   *Last full verification* line at the top.
