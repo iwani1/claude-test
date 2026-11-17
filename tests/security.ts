@@ -536,6 +536,32 @@ async function main() {
   const data = Buffer.from(JSON.stringify({ id: 3, version: 0, iat: 1, exp: 2 })).toString("base64url");
   const expired = `${data}.${createHmac("sha256", process.env.AUTH_SECRET!).update(data).digest("base64url")}`;
   check((await request("/api/menu", "GET", undefined, `pos_session=${expired}`)).status === 401, "server rejects correctly signed expired token");
+  // --- P4: an active session renews itself; nothing outlives 16 h ------------
+  const forge = (claims: Record<string, number>) => {
+    const body = Buffer.from(JSON.stringify(claims)).toString("base64url");
+    return `pos_session=${body}.${createHmac("sha256", process.env.AUTH_SECRET!).update(body).digest("base64url")}`;
+  };
+  const claimsOf = (cookie: string) => JSON.parse(Buffer.from(cookie.replace("pos_session=", "").split(".")[0], "base64url").toString());
+  const ownerVersion = Number((await admin.query("SELECT session_version FROM users WHERE id=1")).rows[0].session_version);
+  const nowS = Math.floor(Date.now() / 1000), hour = 3600;
+  const freshMe = await request("/api/auth/me", "GET", undefined, owner);
+  check(freshMe.status === 200 && !freshMe.cookie, "P4: a session under an hour old is not renewed");
+  const aged = forge({ id: 1, version: ownerVersion, iat: nowS - 2 * hour, auth: nowS - 2 * hour, exp: nowS + 6 * hour });
+  const renewedMe = await request("/api/auth/me", "GET", undefined, aged);
+  const renewedClaims = renewedMe.cookie ? claimsOf(renewedMe.cookie) : null;
+  check(renewedMe.status === 200 && renewedClaims && renewedClaims.iat >= nowS && renewedClaims.exp >= nowS + 8 * hour - 5 && renewedClaims.auth === nowS - 2 * hour,
+    "P4: a two-hour-old session gets a fresh 8-hour cookie that keeps the original sign-in time");
+  check(/HttpOnly/.test(renewedMe.headers.get("set-cookie") || "") && /SameSite=Lax/.test(renewedMe.headers.get("set-cookie") || "") && /Secure/.test(renewedMe.headers.get("set-cookie") || ""), "P4: the renewed cookie keeps HttpOnly, SameSite and Secure");
+  check((await request("/api/menu", "GET", undefined, renewedMe.cookie)).status === 200, "P4: the renewed cookie works");
+  const legacy = forge({ id: 1, version: ownerVersion, iat: nowS - 2 * hour, exp: nowS + 6 * hour });
+  const legacyMe = await request("/api/auth/me", "GET", undefined, legacy);
+  check(legacyMe.status === 200 && claimsOf(legacyMe.cookie).auth === nowS - 2 * hour, "P4: a token from before renewal treats its issue time as the sign-in time");
+  const nearCap = forge({ id: 1, version: ownerVersion, iat: nowS - 2 * hour, auth: nowS - 16 * hour + 600, exp: nowS + 600 });
+  const nearCapMe = await request("/api/auth/me", "GET", undefined, nearCap);
+  check(nearCapMe.status === 200 && claimsOf(nearCapMe.cookie).exp <= nowS - 16 * hour + 600 + 16 * hour && /Max-Age=(\d+)/.test(nearCapMe.headers.get("set-cookie") || "") && Number(/Max-Age=(\d+)/.exec(nearCapMe.headers.get("set-cookie") || "")![1]) <= 600,
+    "P4: renewal never extends a session past 16 hours from sign-in");
+  const pastCap = forge({ id: 1, version: ownerVersion, iat: nowS - hour, auth: nowS - 16 * hour - 60, exp: nowS + 7 * hour });
+  check((await request("/api/auth/me", "GET", undefined, pastCap)).status === 401, "P4: a session more than 16 hours past sign-in is refused, however recently renewed");
   await admin.query("UPDATE users SET role='accountant' WHERE id=3");
   check((await request("/api/orders", "GET", undefined, cashier)).status === 200, "a token downgraded to finance keeps only the read-only history");
   check((await request("/api/orders", "POST", order("downgraded-to-finance"), cashier)).status === 403, "existing token immediately reflects role downgrade (the till is refused)");

@@ -12,7 +12,15 @@ export interface SessionUser {
    *  gate, server and screen, reads this — never the role alone. */
   permissions: RolePermissionSet;
 }
+/** A session lasts this long without use. Every request from a session older
+ *  than SESSION_RENEW_AFTER_SECONDS gets a fresh cookie (src/lib/api.ts), so a
+ *  device in use stays signed in through a long shift, while an idle one signs
+ *  out after 7–8 hours (P4 in docs/FINDINGS.md). */
 export const SESSION_SECONDS = 60 * 60 * 8;
+export const SESSION_RENEW_AFTER_SECONDS = 60 * 60;
+/** Hard limit from the original sign-in, however busy the device: renewal never
+ *  keeps a session (or a stolen cookie) alive past this. */
+export const SESSION_MAX_SECONDS = 60 * 60 * 16;
 export function authSecret(): string {
   const value = process.env.AUTH_SECRET;
   if (!value || value.length < 32) throw new Error("AUTH_SECRET must contain at least 32 random characters");
@@ -41,10 +49,14 @@ export function verifyPassword(password: string, stored: string): boolean {
 export function pinDigest(pin: string): string {
   return crypto.createHmac("sha256", authSecret()).update(`pin:${pin}`).digest("hex");
 }
-export interface TokenClaims { id: number; version: number; exp: number; iat: number; }
-export function createToken(user: Pick<SessionUser, "id" | "sessionVersion">): string {
+/** `auth` is when the person originally signed in; renewals carry it forward. */
+export interface TokenClaims { id: number; version: number; exp: number; iat: number; auth: number; }
+export function createToken(user: Pick<SessionUser, "id" | "sessionVersion">, originalAuth?: number): string {
   const iat = Math.floor(Date.now() / 1000);
-  const data = Buffer.from(JSON.stringify({ id: user.id, version: user.sessionVersion, iat, exp: iat + SESSION_SECONDS })).toString("base64url");
+  const auth = originalAuth ?? iat;
+  // Never issue a token that outlives the hard limit from the original sign-in.
+  const exp = Math.min(iat + SESSION_SECONDS, auth + SESSION_MAX_SECONDS);
+  const data = Buffer.from(JSON.stringify({ id: user.id, version: user.sessionVersion, iat, auth, exp })).toString("base64url");
   return `${data}.${crypto.createHmac("sha256", authSecret()).update(data).digest("base64url")}`;
 }
 export function verifyToken(token: string): TokenClaims | null {
@@ -61,7 +73,10 @@ export function verifyToken(token: string): TokenClaims | null {
     if (!Number.isSafeInteger(payload.id) || payload.id <= 0 || !Number.isSafeInteger(payload.version) || payload.version < 0 ||
         !Number.isSafeInteger(payload.exp) || !Number.isSafeInteger(payload.iat) || payload.iat > now ||
         payload.exp <= now || payload.exp <= payload.iat || payload.exp - payload.iat > SESSION_SECONDS) return null;
-    return payload;
+    // Tokens issued before renewal existed carry no `auth`; their issue time is it.
+    const auth = payload.auth === undefined ? payload.iat : payload.auth;
+    if (!Number.isSafeInteger(auth) || auth > payload.iat || now - auth > SESSION_MAX_SECONDS) return null;
+    return { id: payload.id, version: payload.version, iat: payload.iat, exp: payload.exp, auth };
   } catch {
     /* audit-ok: fails closed — an unverifiable token is no session */
     return null;
@@ -72,4 +87,16 @@ export function publicUser(user: SessionUser) {
   return safe;
 }
 export const cookieOptions = () => ({ httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax" as const, path: "/", maxAge: SESSION_SECONDS });
+
+/** A renewed session cookie, if this session is due one: older than
+ *  SESSION_RENEW_AFTER_SECONDS and still inside the hard limit. */
+export function renewedSessionCookie(claims: TokenClaims, user: Pick<SessionUser, "id" | "sessionVersion">): string | null {
+  const now = Math.floor(Date.now() / 1000);
+  if (now - claims.iat < SESSION_RENEW_AFTER_SECONDS) return null;
+  const token = createToken(user, claims.auth);
+  const maxAge = Math.max(0, Math.min(SESSION_SECONDS, claims.auth + SESSION_MAX_SECONDS - now));
+  if (maxAge <= 0) return null;
+  const options = cookieOptions();
+  return [`pos_session=${token}`, `Path=${options.path}`, `Max-Age=${maxAge}`, "HttpOnly", "SameSite=Lax", ...(options.secure ? ["Secure"] : [])].join("; ");
+}
 

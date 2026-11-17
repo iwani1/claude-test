@@ -31,6 +31,10 @@ There are no generated demo/default passwords. Tokens contain only user ID,
 version and bounded timestamps; role/ownership never comes from client claims.
 Signatures use constant-time comparison. Cookies are HttpOnly, SameSite=Lax and
 Secure in production, and tokens are not duplicated in JSON responses.
+Sessions last 8 hours without use. A request from a session more than an hour
+old gets a fresh cookie, so a device in use stays signed in through a long shift,
+but no session is renewed past 16 hours from the original sign-in (the token
+carries that time as `auth`), so a copied cookie cannot be kept alive forever.
 
 Managers cannot create owners/managers, modify those privileged accounts, or see
 PINs. PIN change/account toggle increments session version; logout revokes all

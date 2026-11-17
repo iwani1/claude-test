@@ -5,7 +5,7 @@ import { NextResponse } from "next/server";
 import { eq, sql } from "drizzle-orm";
 import { rootDb, requestContext, Transaction } from "@/db";
 import { users, branches } from "@/db/schema";
-import { authSecret, effectivePermissions, sanitizePermissionOverrides, SessionUser, UserRole, verifyToken } from "./auth";
+import { authSecret, effectivePermissions, renewedSessionCookie, sanitizePermissionOverrides, SessionUser, TokenClaims, UserRole, verifyToken } from "./auth";
 import type { Permission } from "./guard";
 import { databaseBusyMessage, databaseUnreachableMessage, schemaDriftMessage } from "./schema-guard";
 import { databaseTimeouts } from "@/db/timeouts";
@@ -107,6 +107,7 @@ export function secureRoute(handler: Handler, permission: Permission | "session"
     try {
       authSecret();
       checkRequest(req);
+      let sessionClaims: TokenClaims | null = null;
       return await rootDb.transaction(async tx => requestContext.run({ tx, requestId }, async () => {
         const role = await tx.execute(sql`select rolsuper, rolbypassrls from pg_roles where rolname = current_user`);
         if (role.rows[0]?.rolsuper || role.rows[0]?.rolbypassrls) throw new Error("Runtime database role must not bypass row security");
@@ -120,11 +121,19 @@ export function secureRoute(handler: Handler, permission: Permission | "session"
           if (!fresh || fresh.sessionVersion !== claims.version) throw new ApiError(401, "Session revoked");
           const user = await activateUser(tx, fresh);
           if (permission !== "session" && !user.permissions?.[permission]) throw new ApiError(403, "Access denied");
+          sessionClaims = claims;
         }
         const params = (await context?.params) || {};
         const response = await handler(req, { params: Promise.resolve({ id: params.id || "" }) });
         if (response.status >= 400) throw new RollbackResponse(response);
         response.headers.set("Cache-Control", "no-store");
+        // Keep an active session alive (P4). Routes that set the session cookie
+        // themselves (login, PIN switch, logout) are left alone.
+        const user = requestContext.getStore()?.user;
+        if (sessionClaims && user && !/(^|,\s*)pos_session=/.test(response.headers.get("set-cookie") || "")) {
+          const renewed = renewedSessionCookie(sessionClaims, user);
+          if (renewed) response.headers.append("Set-Cookie", renewed);
+        }
         return withRequestId(response);
       }));
     } catch (err) {
