@@ -94,6 +94,63 @@ async function main() {
   const otherCookie = (await request("auth/login", { email: "user8@test.invalid", password: "Test-password-only-123!" })).cookie;
   check((await request(path, undefined, otherCookie)).status === 404, "other branch cannot inspect refundable balances");
   check((await request("reports?timeframe=today", undefined, otherCookie)).data.summary.totalRefunds === "0.00", "collection reports remain branch-isolated");
+
+  // --- P7: the database-aggregated report equals the old row-by-row result ---
+  // The reference below is the previous implementation: load every row of the
+  // branch and add up in JavaScript. (Timestamps are UTC wall-clock, as in the
+  // app; the test runs in UTC like the server.) The report must give the same figures for
+  // several periods; only wastage changed on purpose (now limited to the period).
+  const wasteUnit = 2.5;
+  for (const reason of ["P7 waste today", "P7 waste three days ago"]) {
+    await ok("inventory", { action: "adjust_stock", ingredientId: 1, delta: -1, movementType: "waste_spoilage", reason });
+    await admin.query("UPDATE stock_movements SET unit_cost=$1 WHERE id=(SELECT max(id) FROM stock_movements WHERE branch_id=1 AND reason=$2)", [wasteUnit, reason]);
+  }
+  await admin.query("UPDATE stock_movements SET created_at=created_at - interval '3 days' WHERE branch_id=1 AND reason='P7 waste three days ago'");
+  const money = (n: number) => n.toFixed(2);
+  async function oldWayReport(startIso: string | null, endIso: string) {
+    const inWindow = (d: Date) => (!startIso || d >= new Date(startIso)) && d < new Date(endIso);
+    const allOrders = (await admin.query("SELECT id, status, total_amount, is_complimentary, created_at FROM orders WHERE branch_id=1")).rows
+      .filter((o) => inWindow(new Date(o.created_at)));
+    const valid = allOrders.filter((o) => o.status !== "cancelled");
+    const ids = new Set(valid.map((o) => o.id));
+    const items = (await admin.query("SELECT order_id, menu_item_id, item_name, quantity, total_price, cost_price FROM order_items WHERE branch_id=1")).rows.filter((i) => ids.has(i.order_id));
+    const menu = (await admin.query("SELECT id, category_id FROM menu_items WHERE branch_id=1")).rows;
+    const cats = (await admin.query("SELECT id, name FROM menu_categories WHERE branch_id=1")).rows;
+    const catMap: Record<string, { name: string; revenue: number; count: number }> = {};
+    for (const c of cats) catMap[c.id] = { name: c.name, revenue: 0, count: 0 };
+    for (const i of items) { const m = menu.find((x) => x.id === i.menu_item_id); if (m && catMap[m.category_id]) { catMap[m.category_id].revenue += Number(i.total_price); catMap[m.category_id].count += i.quantity; } }
+    const itemMap: Record<string, { quantity: number; revenue: number }> = {};
+    for (const i of items) { itemMap[i.item_name] ??= { quantity: 0, revenue: 0 }; itemMap[i.item_name].quantity += i.quantity; itemMap[i.item_name].revenue += Number(i.total_price); }
+    const waste = (await admin.query("SELECT quantity_delta, unit_cost, created_at FROM stock_movements WHERE branch_id=1 AND movement_type='waste_spoilage'")).rows
+      .filter((m) => inWindow(new Date(m.created_at))).reduce((a, m) => a + Math.abs(Number(m.quantity_delta)) * Number(m.unit_cost || 0), 0);
+    return {
+      orders: valid.length,
+      sales: money(valid.reduce((a, o) => a + Number(o.total_amount), 0)),
+      cogs: money(items.reduce((a, i) => a + Number(i.cost_price || 0) * i.quantity, 0)),
+      categories: Object.values(catMap).filter((c) => c.revenue > 0).map((c) => `${c.name}:${money(c.revenue)}:${c.count}`).sort(),
+      itemMap, waste: money(waste),
+    };
+  }
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const threeDaysAgo = new Date(Date.now() - 3 * 86400000).toISOString().slice(0, 10);
+  for (const [label, query] of [["all time", "timeframe=all"], ["today", "timeframe=today"], ["three days ago", `timeframe=custom&start=${threeDaysAgo}&end=${threeDaysAgo}`]]) {
+    const report = await ok(`reports?${query}`);
+    const ref = await oldWayReport(report.window.start, report.window.endExclusive);
+    check(report.summary.totalOrdersCount === ref.orders && report.summary.totalSales === ref.sales && report.summary.totalCostOfGoods === ref.cogs,
+      `P7 (${label}): order count, sales and cost of goods match the old row-by-row result (${ref.orders} orders, GH₵${ref.sales})`);
+    check(JSON.stringify(report.categoryBreakdown.map((c: any) => `${c.name}:${money(c.revenue)}:${c.count}`).sort()) === JSON.stringify(ref.categories),
+      `P7 (${label}): sales by category match`);
+    const top = report.topItems as { name: string; quantity: number; revenue: number }[];
+    const refTopQuantities = Object.values(ref.itemMap).map((x) => x.quantity).sort((a, b) => b - a).slice(0, 6);
+    check(top.every((t) => ref.itemMap[t.name]?.quantity === t.quantity && money(ref.itemMap[t.name].revenue) === money(t.revenue))
+      && JSON.stringify(top.map((t) => t.quantity)) === JSON.stringify(refTopQuantities), `P7 (${label}): top sellers match`);
+    check(report.summary.totalWastageCost === ref.waste, `P7 (${label}): wastage is the period's own (GH₵${ref.waste})`);
+  }
+  const allReport = await ok("reports?timeframe=all"), todayReport = await ok("reports?timeframe=today");
+  check(Number(allReport.summary.totalWastageCost) >= 2 * wasteUnit && Number(todayReport.summary.totalWastageCost) < Number(allReport.summary.totalWastageCost),
+    "P7: older wastage counts in 'all time' but not in 'today'");
+  const lowNow = (await admin.query("SELECT id FROM ingredients WHERE branch_id=1 AND current_stock <= min_stock_level ORDER BY id")).rows.map((r) => r.id);
+  check(JSON.stringify(allReport.lowStockAlerts.map((a: any) => a.id).sort((a: number, b: number) => a - b)) === JSON.stringify(lowNow), "P7: low-stock alerts list exactly the ingredients at or below their minimum");
   console.log(`\n${checks} accounting checks passed.`);
 }
 main().catch(error => { console.error(error); process.exitCode = 1; }).finally(() => admin.end());

@@ -2,16 +2,8 @@ import { collectionSummary, reportWindow } from "@/lib/collection-report";
 import { secureRoute, ApiError, isDatabaseFailure } from "@/lib/api";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
-import {
-  orders,
-  orderItems,
-  menuItems,
-  menuCategories,
-  payments,
-  ingredients,
-  stockMovements,
-} from "@/db/schema";
-import { desc, eq, gte, lt, and } from "drizzle-orm";
+import { orders, ingredients } from "@/db/schema";
+import { desc, gte, lt, lte, and, sql } from "drizzle-orm";
 
 async function handleGET(req: Request) {
   try {
@@ -23,17 +15,26 @@ async function handleGET(req: Request) {
       end: searchParams.get("end") ?? undefined,
     });
     const collections = await collectionSummary(window);
-    const allOrders = await db.select().from(orders).where(and(
+    // Everything below is aggregated in the database for this period only (P7 in
+    // docs/FINDINGS.md). The report used to load every order line, stock movement,
+    // ingredient and menu item of the branch's whole history, photos included,
+    // and add them up here on every request.
+    // Bounds are sent as ISO text, exactly as Drizzle sends them for the orders
+    // query below, so every figure uses the same period. `column` is a constant.
+    const inWindow = (column: string) => window.start
+      ? sql`${sql.raw(column)} >= ${window.start.toISOString()} AND ${sql.raw(column)} < ${window.end.toISOString()}`
+      : sql`${sql.raw(column)} < ${window.end.toISOString()}`;
+
+    // Orders of the period: only the columns the report uses.
+    const periodOrders = await db.select({
+      id: orders.id, orderNumber: orders.orderNumber, status: orders.status, totalAmount: orders.totalAmount,
+      roomCharge: orders.roomCharge, isComplimentary: orders.isComplimentary, compValue: orders.compValue,
+      customerName: orders.customerName, complimentaryReason: orders.complimentaryReason, createdAt: orders.createdAt,
+    }).from(orders).where(and(
       window.start ? gte(orders.createdAt, window.start) : undefined, lt(orders.createdAt, window.end)
     )).orderBy(desc(orders.createdAt));
 
-    const allOrderItems = await db.select().from(orderItems);
-    const allCategories = await db.select().from(menuCategories);
-    const allMenuItems = await db.select().from(menuItems);
-    const allIngredients = await db.select().from(ingredients);
-    const allMovements = await db.select().from(stockMovements);
-
-    const validOrders = allOrders.filter((o) => o.status !== "cancelled");
+    const validOrders = periodOrders.filter((o) => o.status !== "cancelled");
     const totalSales = validOrders.reduce((sum, o) => sum + Number(o.totalAmount || 0), 0);
     const totalOrdersCount = validOrders.length;
 
@@ -57,31 +58,28 @@ async function handleGET(req: Request) {
         ? paidOrders.reduce((sum, o) => sum + Number(o.totalAmount || 0), 0) / paidOrders.length
         : 0;
 
+    // Lines of the period's non-cancelled orders, as a reusable subquery.
+    const periodLines = sql`
+      SELECT oi.menu_item_id, oi.item_name, oi.quantity, oi.total_price, oi.cost_price
+      FROM order_items oi JOIN orders o ON o.id = oi.order_id
+      WHERE o.status <> 'cancelled' AND ${inWindow("o.created_at")}`;
+
     // Cost of goods sold (COGS)
-    const validOrderIds = new Set(validOrders.map((o) => o.id));
-    const itemsInValidOrders = allOrderItems.filter((i) => validOrderIds.has(i.orderId));
-    const totalCostOfGoods = itemsInValidOrders.reduce(
-      (sum, i) => sum + Number(i.costPrice || 0) * i.quantity,
-      0
-    );
+    const [cogs] = (await db.execute(sql`
+      SELECT COALESCE(SUM(COALESCE(cost_price, 0) * quantity), 0) AS total FROM (${periodLines}) l`)).rows as { total: string }[];
+    const totalCostOfGoods = Number(cogs?.total ?? 0);
     const grossProfit = totalSales - totalCostOfGoods;
     const foodCostPercentage = totalSales > 0 ? ((totalCostOfGoods / totalSales) * 100).toFixed(1) : "0.0";
 
-    // Sales by Category
-    const categorySalesMap: Record<string, { name: string; revenue: number; count: number }> = {};
-    for (const cat of allCategories) {
-      categorySalesMap[cat.id] = { name: cat.name, revenue: 0, count: 0 };
-    }
-
-    for (const item of itemsInValidOrders) {
-      const menuItem = allMenuItems.find((m) => m.id === item.menuItemId);
-      if (menuItem && categorySalesMap[menuItem.categoryId]) {
-        categorySalesMap[menuItem.categoryId].revenue += Number(item.totalPrice);
-        categorySalesMap[menuItem.categoryId].count += item.quantity;
-      }
-    }
-
-    const categoryBreakdown = Object.values(categorySalesMap)
+    // Sales by Category (lines whose dish and category still exist, as before)
+    const categoryRows = (await db.execute(sql`
+      SELECT c.name, SUM(l.total_price) AS revenue, SUM(l.quantity) AS count
+      FROM (${periodLines}) l
+      JOIN menu_items m ON m.id = l.menu_item_id
+      JOIN menu_categories c ON c.id = m.category_id
+      GROUP BY c.id, c.name`)).rows as { name: string; revenue: string; count: string }[];
+    const categoryBreakdown = categoryRows
+      .map((c) => ({ name: c.name, revenue: Number(c.revenue), count: Number(c.count) }))
       .filter((c) => c.revenue > 0)
       .sort((a, b) => b.revenue - a.revenue);
 
@@ -90,36 +88,27 @@ async function handleGET(req: Request) {
     const paymentMethodMap = { cash: Number(collections.cashCollections), momo: Number(collections.momoCollections), other: Number(collections.otherCollections) };
 
     // Top Selling Items
-    const itemSalesMap: Record<string, { name: string; quantity: number; revenue: number }> = {};
-    for (const item of itemsInValidOrders) {
-      if (!itemSalesMap[item.itemName]) {
-        itemSalesMap[item.itemName] = { name: item.itemName, quantity: 0, revenue: 0 };
-      }
-      itemSalesMap[item.itemName].quantity += item.quantity;
-      itemSalesMap[item.itemName].revenue += Number(item.totalPrice);
-    }
+    const topRows = (await db.execute(sql`
+      SELECT item_name AS name, SUM(quantity) AS quantity, SUM(total_price) AS revenue
+      FROM (${periodLines}) l
+      GROUP BY item_name
+      ORDER BY SUM(quantity) DESC, item_name
+      LIMIT 6`)).rows as { name: string; quantity: string; revenue: string }[];
+    const topItems = topRows.map((t) => ({ name: t.name, quantity: Number(t.quantity), revenue: Number(t.revenue) }));
 
-    const topItems = Object.values(itemSalesMap)
-      .sort((a, b) => b.quantity - a.quantity)
-      .slice(0, 6);
+    // Wastage & Spoilage, recorded in this period (it used to be all-time,
+    // whatever period the report was for).
+    const [waste] = (await db.execute(sql`
+      SELECT COALESCE(SUM(ABS(quantity_delta) * COALESCE(unit_cost, 0)), 0) AS total
+      FROM stock_movements
+      WHERE movement_type = 'waste_spoilage' AND ${inWindow("created_at")}`)).rows as { total: string }[];
+    const totalWastageCost = Number(waste?.total ?? 0);
 
-    // Wastage & Spoilage
-    const wastageMovements = allMovements.filter((m) => m.movementType === "waste_spoilage");
-    const totalWastageCost = wastageMovements.reduce(
-      (acc, m) => acc + Math.abs(Number(m.quantityDelta)) * Number(m.unitCost || 0),
-      0
-    );
-
-    // Low stock items
-    const lowStockAlerts = allIngredients
-      .filter((ing) => Number(ing.currentStock) <= Number(ing.minStockLevel))
-      .map((ing) => ({
-        id: ing.id,
-        name: ing.name,
-        currentStock: ing.currentStock,
-        minStockLevel: ing.minStockLevel,
-        unit: ing.unit,
-      }));
+    // Low stock items: a snapshot of now, not of the period.
+    const lowStockAlerts = await db.select({
+      id: ingredients.id, name: ingredients.name, currentStock: ingredients.currentStock,
+      minStockLevel: ingredients.minStockLevel, unit: ingredients.unit,
+    }).from(ingredients).where(lte(ingredients.currentStock, ingredients.minStockLevel));
 
     return NextResponse.json({
       window: { start: window.start?.toISOString() ?? null, endExclusive: window.end.toISOString(), timezone: "UTC / Africa/Accra", basis: "Collections/refunds use transaction dates; gross billed sales use order creation dates." },

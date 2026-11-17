@@ -13,6 +13,9 @@ async function run(command: string, args: string[], env = process.env) {
   });
 }
 async function main() {
+  // Ghana is UTC+0 and the server runs in UTC; pin it so date-based checks
+  // (reports, custom ranges) mean the same on any machine.
+  process.env.TZ = "UTC";
   // Only disposable resources; never use the developer's DATABASE_URL.
   const directory = await mkdtemp(join(tmpdir(), "pos-security-"));
   const password = randomBytes(24).toString("hex");
