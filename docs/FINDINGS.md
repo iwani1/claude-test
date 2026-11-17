@@ -4,7 +4,7 @@
 `docs/AUDIT_*.md` and `docs/PRODUCTION_READINESS_*.md` are point-in-time snapshots; they
 are never edited to say something was fixed. This file is.
 
-- **Last full verification:** 2026-11-17 against `main` @ `06126e9` (after PR #35).
+- **Last full verification:** 2026-11-17 (second pass) against `main` @ `4eca07d` (after PR #36): every Open row re-checked, no new findings. See [`AUDIT_2026-11-17-2.md`](AUDIT_2026-11-17-2.md).
 - **How a status changes:** see [Rules](#rules). A row says *Fixed* only when the fix is
   merged to `main` and the row names the PR and how it was verified.
 
@@ -21,7 +21,7 @@ are never edited to say something was fixed. This file is.
 A fix that exists only in someone's local copy, an AI builder's sandbox, or directly on
 the VPS is **not** fixed: it is lost on the next deploy and invisible to audits.
 
-## Summary (2026-11-17)
+## Summary (2026-11-17, re-verified @ `4eca07d`)
 
 | Severity | Open | Owner action | Fixed | Accepted |
 |---|---|---|---|---|
