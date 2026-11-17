@@ -7,7 +7,8 @@ import { rootDb, requestContext, Transaction } from "@/db";
 import { users, branches } from "@/db/schema";
 import { authSecret, effectivePermissions, sanitizePermissionOverrides, SessionUser, UserRole, verifyToken } from "./auth";
 import type { Permission } from "./guard";
-import { databaseUnreachableMessage, schemaDriftMessage } from "./schema-guard";
+import { databaseBusyMessage, databaseUnreachableMessage, schemaDriftMessage } from "./schema-guard";
+import { databaseTimeouts } from "@/db/timeouts";
 export class ApiError extends Error {
   constructor(public status: number, message: string) { super(message); }
 }
@@ -36,7 +37,8 @@ export function isDatabaseFailure(err: unknown): boolean {
   const message = String(driver.message || "");
   return ["23505", "23503", "23514"].includes(code) ||
     schemaDriftMessage(code, message) !== null ||
-    databaseUnreachableMessage(code, message) !== null;
+    databaseUnreachableMessage(code, message) !== null ||
+    databaseBusyMessage(code, message) !== null;
 }
 /** Every API answer is uncacheable — including failures. A cached 503 or 401
  *  once made a repaired system look broken for an hour, to the browser and to
@@ -144,6 +146,15 @@ export function secureRoute(handler: Handler, permission: Permission | "session"
       // problem, not the user's, and it must not read as a wrong password.
       const unreachable = databaseUnreachableMessage(String(driver.code || ""), String(driver.message || detail));
       if (unreachable) { logRequestFailure(requestId, req, 503, err); return withRequestId(errorResponse({ error: unreachable, requestId }, 503)); }
+      // A time limit was reached (P5): the request is refused promptly instead
+      // of hanging the till. Nothing was saved; the transaction rolled back.
+      const busy = databaseBusyMessage(String(driver.code || ""), String(driver.message || detail || (err as any)?.message || ""));
+      if (busy) {
+        logRequestFailure(requestId, req, 503, err);
+        const response = withRequestId(errorResponse({ error: busy, requestId }, 503));
+        response.headers.set("Retry-After", "2");
+        return response;
+      }
       if (driver.code === "23505" || /duplicate key/i.test(detail)) {
         const label = /pin/i.test(detail) ? "That PIN is already used by another staff member in this branch. Choose a different PIN."
           : /email/i.test(detail) ? "That email is already registered."
@@ -180,7 +191,7 @@ function rateDb(): ReturnType<typeof drizzle> {
   if (!rateDbInstance) {
     const connectionString = process.env.DATABASE_URL;
     if (!connectionString) throw new Error("DATABASE_URL is required");
-    rateDbInstance = drizzle(new Pool({ connectionString, max: 2 }));
+    rateDbInstance = drizzle(new Pool({ connectionString, max: 2, ...databaseTimeouts() }));
   }
   return rateDbInstance;
 }

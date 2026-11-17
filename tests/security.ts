@@ -315,6 +315,33 @@ async function main() {
     && /order-editing permission/.test((await lastAudit("order_cancelled", ownerCancel.body.order.id))?.details || ""), "N4: the owner cancels a kitchen order without a PIN, and it is logged");
   await admin.query("DELETE FROM auth_attempts WHERE key LIKE 'manager-approval:%'");
   await admin.query("UPDATE ingredients SET current_stock=$1 WHERE id=1", [n3StockBefore]);
+  // --- P5: a stuck request cannot freeze the till -----------------------------
+  // The test server's lock limit is 1.5 s (tests/run-security.ts). A request that
+  // needs a row another session holds must give up promptly with a clear answer,
+  // not hang, and work again as soon as the lock is released.
+  const lockTarget = await request("/api/orders", "POST", order("p5-lock-target"), owner);
+  const lockTargetId = lockTarget.body.order.id;
+  const holder = await admin.connect();
+  try {
+    await holder.query("BEGIN");
+    await holder.query("SELECT id FROM orders WHERE id=$1 FOR UPDATE", [lockTargetId]);
+    const started = Date.now();
+    const blocked = await request(`/api/orders/${lockTargetId}`, "PATCH", { notes: "lock probe" }, owner);
+    const waited = Date.now() - started;
+    check(blocked.status === 503 && /Someone else is working on this same record/.test(blocked.body.error) && blocked.headers.get("retry-after") === "2",
+      "P5: a request blocked by a locked row is refused with a clear 'try again' answer");
+    check(waited < 5000, `P5: the blocked request gave up promptly (${waited} ms), instead of hanging`);
+  } finally {
+    await holder.query("ROLLBACK");
+    holder.release();
+  }
+  const unblocked = await request(`/api/orders/${lockTargetId}`, "PATCH", { notes: "lock probe" }, owner);
+  check(unblocked.status === 200 && unblocked.body.order.notes === "lock probe", "P5: the same request succeeds once the lock is released");
+  const { databaseTimeouts } = await import("../src/db/timeouts");
+  process.env.POS_DB_STATEMENT_TIMEOUT_MS = "0";
+  check((() => { try { databaseTimeouts(); return false; } catch { return true; } })(), "P5: a timeout set to 0 (no limit) is refused, not silently accepted");
+  delete process.env.POS_DB_STATEMENT_TIMEOUT_MS;
+  check(databaseTimeouts().statement_timeout === 15000 && databaseTimeouts().lock_timeout === 5000, "P5: default limits are 15 s per statement and 5 s per lock wait");
   // --- Owner-selected per-user permissions ----------------------------------
   // A role is only the starting point: the owner may give one person a single
   // extra ability (or take one away) without changing their whole role, and

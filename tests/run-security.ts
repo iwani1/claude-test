@@ -33,7 +33,7 @@ async function main() {
     const { seedSecurityFixtures } = await import("./security-fixtures");
     await seedSecurityFixtures(admin);
     await run("node_modules/.bin/next", ["build"]);
-    app = spawn("node_modules/.bin/next", ["start", "--hostname", "0.0.0.0", "--port", "3100"], { env: { ...process.env, PIN_LOGIN_BRANCH_ID: "", NODE_ENV: "production" }, stdio: ["ignore", "pipe", "pipe"] });
+    app = spawn("node_modules/.bin/next", ["start", "--hostname", "0.0.0.0", "--port", "3100"], { env: { ...process.env, PIN_LOGIN_BRANCH_ID: "", NODE_ENV: "production", POS_DB_LOCK_TIMEOUT_MS: "1500" }, stdio: ["ignore", "pipe", "pipe"] });
     await new Promise<void>((resolve, reject) => {
       const timeout = setTimeout(() => reject(new Error("Next server startup timeout")), 90_000);
       app!.once("exit", code => { clearTimeout(timeout); reject(new Error(`Next exited ${code}`)); });

@@ -3,6 +3,7 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import { AsyncLocalStorage } from "node:async_hooks";
 import type { SessionUser } from "@/lib/auth";
+import { databaseTimeouts } from "./timeouts";
 
 // The pool is created lazily, on first actual database use — never at module
 // import. Next.js imports every route module while collecting page data at
@@ -20,7 +21,7 @@ export function getPool(): Pool {
   if (!globalDb.posPool) {
     const connectionString = process.env.DATABASE_URL;
     if (!connectionString) throw new Error("DATABASE_URL is required");
-    globalDb.posPool = new Pool({ connectionString, max: 15 });
+    globalDb.posPool = new Pool({ connectionString, max: 15, ...databaseTimeouts() });
   }
   return globalDb.posPool;
 }

@@ -27,7 +27,7 @@ the VPS is **not** fixed: it is lost on the next deploy and invisible to audits.
 |---|---|---|---|---|
 | Critical | 0 | 1 | 1 | 0 |
 | High | 0 | 1 | 4 | 0 |
-| Medium | 9 | 0 | 0 | 0 |
+| Medium | 8 | 0 | 1 | 0 |
 | Low / Info | 11 | 0 | 3 | 0 |
 
 ## Go-live blockers
@@ -62,7 +62,7 @@ N2 (owner action; owner has deferred making the repo private, see its row) and P
 | P2 | High | Global login-failure counter lets anyone lock out all sign-ins | **Fixed** | PR #37 (`16da35e`): no site-wide lock; limits per address (30), per account per address (10), per account (50); site-wide count only logs `login_failure_surge`; nginx `auth_limit` zone and `limit_req_status 429` in the deployment guide | `tests/security.ts` P2 checks (flood never refuses a correct login; locks stay with the guessing address; per-address spray refused; account backstop) | `src/app/api/auth/login/route.ts`, `src/lib/api.ts` `clientAddress`, `docs/VPS_DEPLOYMENT.md` Phase 8 |
 | P3 | Medium | Deploy builds in place over the live `.next`; slow rollback | Open | — | 2026-11-17 | `scripts/deploy-vps.sh` step 5 |
 | P4 | Medium | 8-hour sessions, never renewed | Open | — | 2026-11-17 | `src/lib/auth.ts` `SESSION_SECONDS` |
-| P5 | Medium | No DB statement, lock or idle-in-transaction timeouts; pool has no connect timeout | Open | — | 2026-11-17 | `src/db/index.ts`, `src/lib/api.ts` |
+| P5 | Medium | No DB statement, lock or idle-in-transaction timeouts; pool has no connect timeout | **Fixed** | PR #37: every app connection carries `statement_timeout` 15 s, `lock_timeout` 5 s, `idle_in_transaction_session_timeout` 30 s, plus a 5 s pool connect timeout (`src/db/timeouts.ts`, env-tunable, 0 refused). Timeouts answer 503 with a plain 'try again' message and `Retry-After` (`databaseBusyMessage`). Maintenance scripts are unaffected | `tests/security.ts` P5 checks: a row locked by another session makes an edit fail in under 5 s with the clear message, and the same edit succeeds after release; defaults and the refusal of 0 | `src/db/timeouts.ts`, `src/db/index.ts`, `src/lib/api.ts`, `src/lib/schema-guard.ts` |
 | P6 | Medium | `scryptSync` blocks the event loop on every login, PIN or refund | Open | — | 2026-11-17 | `src/lib/auth.ts` |
 | P7 | Medium | Reports load the whole branch history every request | Open | — | 2026-11-17 | `src/app/api/reports/route.ts` |
 | P8 | Medium | No uptime, backup, disk or certificate alerting | Open | — | 2026-11-17 | ops |
