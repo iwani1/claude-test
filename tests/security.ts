@@ -304,7 +304,12 @@ async function main() {
   check((await request(`/api/orders/${sentId}`, "PATCH", { status: "cancelled", managerPin: "2222" }, cashier)).status === 200, "N4: a manager's PIN approves the cancel");
   const cancelRow = await lastAudit("order_cancelled", sentId);
   check(cancelRow?.user_id === 3 && cancelRow?.user_name && /Approved by manager Test manager/.test(cancelRow?.details), "N4: the cancel is logged with the cashier and the approving manager");
-  check((await request(`/api/orders/${draftId}`, "PATCH", { status: "cancelled" }, cashier)).status === 200 && (await lastAudit("order_cancelled", draftId))?.user_id === 3, "N4: a draft can be cancelled without a PIN, and the actor is still recorded");
+  // (Editing the draft above opened a kitchen docket, as the till's edit does, so
+  // use a fresh draft that never reached the kitchen.)
+  const freshDraft = await request("/api/orders", "POST", order("n4-fresh-draft", { sendToKitchen: false }), cashier);
+  const freshDraftId = freshDraft.body.order.id;
+  check((await request(`/api/orders/${freshDraftId}`, "PATCH", { status: "cancelled" }, cashier)).status === 200 && (await lastAudit("order_cancelled", freshDraftId))?.user_id === 3, "N4: a draft can be cancelled without a PIN, and the actor is still recorded");
+  check((await request(`/api/orders/${draftId}`, "PATCH", { status: "cancelled" }, cashier)).status === 403, "N4: once an edit has sent a draft to the kitchen, cancelling it needs a PIN");
   const ownerCancel = await request("/api/orders", "POST", order("n4-owner-cancel"), cashier);
   check((await request(`/api/orders/${ownerCancel.body.order.id}`, "PATCH", { status: "cancelled" }, owner)).status === 200
     && /order-editing permission/.test((await lastAudit("order_cancelled", ownerCancel.body.order.id))?.details || ""), "N4: the owner cancels a kitchen order without a PIN, and it is logged");
