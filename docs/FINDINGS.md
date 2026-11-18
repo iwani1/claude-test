@@ -85,7 +85,7 @@ listed here were recorded as closed in later audits. Status of the 2026-10-23 se
 | F4 | Archived menu readable by any session | **Fixed** | Verified 2026-11-17: `includeArchived` requires `canManageMenu` |
 | F5 | Dev-only dependency advisories | Superseded by **N14** | |
 | F6 | Photo data URLs grow the menu payload | Superseded by **N8** | |
-| F7 | Live deploy state unconfirmed | Open (ops) | `/api/health` does **not** yet report the running commit: `APP_BUILD_COMMIT` appears only in server error logs, and a healthy response is just `{"ok":true}`. Until that changes, confirm the VPS commit by hand (`git -C /opt/pos rev-parse --short HEAD`) after each deploy |
+| F7 | Live deploy state unconfirmed | **Fixed** | PR #37: `/api/health` reports the commit its build was made from in every answer (`{"ok":true,"commit":"a793fe6"}`; anything that is not a hash reads `unknown`), and `deploy-vps.sh` checks the restarted app reports the commit it deployed. Verified by `tests/security.ts` F7 checks: the health commit equals the commit under test, and the schema-behind answer still names no tables, columns or database |
 
 ## Rules
 

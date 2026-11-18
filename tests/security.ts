@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { execSync } from "node:child_process";
 import { Pool } from "pg";
 import { readFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
@@ -654,6 +655,10 @@ async function main() {
   check((await request("/api/auth/login", "POST", { email: removedRow.email, password: "Revived-password-123!" })).status === 401, "removed account still cannot sign in after the refused attempts");
   check((await request("/api/staff", "POST", { action: "create_employee", name: "Rehired Test", email: "removeme@test.invalid", role: "cashier", password: "Rehire-password-123!", pin: "8383" }, owner)).status === 200, "the freed email and PIN can be used by a new account");
   check((await request("/api/health")).status === 200, "public health endpoint works without scoped data access");
+  // F7: health says which code is running: the commit this build was made from.
+  const builtFrom = execSync("git rev-parse --short HEAD").toString().trim();
+  const healthBody = (await request("/api/health")).body;
+  check(healthBody.ok === true && healthBody.commit === builtFrom, `F7: /api/health reports the running commit (${healthBody.commit}, built from ${builtFrom})`);
   check((await request("/api/orders", "POST", order("bad-origin"), cashier, { Origin: "https://attacker.invalid" })).status === 403, "cross-origin mutation rejected");
   // --- P6: password and PIN checks must not freeze the server ----------------
   const asyncHash = await hashPasswordAsync("Shift-change-1234");
@@ -776,7 +781,7 @@ async function main() {
   check(/idempotency_key/.test(String(driftedPay.body.error)) && /db:migrate/.test(String(driftedPay.body.error)), "the payment refusal names the missing column and the command that fixes it");
   check(Number((await admin.query("SELECT paid_amount FROM orders WHERE id=$1", [driftSale.body.order.id])).rows[0].paid_amount) === 0, "the refused payment took no money");
   const driftedHealth = await request("/api/health");
-  check(driftedHealth.status === 503 && driftedHealth.body.reason === "schema-behind" && !JSON.stringify(driftedHealth.body).includes("idempotency_key") && !("missing" in driftedHealth.body) && !("database" in driftedHealth.body), "public health reports the schema gap without naming tables, columns or the database");
+  check(driftedHealth.status === 503 && driftedHealth.body.reason === "schema-behind" && !JSON.stringify(driftedHealth.body).includes("idempotency_key") && !("missing" in driftedHealth.body) && !("database" in driftedHealth.body) && driftedHealth.body.commit === builtFrom, "public health reports the schema gap and the commit, without naming tables, columns or the database");
   await admin.query(await readFile("migrations/0004_payment_idempotency.sql", "utf8"));
   check((await request("/api/health")).status === 200, "running the migration returns the app to healthy");
   check((await request(`/api/orders/${driftId}`, "DELETE", {}, owner)).status === 200, "and the work that was refused now succeeds");

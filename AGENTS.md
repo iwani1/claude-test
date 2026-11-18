@@ -56,7 +56,8 @@ report it as passed.
 
 - Every API route export goes through `secureRoute` (`src/lib/api.ts`) with an explicit
   permission (`"public"` for login). The one deliberate exception is `GET /api/health`: it is
-  public, outside `secureRoute`, and answers only a status and reason code. Keep it that way;
+  public, outside `secureRoute`, and answers only a status, a reason code and the
+  build's commit (never database, schema, table or column names). Keep it that way;
   any new route uses `secureRoute`. Permission questions go through `src/lib/permissions.ts` (effective
   permissions), not role names, except the documented owner-only rules in
   `src/app/api/staff/route.ts`.

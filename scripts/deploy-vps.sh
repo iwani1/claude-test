@@ -326,6 +326,13 @@ else
     Check: journalctl -u $POS_SERVICE -n 100. Database backup taken before this deploy: $DUMP"
   fi
   info "Health: $(cat /tmp/pos-health.json)"
+  # The app reports the commit it was built from (F7): confirm it is this release.
+  SERVED_COMMIT="$(grep -o '"commit":"[^"]*"' /tmp/pos-health.json | cut -d'"' -f4)"
+  if [[ -n "$SERVED_COMMIT" && "$SERVED_COMMIT" != "unknown" && "${NEW_SHA:0:${#SERVED_COMMIT}}" == "$SERVED_COMMIT" ]]; then
+    info "The app reports commit $SERVED_COMMIT: the new release is live."
+  else
+    warn "The app reports commit '${SERVED_COMMIT:-none}', expected ${NEW_SHA:0:7}. Check that the service runs the new release."
+  fi
   if curl -fsS --max-time 5 -o /dev/null "$POS_URL/sw.js"; then
     info "Offline app shell (/sw.js) is being served."
   else
