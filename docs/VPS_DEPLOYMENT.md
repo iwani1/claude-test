@@ -224,7 +224,7 @@ Bootstrap the first owner (new empty database only; it refuses existing data):
 export MIGRATION_DATABASE_URL='postgresql://pos_owner:OWNER_PASSWORD_HERE@127.0.0.1:5432/pos'
 export BOOTSTRAP_EMAIL='owner@yourrestaurant.com'
 export BOOTSTRAP_PASSWORD='A-strong-password-12-plus-chars'
-export BOOTSTRAP_PIN='4567'                 # optional, 4–8 digits
+export BOOTSTRAP_PIN='456789'               # optional, 6–8 digits (the owner's PIN approves)
 export BOOTSTRAP_RESTAURANT='Your Restaurant Name'
 npm run db:bootstrap
 

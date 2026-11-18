@@ -160,7 +160,7 @@ async function main() {
     check("credentials CSV lists 2 imported staff", pinRows.length === 2, csv);
     const adminRow = pinRows.find(r => r.name === "Admin");
     const waiterRow = pinRows.find(r => r.name === "Waiter One");
-    check("Admin is super_admin with fresh 4-digit PIN", adminRow?.role === "super_admin" && /^\d{4}$/.test(adminRow?.pin ?? ""), adminRow);
+    check("Admin is super_admin with a fresh 6-digit PIN (approvers need 6, N21)", adminRow?.role === "super_admin" && /^\d{6}$/.test(adminRow?.pin ?? ""), adminRow);
     check("Waiter One resolved case-insensitively", !!waiterRow, pinRows);
     if (adminRow) {
       const stored = await one("SELECT pin, pin_lookup FROM users WHERE email=$1".replace("$1", `'${adminRow.email}'`));

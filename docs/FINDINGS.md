@@ -4,7 +4,7 @@
 `docs/AUDIT_*.md` and `docs/PRODUCTION_READINESS_*.md` are point-in-time snapshots; they
 are never edited to say something was fixed. This file is.
 
-- **Last full verification:** 2026-11-18 against PR #37 @ `b99801b` (what `main` becomes on merge; `main` itself is still `4eca07d`, so none of the PR #37 fixes is live yet). Every row re-checked, four new findings (N16–N19). See [`AUDIT_2026-11-18.md`](AUDIT_2026-11-18.md).
+- **Last full verification:** 2026-11-18 (second pass) against PR #37 @ `b3b803c` (what `main` becomes on merge; `main` itself is still `4eca07d`, so none of the PR #37 fixes is live yet). Every row re-checked, two new findings (N20, N21). See [`AUDIT_2026-11-18-2.md`](AUDIT_2026-11-18-2.md).
 - **How a status changes:** see [Rules](#rules). A row says *Fixed* only when the fix is
   merged to `main` and the row names the PR and how it was verified.
 
@@ -21,14 +21,14 @@ are never edited to say something was fixed. This file is.
 A fix that exists only in someone's local copy, an AI builder's sandbox, or directly on
 the VPS is **not** fixed: it is lost on the next deploy and invisible to audits.
 
-## Summary (2026-11-18, PR #37 @ `b99801b`)
+## Summary (2026-11-18 second pass, PR #37 @ `b3b803c`)
 
 | Severity | Open | Owner action | Fixed | Accepted |
 |---|---|---|---|---|
 | Critical | 0 | 1 | 1 | 0 |
 | High | 0 | 1 | 4 | 0 |
 | Medium | 0 | 1 | 9 | 0 |
-| Low / Info | 1 | 2 | 15 | 0 |
+| Low / Info | 1 | 2 | 17 | 0 |
 
 ## Go-live blockers
 
@@ -58,6 +58,8 @@ N2 (owner action; owner has deferred making the repo private, see its row) and P
 | N17 | Low | Overnight backup at 03:05 overlapped unattended upgrades at 03:00, which can restart PostgreSQL mid-dump | **Fixed** | PR #37 (found by the 2026-11-18 audit): overnight backup moved to 02:35 | Timer and guide updated; `test:backup` passes | `deploy/systemd/pos-backup.timer`, `docs/VPS_DEPLOYMENT.md` Phase 10 |
 | N18 | Low | `shift_opened` audit row had no `userName` (and fell back to user 1); rule 9 accepted any row with a `userId` | **Fixed** | PR #37 (found by the 2026-11-18 audit): row uses `auditActor()`; rule 9 now requires id **and** name (or `auditActor()`); dead `|| 1` fallbacks in goods receiving removed | Rule 9 fails on a planted row with an id but no name; `test:security` passes | `src/app/api/shifts/route.ts`, `scripts/audit-workflows.py` rule 9 |
 | N19 | Low | Per-person PIN limits (N13) raise the most PIN guesses possible per branch from 40/h to up to 160/h for someone holding several colleagues' sessions | **Fixed** | PR #37: PINs that can approve (owner, and anyone with `canApproveRefunds` or `canApproveVoids`) must be 6–8 digits: refused when set; a PIN under 6 digits is refused by the approval prompt and refunds before any lookup; an approver's short legacy PIN no longer works for quick switch or PIN login; granting approval power reminds the owner. A 6-digit space takes about 260 days at the maximum rate. **Deploy day:** set 6-digit PINs for managers before they need to approve | `tests/security.ts` N19 checks (8): short manager PIN refused at creation and change; cashier keeps 4 digits; legacy short manager PIN refused for switch; grant reminder; 4-digit PIN never approves a removal or a refund. Fixture PINs are now 6 digits | `src/lib/permissions.ts` `needsApproverPin`, `src/lib/manager-approval.ts`, refund, switch-pin, login and staff routes |
+| N20 | Low | Setup (`db:bootstrap`) accepted a 4-digit owner PIN, and the guide's example was `4567`: a new owner's PIN would be refused by every approval (N19) | **Fixed** | PR #37 (found by the 2026-11-18 second audit): bootstrap requires 6–8 digits; both deployment guides show a 6-digit example | Bootstrap run: `4567` refused with the new message, `456789` passes validation | `src/db/seed.ts`, `docs/VPS_DEPLOYMENT.md` Phase 6, `GREENGEEKS_DEPLOYMENT_GUIDE.md` |
+| N21 | Low | The legacy import gave every account, owner and managers included, a random 4-digit PIN: imported approvers' PINs would be refused from day one; the import test asserted it | **Fixed** | PR #37 (found by the 2026-11-18 second audit): approver roles get a random 6-digit PIN, others 4 digits | `test:legacy-import` now requires a 6-digit PIN for the imported owner, and passes | `scripts/import-restpos.ts`, `tests/legacy-import.ts`, `docs/LEGACY_IMPORT.md` |
 
 ## Production findings — [`PRODUCTION_READINESS_2026-11-17.md`](PRODUCTION_READINESS_2026-11-17.md)
 

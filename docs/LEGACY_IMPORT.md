@@ -9,7 +9,7 @@ be run today, then re-run on switch day to pick up the final days of trading.
 | Legacy source | Target | Notes |
 |---|---|---|
 | `rest_category`, `rest_item` | `menu_categories`, `menu_items` | Prices, costs, enable flags. Duplicate name+category items collapse (first wins); sold-but-removed items become disabled stubs. |
-| `rest_user` | `users` | Staff accounts. **Legacy plaintext PINs/passwords are never copied** — each account gets a fresh random 4-digit PIN (written to a CSV) and an unusable password. |
+| `rest_user` | `users` | Staff accounts. **Legacy plaintext PINs/passwords are never copied** — each account gets a fresh random PIN (6 digits for the owner and managers, 4 for other staff; written to a CSV) and an unusable password. |
 | `rest_order`, `rest_order_item`, `rest_order_payment` | `orders`, `order_items`, `payments` | Full sales history with money split (cash/momo/card), service charges, discounts, tips. Order numbers are prefixed `OLD-`. |
 | `rest_table`, `rest_table_group` | `dining_areas`, `dining_tables` | Includes the `Bar` and `Takeout` counters. |
 | `inventory_item`, `inventory_vendor` | `ingredients`, `suppliers` | Opening stock starts at 0 — do a Stock Audit count on site. |
