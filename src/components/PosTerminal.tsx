@@ -44,6 +44,23 @@ import { priceOrder, fromCents, toCents } from "@/lib/pricing-core";
 import type { BillingConfig } from "@/lib/pricing-core";
 import { apiErrorMessage, apiFetch } from "@/lib/api-client";
 import type { CurrentUser } from "@/lib/api-types";
+import { useUiPreferences } from "@/lib/ui-preferences";
+import { PosNewLayout, type OrderType } from "@/components/pos/PosNewLayout";
+
+/** The new POS layout needs a laptop-width screen (64rem); narrower screens
+ *  keep the classic till and its slide-up order sheet until a later stage. */
+const WIDE_QUERY = "(min-width: 64rem)";
+function useWideScreen() {
+  return React.useSyncExternalStore(
+    (fn) => {
+      const mq = window.matchMedia(WIDE_QUERY);
+      mq.addEventListener("change", fn);
+      return () => mq.removeEventListener("change", fn);
+    },
+    () => window.matchMedia(WIDE_QUERY).matches,
+    () => false,
+  );
+}
 
 interface PosTerminalProps {
   categories: any[];
@@ -134,6 +151,17 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
    * exists (no duplicated state, no second set of handlers).
    */
   const [cartOpen, setCartOpen] = useState(false);
+  /** The new design (redesign stage 2) swaps only the layout; see PosNewLayout. */
+  const { design } = useUiPreferences();
+  const wideScreen = useWideScreen();
+  const newLayout = design === "new" && wideScreen;
+  /** Bumped whenever this till creates, sends or settles an order, so the new
+   *  layout's recent-orders strip refreshes at once instead of on its timer. */
+  const [recentOrdersKey, setRecentOrdersKey] = useState(0);
+  const notifyOrderChanged = () => {
+    onOrderCreated?.();
+    setRecentOrdersKey((k) => k + 1);
+  };
 
   /**
    * One stable order identity per ticket.
@@ -666,7 +694,7 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
         const data = await syncLoadedOrder(loadedOrder.id);
         const updated = data.order || loadedOrder;
         const fresh = newKitchenItems();
-        if (onOrderCreated) onOrderCreated();
+        notifyOrderChanged();
         setKitchenTicketOrder(buildKitchenTicket(updated, fresh.length > 0 ? fresh : cart));
         setCartOpen(false);
         setShowKitchenTicket(true);
@@ -740,7 +768,7 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
       });
       if (data.success) {
         clearCart();
-        if (onOrderCreated) onOrderCreated();
+        notifyOrderChanged();
         // The kitchen has no screen, so the printed docket IS the order.
         setKitchenTicketOrder(buildKitchenTicket(data.order, cart));
         setCartOpen(false);
@@ -923,7 +951,7 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
 
       setShowPayModal(false);
       clearCart();
-      if (onOrderCreated) onOrderCreated();
+      notifyOrderChanged();
 
       if (docketItems.length > 0) {
         setKitchenTicketOrder(buildKitchenTicket(settledOrder, docketItems));
@@ -999,7 +1027,7 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
         setShowPayModal(false);
         const docketItems = cart;
         clearCart();
-        if (onOrderCreated) onOrderCreated();
+        notifyOrderChanged();
         setKitchenTicketOrder(buildKitchenTicket(createdOrder, docketItems));
         setPendingReceipt(compReceipt);
         setCartOpen(false);
@@ -1123,646 +1151,20 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
     setSelectedItemForMod(null);
   };
 
-  return (
-    <div className="flex-1 flex flex-col h-full overflow-hidden bg-neutral-950">
-      <div className="flex-1 flex flex-col md:flex-row min-h-0 overflow-hidden relative">
-      {/* LEFT/CENTER: Ghanaian Menu Items & Categories */}
-      <div className="flex-1 flex flex-col h-full border-r border-neutral-800 overflow-hidden">
-        {/* Shell controls strip lives over THIS column only (staff request,
-            Oct 2026): everything grouped on its left, and the bill panel
-            beside it extends to the very top of the screen. */}
-        {headerControls}
-        {/* Top search & Filter bar */}
-        <div className="p-4 max-md:p-3 bg-neutral-900 border-b border-neutral-800 flex flex-col sm:flex-row gap-3 items-center justify-between">
-          <div className="relative w-full sm:w-80">
-            <Search className="w-4 h-4 text-neutral-400 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              placeholder="Search menu items, dishes, drinks..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 max-md:h-12 max-md:rounded-2xl max-md:text-base bg-neutral-800 border border-neutral-700 rounded-xl text-sm text-white placeholder-neutral-400 focus:outline-none focus:border-amber-500"
-            />
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery("")}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-white"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            )}
-          </div>
+  /** Switching order type clears what only made sense for the old type:
+   *  the table (dine-in), and the room and comp breakfast (room service). */
+  const changeOrderType = (type: OrderType) => {
+    setOrderType(type);
+    if (type !== "dine_in") setSelectedTableId(null);
+    if (type !== "room_service") setIsComplimentary(false);
+    if (type !== "room_service") setRoomNumber("");
+  };
 
-          {/* Table Indicator if table active */}
-          {selectedTableId && (
-            <div className="px-3 py-1.5 bg-amber-500/10 border border-amber-500/30 rounded-xl flex items-center gap-2 text-xs font-semibold text-amber-400">
-              <span>Ordering for Table #{selectedTableId}</span>
-              <button
-                onClick={() => setSelectedTableId(null)}
-                className="text-neutral-400 hover:text-white"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* Category Pills */}
-        <div className="px-4 py-3 max-md:px-3 max-md:py-2.5 bg-neutral-900/50 border-b border-neutral-800 flex items-center gap-2 overflow-x-auto custom-scrollbar shrink-0">
-          <button
-            onClick={() => setSelectedCategory("all")}
-            className={`px-5 h-12 max-md:h-11 max-md:px-4 max-md:rounded-full max-md:text-[0.8125rem] rounded-xl text-sm font-bold whitespace-nowrap transition-all active:scale-95 ${
-              selectedCategory === "all"
-                ? "bg-amber-500 text-black shadow-md shadow-amber-500/20"
-                : "bg-neutral-800 text-neutral-300 hover:bg-neutral-750 hover:text-white"
-            }`}
-          >
-            All Dishes ({menuItems.length})
-          </button>
-          {categories.map((cat) => (
-            <button
-              key={cat.id}
-              onClick={() => setSelectedCategory(cat.id)}
-              className={`px-5 h-12 max-md:h-11 max-md:px-4 max-md:rounded-full max-md:text-[0.8125rem] rounded-xl text-sm font-bold whitespace-nowrap transition-all active:scale-95 ${
-                selectedCategory === cat.id
-                  ? "bg-amber-500 text-black shadow-md shadow-amber-500/20"
-                  : "bg-neutral-800 text-neutral-300 hover:bg-neutral-750 hover:text-white"
-              }`}
-            >
-              {cat.name}
-              <span className="md:hidden font-semibold opacity-75">
-                {" "}· {menuItems.filter((i) => i.categoryId === cat.id).length}
-              </span>
-            </button>
-          ))}
-        </div>
-
-        {/* Item Cards Grid */}
-        <div className="flex-1 overflow-y-auto p-4 max-md:p-3 pb-44 xl:pb-4 custom-scrollbar">
-          {/* Cards never shrink below ~9.75rem: on a 10–13" till the old
-              fixed column counts squeezed dishes to ~110px slivers with
-              clipped names (field report, Oct 2026). auto-fill trades
-              column count for a guaranteed tappable card size instead. */}
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(9.75rem,1fr))] max-md:grid-cols-2 gap-4 max-md:gap-3">
-            {filteredItems.map((item) => (
-              <div
-                key={item.id}
-                role="button"
-                tabIndex={item.isAvailable ? 0 : -1}
-                onClick={() => handleItemClick(item)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    handleItemClick(item);
-                  }
-                }}
-                className={`group relative bg-neutral-900 hover:bg-neutral-850 active:bg-neutral-800 border border-neutral-800 hover:border-amber-500/50 active:border-amber-500 rounded-2xl p-3.5 max-md:p-3 flex-col justify-between cursor-pointer transition-all duration-150 hover:shadow-xl hover:shadow-amber-500/5 select-none ${
-                  item.isAvailable ? "flex" : "hidden max-md:flex max-md:opacity-75"
-                }`}
-                aria-disabled={!item.isAvailable}
-              >
-                <div>
-                  {/* Photo with badges */}
-                  <div className={`relative w-full h-32 max-md:h-24 rounded-xl overflow-hidden bg-neutral-800 mb-3 ${item.isAvailable ? "" : "max-md:grayscale"}`}>
-                    {item.imageUrl ? (
-                      <Image unoptimized width={400} height={300}
-                        src={item.imageUrl}
-                        alt={item.name}
-                        className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
-                        loading="lazy"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-neutral-600">
-                        <Coffee className="w-8 h-8" />
-                      </div>
-                    )}
-                    {item.hasRecipe && (
-                      <div className="absolute top-2 left-2 px-1.5 py-0.5 rounded-md bg-black/70 backdrop-blur-xs text-[0.625rem] text-amber-300 font-medium flex items-center gap-1 border border-amber-500/30">
-                        <ChefHat className="w-3 h-3" />
-                        <span>Recipe</span>
-                      </div>
-                    )}
-                    <div className="max-md:hidden absolute bottom-2 right-2 px-2.5 py-1 rounded-lg bg-neutral-950/85 backdrop-blur-xs text-[0.8125rem] font-bold text-emerald-400 border border-neutral-700">
-                      GH₵{Number(item.price).toFixed(2)}
-                    </div>
-                    {/* Phone: how many of this dish are already on the bill —
-                        build the order without opening the sheet. */}
-                    {(cartQtyByItem.get(item.id) ?? 0) > 0 && (
-                      <div className="md:hidden absolute top-2 right-2 min-w-7 h-7 px-1.5 rounded-full bg-amber-500 text-black text-[0.75rem] font-extrabold flex items-center justify-center shadow-lg">
-                        ×{cartQtyByItem.get(item.id)}
-                      </div>
-                    )}
-                    {!item.isAvailable && (
-                      <div className="md:hidden absolute bottom-2 left-2 px-2 py-0.5 rounded-md bg-black/75 backdrop-blur-xs text-[0.625rem] font-bold text-rose-300 border border-rose-500/40">
-                        Unavailable
-                      </div>
-                    )}
-                  </div>
-
-                  <h4 className="font-bold text-neutral-50 text-[0.84375rem] leading-snug line-clamp-2">
-                    {item.name}
-                  </h4>
-                  {item.sku && (
-                    <div className="text-[0.625rem] text-neutral-500 mt-0.5 font-mono">
-                      {item.sku}
-                    </div>
-                  )}
-                </div>
-
-                <div className="mt-3 pt-2.5 border-t border-neutral-800/80 flex items-center max-md:items-end justify-between text-[0.71875rem] text-neutral-400">
-                  <span className="flex flex-col min-w-0">
-                    <span className="capitalize text-neutral-500">{item.station || "Kitchen"}</span>
-                    {/* Phone cards carry the price here, Demo A style: big and
-                        bold beside the add button instead of a pill on the photo. */}
-                    <span className="md:hidden mt-0.5 text-[0.9375rem] leading-none font-extrabold text-neutral-50">
-                      GH₵{Number(item.price).toFixed(2)}
-                    </span>
-                  </span>
-                  <span className={`w-8 h-8 max-md:w-9 max-md:h-9 max-md:rounded-full rounded-lg bg-amber-500/10 text-amber-400 group-hover:bg-amber-500 group-hover:text-black flex items-center justify-center font-bold transition text-lg leading-none shrink-0 ${
-                    item.isAvailable ? "max-md:bg-amber-500 max-md:text-black" : "max-md:bg-neutral-800 max-md:text-neutral-500"
-                  }`}>
-                    +
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {filteredItems.length === 0 && (
-            <div className="h-64 flex flex-col items-center justify-center text-center p-6 text-neutral-500">
-              <Search className="w-10 h-10 mb-2 opacity-40" />
-              <p className="text-sm font-medium">No dishes match your search.</p>
-              <p className="text-xs text-neutral-600 mt-1">Try changing category or search terms.</p>
-            </div>
-          )}
-          {filteredItems.length > 0 && !filteredItems.some((i) => i.isAvailable) && (
-            <div className="hidden md:flex h-64 flex-col items-center justify-center text-center p-6 text-neutral-500">
-              <Search className="w-10 h-10 mb-2 opacity-40" />
-              <p className="text-sm font-medium">Everything here is marked unavailable.</p>
-              <p className="text-xs text-neutral-600 mt-1">On a phone these dishes show greyed-out instead.</p>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* PHONE CART BAR — the running total is the number a cashier must never
-          have to hunt for, and it is the only way into the order panel when the
-          panel lives in a sheet. */}
-      <button
-        onClick={() => setCartOpen(true)}
-        className={`xl:hidden fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom,0px))] md:bottom-0 z-20 min-h-16 px-4 flex items-center gap-3 bg-neutral-900/95 backdrop-blur border-t border-neutral-700 shadow-[0_-8px_24px_rgba(0,0,0,0.55)] transition-transform ${
-          cartOpen ? "translate-y-full" : "translate-y-0"
-        }`}
-        aria-label={`Open the order: ${cartCount} items, GH₵${totalAmount.toFixed(2)}`}
-      >
-        <span className="relative shrink-0 w-11 h-11 rounded-xl bg-amber-500 text-black flex items-center justify-center">
-          <ShoppingCart className="w-5 h-5" strokeWidth={2.5} />
-          {cartCount > 0 && (
-            <span className="absolute -top-1.5 -right-1.5 min-w-5 h-5 px-1 rounded-full bg-rose-500 text-white text-[0.6875rem] font-bold flex items-center justify-center">
-              {cartCount}
-            </span>
-          )}
-        </span>
-        <span className="flex-1 text-left min-w-0">
-          {/* md+ keeps the one-line summary; phones split it so the total is
-              the biggest thing on the bar (mobile redesign rec, Oct 2026). */}
-          <span className="hidden md:block text-[0.6875rem] font-bold tracking-[0.12em] text-neutral-500 uppercase">
-            Open order
-          </span>
-          <span className="hidden md:block text-base font-bold text-white truncate">
-            {cartCount === 0 ? "No items yet" : `${cartCount} item${cartCount === 1 ? "" : "s"}`}
-            {cartCount > 0 ? ` · GH₵${totalAmount.toFixed(2)}` : ""}
-          </span>
-          <span className="md:hidden block text-[0.6875rem] font-bold tracking-[0.12em] text-neutral-500 uppercase">
-            {cartCount === 0 ? "Open order" : `${cartCount} item${cartCount === 1 ? "" : "s"}`}
-          </span>
-          <span className="md:hidden block text-lg font-extrabold text-white truncate leading-tight">
-            {cartCount === 0 ? "No items yet" : `GH₵${totalAmount.toFixed(2)}`}
-          </span>
-        </span>
-        <span className="shrink-0 h-11 px-3.5 rounded-xl max-md:bg-amber-500 max-md:border-amber-500 max-md:text-black bg-neutral-800 border border-neutral-700 text-white font-bold text-sm flex items-center gap-1.5">
-          View <ChevronUp className="w-4 h-4" />
-        </span>
-      </button>
-
-      {/* Backdrop for the phone sheet. Sits under the sheet, over the bar. */}
-      {cartOpen && (
-        <div
-          className="xl:hidden fixed inset-0 z-30 bg-black/60 backdrop-blur-[2px]"
-          onClick={() => setCartOpen(false)}
-          aria-hidden="true"
-        />
-      )}
-
-      {/* RIGHT: Active Order Cart & Totals Panel.
-          md and up: the in-flow right-hand column. Below md: a slide-up sheet
-          with its own grab handle and close button. Same element either way. */}
-      <div
-        className={`bg-neutral-900 flex flex-col shrink-0 transition-all duration-200 xl:h-full xl:w-96 xl:border-l xl:border-neutral-800 max-xl:fixed max-xl:z-30 max-xl:shadow-2xl max-xl:border-neutral-700 max-md:inset-x-0 max-md:bottom-[calc(4rem+env(safe-area-inset-bottom,0px))] max-md:rounded-t-3xl max-md:border-t max-md:max-h-[min(85dvh,calc(100dvh-7.5rem))] md:max-xl:top-0 md:max-xl:bottom-0 md:max-xl:right-0 md:max-xl:w-[min(26rem,94vw)] md:max-xl:border-l ${
-          cartOpen
-            ? "max-xl:visible max-md:translate-y-0 md:max-xl:translate-x-0"
-            : "max-xl:invisible max-xl:pointer-events-none max-md:translate-y-full md:max-xl:translate-x-full"
-        }`}
-      >
-        {/* Sheet header — phones and tablets, wherever the panel overlays. */}
-        <div className="xl:hidden shrink-0 px-4 pt-2.5 pb-2 border-b border-neutral-800">
-          {/* Grab pill on top, Demo A sheet style (phones; tablets keep theirs below). */}
-          <div className="md:hidden mx-auto mb-2 h-1.5 w-12 rounded-full bg-neutral-700" />
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setCartOpen(false)}
-              className="h-11 w-11 rounded-xl bg-neutral-800 border border-neutral-700 text-neutral-200 flex items-center justify-center transition active:bg-neutral-700"
-              aria-label="Close the order panel"
-            >
-              <ChevronDown className="w-5 h-5" />
-            </button>
-            <div className="flex-1 min-w-0 text-center">
-              <div className="text-[0.6875rem] font-bold tracking-[0.12em] text-neutral-500 uppercase">
-                Open order
-              </div>
-              <div className="text-sm font-bold text-white truncate">
-                {cartCount} item{cartCount === 1 ? "" : "s"} · GH₵{totalAmount.toFixed(2)}
-              </div>
-            </div>
-            <div className="w-11" />
-          </div>
-          <div className="max-md:hidden mt-1.5 h-1.5 w-12 mx-auto rounded-full bg-neutral-700" />
-        </div>
-        {/* Order Meta Header — deliberately compact (field report, Oct 2026):
-            the old labelled fields ate ~230px and squeezed the ticket items
-            into a sliver staff had to scroll to. Labels are sr-only now; the
-            placeholders carry the meaning. Items + checkout get the height. */}
-        <div className="p-3 border-b border-neutral-800 space-y-2 shrink-0">
-          {/* Order Type Selector — Room Service is distinct from restaurant
-              table dining because the GH₵ room charge applies only there. */}
-          <div className="flex gap-1 bg-neutral-950 p-1 rounded-xl border border-neutral-800 text-[0.625rem] min-[420px]:text-[0.6875rem] font-bold">
-            {([
-              ["dine_in", "Table"],
-              ["room_service", "Room Service"],
-              ["takeaway", "Takeaway"],
-              ["delivery", "Delivery"],
-            ] as const).map(([type, label]) => (
-              <button
-                key={type}
-                onClick={() => {
-                  setOrderType(type);
-                  if (type !== "dine_in") setSelectedTableId(null);
-                  if (type !== "room_service") setIsComplimentary(false);
-                  if (type !== "room_service") setRoomNumber("");
-                }}
-                className={`flex-1 h-11 px-0.5 rounded-lg leading-[1.05] flex items-center justify-center text-center transition active:scale-[0.97] ${
-                  orderType === type
-                    ? type === "room_service"
-                      ? "bg-sky-400 text-black shadow-xs"
-                      : "bg-amber-500 text-black shadow-xs"
-                    : "text-neutral-400 hover:text-white"
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-
-          {/* Table / Room Number / Guest contact */}
-          <div className="grid grid-cols-2 gap-2 text-xs">
-            {orderType === "dine_in" ? (
-              <div>
-                <label className="sr-only">
-                  Table Number
-                </label>
-                <select
-                  value={selectedTableId || ""}
-                  onChange={(e) => setSelectedTableId(e.target.value ? Number(e.target.value) : null)}
-                  className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-2.5 h-11 text-white focus:outline-none focus:border-amber-500"
-                >
-                  <option value="">Select Table...</option>
-                  {tables.map((tbl) => (
-                    <option key={tbl.id} value={tbl.id}>
-                      {tbl.tableNumber} ({tbl.capacity}p - {tbl.status})
-                    </option>
-                  ))}
-                </select>
-              </div>
-            ) : orderType === "room_service" ? (
-              <div>
-                <label className="sr-only">
-                  Hotel Room Number *
-                </label>
-                <input
-                  type="text"
-                  value={roomNumber}
-                  onChange={(e) => setRoomNumber(e.target.value)}
-                  placeholder="Room · e.g. 204 *"
-                  className="w-full bg-neutral-800 border border-sky-500/40 rounded-lg px-3 h-11 text-white font-bold placeholder:text-neutral-500 focus:outline-none focus:border-sky-400"
-                />
-              </div>
-            ) : (
-              <div>
-                <label className="sr-only">
-                  Guest Phone (optional)
-                </label>
-                <div className="relative">
-                  <Phone className="w-3.5 h-3.5 text-neutral-500 absolute left-3 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="tel"
-                    value={customerPhone}
-                    onChange={(e) => setCustomerPhone(e.target.value)}
-                    placeholder="024 410 0000"
-                    className="w-full bg-neutral-800 border border-neutral-700 rounded-lg pl-9 pr-2 h-11 text-white focus:outline-none focus:border-amber-500"
-                  />
-                </div>
-              </div>
-            )}
-
-            <div>
-              <label className="sr-only">
-                Guest Name
-              </label>
-              <div className="relative">
-                <User className="w-3 h-3 text-neutral-500 absolute left-2 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  value={customerName}
-                  onChange={(e) => setCustomerName(e.target.value)}
-                  placeholder="Walk-in Guest"
-                  className="w-full bg-neutral-800 border border-neutral-700 rounded-lg pl-6 pr-2 h-11 text-white placeholder:text-neutral-500 focus:outline-none focus:border-amber-500"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Order note — saved with the order and printed on the kitchen
-              docket ("TICKET NOTE: ..."). Brought back Oct 2026 after staff
-              asked for a way to flag whole-order instructions (extra shito,
-              allergies) that per-item notes don't cover. */}
-          <div>
-            <label className="sr-only">
-              Order note (prints on kitchen docket)
-            </label>
-            <input
-              type="text"
-              value={orderNotes}
-              onChange={(e) => setOrderNotes(e.target.value)}
-              placeholder="Order note (prints on kitchen docket) — e.g. extra shito"
-              className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 h-11 text-xs text-white placeholder:text-neutral-500 focus:outline-none focus:border-amber-500"
-            />
-          </div>
-        </div>
-
-        {/* Cart Item List — the ONLY part of the panel that scrolls. */}
-        {loadedOrder && (
-          <div className="mx-2 mt-2 shrink-0 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-[0.6875rem] leading-snug text-amber-200">
-            <span className="font-bold">Open order {loadedOrder.orderNumber}</span>
-            {loadedOrder.paymentStatus === "partially_paid"
-              ? ` · GH₵${Number(loadedOrder.paidAmount).toFixed(2)} already paid`
-              : " · sent to kitchen, not yet paid"}
-            {" — add items, then Settle Bill to take payment."}
-          </div>
-        )}
-        <ScrollFadeList className="flex-1 min-h-0 overflow-y-auto p-2 space-y-2 custom-scrollbar">
-          {cart.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center text-center text-neutral-500 p-6">
-              <Receipt className="w-12 h-12 mb-2 opacity-30 text-amber-500" />
-              <p className="text-sm font-semibold text-neutral-300">Ticket is empty</p>
-              <p className="text-xs text-neutral-500 mt-1">Tap Ghanaian dishes on the left to start the order</p>
-            </div>
-          ) : (
-            cart.map((it, idx) => (
-              <div
-                key={it.cartItemId || idx}
-                className="bg-neutral-855 border border-neutral-750 rounded-lg px-2.5 py-2 text-sm"
-              >
-                <div className="flex items-baseline justify-between gap-2">
-                  <span className="flex-1 font-semibold text-neutral-100 text-[0.8125rem] leading-tight">
-                    {it.itemName}
-                  </span>
-                  <span className="font-mono font-bold text-neutral-200 text-[0.8125rem] whitespace-nowrap">
-                    GH₵{Number(it.totalPrice).toFixed(2)}
-                  </span>
-                </div>
-                {it.modifiers && it.modifiers.length > 0 && (
-                  <div className="text-[0.6875rem] text-amber-400/90 mt-0.5">
-                    {it.modifiers.map((m: any, mIdx: number) => (
-                      <span key={mIdx} className="mr-2">
-                        + {m.name || m.optionName}
-                      </span>
-                    ))}
-                  </div>
-                )}
-                {it.specialInstructions && (
-                  <div className="text-[0.625rem] text-neutral-400 italic mt-0.5">
-                    * {it.specialInstructions}
-                  </div>
-                )}
-
-                <div className="flex items-center justify-between mt-1.5">
-                  <span className="text-[0.625rem] text-neutral-500">
-                    GH₵{Number(it.unitPrice).toFixed(2)} ea
-                  </span>
-                  {/* Steppers stay finger-sized (the large display sizes floor
-                      tappables at 40px via globals.css); compactness comes
-                      from the single-row layout, not from shrinking targets. */}
-                  <div className="flex items-center gap-1">
-                    <button
-                      onClick={() => updateQuantity(idx, -1)}
-                      aria-label="Decrease quantity"
-                      className="w-8 h-8 rounded-lg bg-neutral-800 hover:bg-neutral-700 active:bg-neutral-600 text-neutral-200 flex items-center justify-center transition active:scale-95"
-                    >
-                      <Minus className="w-4 h-4" strokeWidth={3} />
-                    </button>
-                    <span className="w-6 text-center font-bold text-white font-mono text-sm">
-                      {it.quantity}
-                    </span>
-                    <button
-                      onClick={() => updateQuantity(idx, 1)}
-                      aria-label="Increase quantity"
-                      className="w-8 h-8 rounded-lg bg-neutral-800 hover:bg-neutral-700 active:bg-amber-500 active:text-black text-neutral-200 flex items-center justify-center transition active:scale-95"
-                    >
-                      <Plus className="w-4 h-4" strokeWidth={3} />
-                    </button>
-                    <button
-                      onClick={() => removeCartItem(idx)}
-                      aria-label="Remove item"
-                      className="ml-1 w-8 h-8 rounded-lg text-neutral-500 hover:text-rose-400 hover:bg-rose-500/10 flex items-center justify-center transition"
-                      title="Remove item (Undo appears afterwards)"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ))
-          )}
-        </ScrollFadeList>
-
-        {/* Order Calculations & Checkout Bar — shrink-0: totals and Settle
-            are always on screen; the panel never scrolls to reach them. */}
-        <div className="p-3 bg-neutral-900 border-t border-neutral-800 space-y-2.5 shrink-0">
-          {/* Quick Discount & Tip Triggers */}
-          <div className="flex gap-2 text-xs">
-            <button
-              onClick={() => {
-                setCartOpen(false);
-                setShowDiscountModal(true);
-              }}
-              className={`flex-1 h-11 px-2 rounded-xl border flex items-center justify-center gap-1.5 font-semibold text-[0.78125rem] transition active:scale-95 ${
-                calculatedDiscount > 0
-                  ? "bg-amber-500/10 border-amber-500/40 text-amber-400"
-                  : "bg-neutral-800 border-neutral-700 text-neutral-300 hover:bg-neutral-750"
-              }`}
-            >
-              <Percent className="w-3.5 h-3.5" />
-              <span>
-                {calculatedDiscount > 0 ? `-GH₵${calculatedDiscount.toFixed(2)} Disc` : "Discount"}
-              </span>
-            </button>
-
-            {/* Quick Tip selection */}
-            <div className="flex-1 flex gap-1">
-              {[0.05, 0.10, 0.15].map((pct) => {
-                const tipVal = subtotal * pct;
-                const isSelected = Math.abs(tipAmount - tipVal) < 0.05;
-                return (
-                  <button
-                    key={pct}
-                    onClick={() => setTipAmount(isSelected ? 0 : tipVal)}
-                    className={`flex-1 h-11 rounded-xl border text-[0.8125rem] font-bold transition active:scale-95 ${
-                      isSelected
-                        ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-400"
-                        : "bg-neutral-800 border-neutral-700 text-neutral-400 hover:text-white"
-                    }`}
-                  >
-                    {pct * 100}%
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Complimentary breakfast toggle */}
-          {orderType === "room_service" && billingConfig.compBreakfastEnabled && (
-            <button
-              onClick={() => {
-                  setCartOpen(false);
-                  return isComplimentary ? setIsComplimentary(false) : setShowCompModal(true);
-                }}
-              className={`w-full h-11 rounded-xl border text-[0.78125rem] font-bold flex items-center justify-center gap-2 transition active:scale-[0.98] ${
-                isComplimentary
-                  ? "bg-sky-500/20 border-sky-400 text-sky-200"
-                  : "bg-neutral-800 border-neutral-700 text-neutral-300 hover:bg-neutral-750"
-              }`}
-              title="Mark this order as a free breakfast for a room guest"
-            >
-              <Coffee className="w-4 h-4 shrink-0" />
-              <span>
-                {isComplimentary ? "✓ Complimentary Breakfast — tap to undo" : "Complimentary Breakfast (GH₵0.00)"}
-              </span>
-            </button>
-          )}
-
-          {/* Subtotals Breakdown (Ghanaian Tax + Room Charge) */}
-          <div className="space-y-1 text-xs text-neutral-400">
-            <div className="flex justify-between">
-              <span>Subtotal:</span>
-              <span className="font-mono text-neutral-200">GH₵{subtotal.toFixed(2)}</span>
-            </div>
-            {calculatedDiscount > 0 && !isComplimentary && (
-              <div className="flex justify-between text-amber-400 font-medium">
-                <span>Discount:</span>
-                <span className="font-mono">-GH₵{calculatedDiscount.toFixed(2)}</span>
-              </div>
-            )}
-
-            {/* Room-service charge — not applied to restaurant-table dining,
-                takeaway or delivery. */}
-            {orderType === "room_service" && !isComplimentary && (
-              <div className="flex justify-between text-sky-300 font-bold">
-                <span>Room Service Charge (Room {roomNumber || "—"}):</span>
-                <span className="font-mono">GH₵{roomCharge.toFixed(2)}</span>
-              </div>
-            )}
-
-            <div className="flex justify-between">
-              <span>GRA VAT ({billingConfig.taxRatePercent}%):</span>
-              <span className="font-mono text-neutral-200">GH₵{taxAmount.toFixed(2)}</span>
-            </div>
-            {tipAmount > 0 && !isComplimentary && (
-              <div className="flex justify-between text-emerald-400 font-medium">
-                <span>Tip:</span>
-                <span className="font-mono">+GH₵{tipAmount.toFixed(2)}</span>
-              </div>
-            )}
-
-            {isComplimentary ? (
-              <div className="pt-2 border-t border-neutral-800 space-y-1">
-                <div className="flex justify-between items-baseline font-bold text-sky-300 text-base">
-                  <span>COMPLIMENTARY:</span>
-                  <span className="font-mono text-lg">GH₵0.00</span>
-                </div>
-                <div className="flex justify-between text-[0.6875rem] text-neutral-500">
-                  <span>Food value given free:</span>
-                  <span className="font-mono">GH₵{fromCents(pricing.compValueCents)}</span>
-                </div>
-              </div>
-            ) : (
-              <div className="flex justify-between items-baseline pt-2 border-t border-neutral-800 font-bold text-white text-base">
-                <span>Total Payable:</span>
-                <span className="font-mono text-amber-400 text-lg">GH₵{totalAmount.toFixed(2)}</span>
-              </div>
-            )}
-          </div>
-
-          {/* Action Buttons — Settle is the hero; docket + drawer + clear sit
-              side-by-side underneath for one-thumb till operation. */}
-          <div className="space-y-2.5 pt-1">
-            {isComplimentary ? (
-              /* A comp order has nothing to collect, so it is sent straight
-                 through — no payment modal, no tender step. */
-              <TactileButton
-                onClick={() => requireShift(() => void handleProcessPayment())}
-                disabled={cart.length === 0 || isSubmitting}
-                toneClass="bg-sky-600 hover:bg-sky-500 text-white text-[0.9375rem] font-bold"
-                className="w-full h-14 px-4 disabled:cursor-not-allowed rounded-2xl"
-              >
-                <Coffee className="w-6 h-6 shrink-0" />
-                <span>{isSubmitting ? "Sending…" : "Send Comp Order · GH₵0.00"}</span>
-              </TactileButton>
-            ) : (
-              <TactileButton
-                onClick={() => requireShift(proceedToSettle)}
-                disabled={cart.length === 0 || isSubmitting}
-                toneClass="bg-emerald-600 hover:bg-emerald-500 text-white text-[0.9375rem] font-bold"
-                className="w-full h-14 px-4 disabled:cursor-not-allowed rounded-2xl"
-              >
-                <DollarSign className="w-6 h-6 text-amber-300 shrink-0" />
-                <span>Settle Bill · GH₵{totalAmount.toFixed(2)}</span>
-              </TactileButton>
-            )}
-
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                onClick={() => requireShift(() => void handleSendToKitchen())}
-                disabled={cart.length === 0 || isSubmitting}
-                className="h-12 px-3 bg-neutral-800 hover:bg-neutral-750 active:bg-neutral-700 disabled:opacity-40 disabled:cursor-not-allowed border border-neutral-700 text-white rounded-2xl text-[0.75rem] font-bold flex items-center justify-center gap-2 transition active:scale-[0.98]"
-                title="Print the kitchen docket without taking payment"
-              >
-                <Printer className="w-5 h-5 text-amber-400 shrink-0" />
-                <span>Kitchen Docket</span>
-              </button>
-              <button
-                onClick={requestNewTicket}
-                disabled={cart.length === 0 || isSubmitting}
-                className="h-12 px-3 bg-neutral-800 hover:bg-neutral-750 border border-neutral-700 text-neutral-300 rounded-2xl text-[0.75rem] font-bold flex items-center justify-center gap-2 transition active:scale-[0.98] disabled:opacity-40"
-                title="Clear the current ticket (asks first)"
-              >
-                <Trash2 className="w-5 h-5 shrink-0" />
-                <span>Clear Ticket</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-
+  /* Every pop-up the till uses (shift gate, dish options, discount, comp,
+     payment, docket, receipt, approvals, confirm), shared by the classic and
+     the new layout so both run exactly the same money and approval paths. */
+  const sharedModals = (
+    <>
       {/* Shift gate: a cashier's first sale of the day opens their own shift. */}
       {showShiftGate && (
         <div className="fixed inset-0 z-[120] flex items-start justify-center bg-black/75 backdrop-blur-sm p-4 overflow-y-auto" role="dialog" aria-modal="true" aria-label="Open your shift">
@@ -2436,6 +1838,706 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
           action?.();
         }}
       />
+    </>
+  );
+
+  if (newLayout) {
+    return (
+      <div className="flex-1 flex flex-col h-full overflow-hidden">
+        <PosNewLayout
+          categories={categories}
+          menuItems={menuItems}
+          filteredItems={filteredItems}
+          selectedCategory={selectedCategory}
+          onSelectCategory={setSelectedCategory}
+          searchQuery={searchQuery}
+          onSearch={setSearchQuery}
+          onItem={handleItemClick}
+          cartQtyByItem={cartQtyByItem}
+          tables={tables}
+          cart={cart}
+          onQuantity={updateQuantity}
+          onRemove={removeCartItem}
+          orderType={orderType}
+          onOrderType={changeOrderType}
+          selectedTableId={selectedTableId}
+          onTable={setSelectedTableId}
+          roomNumber={roomNumber}
+          onRoom={setRoomNumber}
+          customerName={customerName}
+          onCustomerName={setCustomerName}
+          customerPhone={customerPhone}
+          onCustomerPhone={setCustomerPhone}
+          orderNotes={orderNotes}
+          onOrderNotes={setOrderNotes}
+          loadedOrder={loadedOrder}
+          subtotal={subtotal}
+          discount={calculatedDiscount}
+          taxAmount={taxAmount}
+          taxRatePercent={billingConfig.taxRatePercent}
+          roomCharge={roomCharge}
+          tipAmount={tipAmount}
+          onTip={setTipAmount}
+          totalAmount={totalAmount}
+          isComplimentary={isComplimentary}
+          compValue={fromCents(pricing.compValueCents)}
+          compEnabled={billingConfig.compBreakfastEnabled}
+          onDiscount={() => setShowDiscountModal(true)}
+          onToggleComp={() => (isComplimentary ? setIsComplimentary(false) : setShowCompModal(true))}
+          onSettle={() => requireShift(proceedToSettle)}
+          onSendComp={() => requireShift(() => void handleProcessPayment())}
+          onKitchen={() => requireShift(() => void handleSendToKitchen())}
+          onClear={requestNewTicket}
+          isSubmitting={isSubmitting}
+          showRecentOrders={!!currentUser?.permissions?.canViewOrderHistory}
+          recentRefreshKey={recentOrdersKey}
+          onOpenOrder={(id) => {
+            if (loadedOrder?.id === id) return;
+            void attachLoadedOrder(id, readTicketDraftOrderId(currentUser?.id ?? "anon") === id);
+          }}
+        />
+        {/* Classic pop-ups, re-coloured for the light theme (globals.css). */}
+        <div className="ui-bridge contents">{sharedModals}</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex-1 flex flex-col h-full overflow-hidden bg-neutral-950">
+      <div className="flex-1 flex flex-col md:flex-row min-h-0 overflow-hidden relative">
+      {/* LEFT/CENTER: Ghanaian Menu Items & Categories */}
+      <div className="flex-1 flex flex-col h-full border-r border-neutral-800 overflow-hidden">
+        {/* Shell controls strip lives over THIS column only (staff request,
+            Oct 2026): everything grouped on its left, and the bill panel
+            beside it extends to the very top of the screen. */}
+        {headerControls}
+        {/* Top search & Filter bar */}
+        <div className="p-4 max-md:p-3 bg-neutral-900 border-b border-neutral-800 flex flex-col sm:flex-row gap-3 items-center justify-between">
+          <div className="relative w-full sm:w-80">
+            <Search className="w-4 h-4 text-neutral-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              placeholder="Search menu items, dishes, drinks..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-9 pr-4 py-2 max-md:h-12 max-md:rounded-2xl max-md:text-base bg-neutral-800 border border-neutral-700 rounded-xl text-sm text-white placeholder-neutral-400 focus:outline-none focus:border-amber-500"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery("")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+
+          {/* Table Indicator if table active */}
+          {selectedTableId && (
+            <div className="px-3 py-1.5 bg-amber-500/10 border border-amber-500/30 rounded-xl flex items-center gap-2 text-xs font-semibold text-amber-400">
+              <span>Ordering for Table #{selectedTableId}</span>
+              <button
+                onClick={() => setSelectedTableId(null)}
+                className="text-neutral-400 hover:text-white"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Category Pills */}
+        <div className="px-4 py-3 max-md:px-3 max-md:py-2.5 bg-neutral-900/50 border-b border-neutral-800 flex items-center gap-2 overflow-x-auto custom-scrollbar shrink-0">
+          <button
+            onClick={() => setSelectedCategory("all")}
+            className={`px-5 h-12 max-md:h-11 max-md:px-4 max-md:rounded-full max-md:text-[0.8125rem] rounded-xl text-sm font-bold whitespace-nowrap transition-all active:scale-95 ${
+              selectedCategory === "all"
+                ? "bg-amber-500 text-black shadow-md shadow-amber-500/20"
+                : "bg-neutral-800 text-neutral-300 hover:bg-neutral-750 hover:text-white"
+            }`}
+          >
+            All Dishes ({menuItems.length})
+          </button>
+          {categories.map((cat) => (
+            <button
+              key={cat.id}
+              onClick={() => setSelectedCategory(cat.id)}
+              className={`px-5 h-12 max-md:h-11 max-md:px-4 max-md:rounded-full max-md:text-[0.8125rem] rounded-xl text-sm font-bold whitespace-nowrap transition-all active:scale-95 ${
+                selectedCategory === cat.id
+                  ? "bg-amber-500 text-black shadow-md shadow-amber-500/20"
+                  : "bg-neutral-800 text-neutral-300 hover:bg-neutral-750 hover:text-white"
+              }`}
+            >
+              {cat.name}
+              <span className="md:hidden font-semibold opacity-75">
+                {" "}· {menuItems.filter((i) => i.categoryId === cat.id).length}
+              </span>
+            </button>
+          ))}
+        </div>
+
+        {/* Item Cards Grid */}
+        <div className="flex-1 overflow-y-auto p-4 max-md:p-3 pb-44 xl:pb-4 custom-scrollbar">
+          {/* Cards never shrink below ~9.75rem: on a 10–13" till the old
+              fixed column counts squeezed dishes to ~110px slivers with
+              clipped names (field report, Oct 2026). auto-fill trades
+              column count for a guaranteed tappable card size instead. */}
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(9.75rem,1fr))] max-md:grid-cols-2 gap-4 max-md:gap-3">
+            {filteredItems.map((item) => (
+              <div
+                key={item.id}
+                role="button"
+                tabIndex={item.isAvailable ? 0 : -1}
+                onClick={() => handleItemClick(item)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    handleItemClick(item);
+                  }
+                }}
+                className={`group relative bg-neutral-900 hover:bg-neutral-850 active:bg-neutral-800 border border-neutral-800 hover:border-amber-500/50 active:border-amber-500 rounded-2xl p-3.5 max-md:p-3 flex-col justify-between cursor-pointer transition-all duration-150 hover:shadow-xl hover:shadow-amber-500/5 select-none ${
+                  item.isAvailable ? "flex" : "hidden max-md:flex max-md:opacity-75"
+                }`}
+                aria-disabled={!item.isAvailable}
+              >
+                <div>
+                  {/* Photo with badges */}
+                  <div className={`relative w-full h-32 max-md:h-24 rounded-xl overflow-hidden bg-neutral-800 mb-3 ${item.isAvailable ? "" : "max-md:grayscale"}`}>
+                    {item.imageUrl ? (
+                      <Image unoptimized width={400} height={300}
+                        src={item.imageUrl}
+                        alt={item.name}
+                        className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
+                        loading="lazy"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-neutral-600">
+                        <Coffee className="w-8 h-8" />
+                      </div>
+                    )}
+                    {item.hasRecipe && (
+                      <div className="absolute top-2 left-2 px-1.5 py-0.5 rounded-md bg-black/70 backdrop-blur-xs text-[0.625rem] text-amber-300 font-medium flex items-center gap-1 border border-amber-500/30">
+                        <ChefHat className="w-3 h-3" />
+                        <span>Recipe</span>
+                      </div>
+                    )}
+                    <div className="max-md:hidden absolute bottom-2 right-2 px-2.5 py-1 rounded-lg bg-neutral-950/85 backdrop-blur-xs text-[0.8125rem] font-bold text-emerald-400 border border-neutral-700">
+                      GH₵{Number(item.price).toFixed(2)}
+                    </div>
+                    {/* Phone: how many of this dish are already on the bill —
+                        build the order without opening the sheet. */}
+                    {(cartQtyByItem.get(item.id) ?? 0) > 0 && (
+                      <div className="md:hidden absolute top-2 right-2 min-w-7 h-7 px-1.5 rounded-full bg-amber-500 text-black text-[0.75rem] font-extrabold flex items-center justify-center shadow-lg">
+                        ×{cartQtyByItem.get(item.id)}
+                      </div>
+                    )}
+                    {!item.isAvailable && (
+                      <div className="md:hidden absolute bottom-2 left-2 px-2 py-0.5 rounded-md bg-black/75 backdrop-blur-xs text-[0.625rem] font-bold text-rose-300 border border-rose-500/40">
+                        Unavailable
+                      </div>
+                    )}
+                  </div>
+
+                  <h4 className="font-bold text-neutral-50 text-[0.84375rem] leading-snug line-clamp-2">
+                    {item.name}
+                  </h4>
+                  {item.sku && (
+                    <div className="text-[0.625rem] text-neutral-500 mt-0.5 font-mono">
+                      {item.sku}
+                    </div>
+                  )}
+                </div>
+
+                <div className="mt-3 pt-2.5 border-t border-neutral-800/80 flex items-center max-md:items-end justify-between text-[0.71875rem] text-neutral-400">
+                  <span className="flex flex-col min-w-0">
+                    <span className="capitalize text-neutral-500">{item.station || "Kitchen"}</span>
+                    {/* Phone cards carry the price here, Demo A style: big and
+                        bold beside the add button instead of a pill on the photo. */}
+                    <span className="md:hidden mt-0.5 text-[0.9375rem] leading-none font-extrabold text-neutral-50">
+                      GH₵{Number(item.price).toFixed(2)}
+                    </span>
+                  </span>
+                  <span className={`w-8 h-8 max-md:w-9 max-md:h-9 max-md:rounded-full rounded-lg bg-amber-500/10 text-amber-400 group-hover:bg-amber-500 group-hover:text-black flex items-center justify-center font-bold transition text-lg leading-none shrink-0 ${
+                    item.isAvailable ? "max-md:bg-amber-500 max-md:text-black" : "max-md:bg-neutral-800 max-md:text-neutral-500"
+                  }`}>
+                    +
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {filteredItems.length === 0 && (
+            <div className="h-64 flex flex-col items-center justify-center text-center p-6 text-neutral-500">
+              <Search className="w-10 h-10 mb-2 opacity-40" />
+              <p className="text-sm font-medium">No dishes match your search.</p>
+              <p className="text-xs text-neutral-600 mt-1">Try changing category or search terms.</p>
+            </div>
+          )}
+          {filteredItems.length > 0 && !filteredItems.some((i) => i.isAvailable) && (
+            <div className="hidden md:flex h-64 flex-col items-center justify-center text-center p-6 text-neutral-500">
+              <Search className="w-10 h-10 mb-2 opacity-40" />
+              <p className="text-sm font-medium">Everything here is marked unavailable.</p>
+              <p className="text-xs text-neutral-600 mt-1">On a phone these dishes show greyed-out instead.</p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* PHONE CART BAR — the running total is the number a cashier must never
+          have to hunt for, and it is the only way into the order panel when the
+          panel lives in a sheet. */}
+      <button
+        onClick={() => setCartOpen(true)}
+        className={`xl:hidden fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom,0px))] md:bottom-0 z-20 min-h-16 px-4 flex items-center gap-3 bg-neutral-900/95 backdrop-blur border-t border-neutral-700 shadow-[0_-8px_24px_rgba(0,0,0,0.55)] transition-transform ${
+          cartOpen ? "translate-y-full" : "translate-y-0"
+        }`}
+        aria-label={`Open the order: ${cartCount} items, GH₵${totalAmount.toFixed(2)}`}
+      >
+        <span className="relative shrink-0 w-11 h-11 rounded-xl bg-amber-500 text-black flex items-center justify-center">
+          <ShoppingCart className="w-5 h-5" strokeWidth={2.5} />
+          {cartCount > 0 && (
+            <span className="absolute -top-1.5 -right-1.5 min-w-5 h-5 px-1 rounded-full bg-rose-500 text-white text-[0.6875rem] font-bold flex items-center justify-center">
+              {cartCount}
+            </span>
+          )}
+        </span>
+        <span className="flex-1 text-left min-w-0">
+          {/* md+ keeps the one-line summary; phones split it so the total is
+              the biggest thing on the bar (mobile redesign rec, Oct 2026). */}
+          <span className="hidden md:block text-[0.6875rem] font-bold tracking-[0.12em] text-neutral-500 uppercase">
+            Open order
+          </span>
+          <span className="hidden md:block text-base font-bold text-white truncate">
+            {cartCount === 0 ? "No items yet" : `${cartCount} item${cartCount === 1 ? "" : "s"}`}
+            {cartCount > 0 ? ` · GH₵${totalAmount.toFixed(2)}` : ""}
+          </span>
+          <span className="md:hidden block text-[0.6875rem] font-bold tracking-[0.12em] text-neutral-500 uppercase">
+            {cartCount === 0 ? "Open order" : `${cartCount} item${cartCount === 1 ? "" : "s"}`}
+          </span>
+          <span className="md:hidden block text-lg font-extrabold text-white truncate leading-tight">
+            {cartCount === 0 ? "No items yet" : `GH₵${totalAmount.toFixed(2)}`}
+          </span>
+        </span>
+        <span className="shrink-0 h-11 px-3.5 rounded-xl max-md:bg-amber-500 max-md:border-amber-500 max-md:text-black bg-neutral-800 border border-neutral-700 text-white font-bold text-sm flex items-center gap-1.5">
+          View <ChevronUp className="w-4 h-4" />
+        </span>
+      </button>
+
+      {/* Backdrop for the phone sheet. Sits under the sheet, over the bar. */}
+      {cartOpen && (
+        <div
+          className="xl:hidden fixed inset-0 z-30 bg-black/60 backdrop-blur-[2px]"
+          onClick={() => setCartOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+
+      {/* RIGHT: Active Order Cart & Totals Panel.
+          md and up: the in-flow right-hand column. Below md: a slide-up sheet
+          with its own grab handle and close button. Same element either way. */}
+      <div
+        className={`bg-neutral-900 flex flex-col shrink-0 transition-all duration-200 xl:h-full xl:w-96 xl:border-l xl:border-neutral-800 max-xl:fixed max-xl:z-30 max-xl:shadow-2xl max-xl:border-neutral-700 max-md:inset-x-0 max-md:bottom-[calc(4rem+env(safe-area-inset-bottom,0px))] max-md:rounded-t-3xl max-md:border-t max-md:max-h-[min(85dvh,calc(100dvh-7.5rem))] md:max-xl:top-0 md:max-xl:bottom-0 md:max-xl:right-0 md:max-xl:w-[min(26rem,94vw)] md:max-xl:border-l ${
+          cartOpen
+            ? "max-xl:visible max-md:translate-y-0 md:max-xl:translate-x-0"
+            : "max-xl:invisible max-xl:pointer-events-none max-md:translate-y-full md:max-xl:translate-x-full"
+        }`}
+      >
+        {/* Sheet header — phones and tablets, wherever the panel overlays. */}
+        <div className="xl:hidden shrink-0 px-4 pt-2.5 pb-2 border-b border-neutral-800">
+          {/* Grab pill on top, Demo A sheet style (phones; tablets keep theirs below). */}
+          <div className="md:hidden mx-auto mb-2 h-1.5 w-12 rounded-full bg-neutral-700" />
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setCartOpen(false)}
+              className="h-11 w-11 rounded-xl bg-neutral-800 border border-neutral-700 text-neutral-200 flex items-center justify-center transition active:bg-neutral-700"
+              aria-label="Close the order panel"
+            >
+              <ChevronDown className="w-5 h-5" />
+            </button>
+            <div className="flex-1 min-w-0 text-center">
+              <div className="text-[0.6875rem] font-bold tracking-[0.12em] text-neutral-500 uppercase">
+                Open order
+              </div>
+              <div className="text-sm font-bold text-white truncate">
+                {cartCount} item{cartCount === 1 ? "" : "s"} · GH₵{totalAmount.toFixed(2)}
+              </div>
+            </div>
+            <div className="w-11" />
+          </div>
+          <div className="max-md:hidden mt-1.5 h-1.5 w-12 mx-auto rounded-full bg-neutral-700" />
+        </div>
+        {/* Order Meta Header — deliberately compact (field report, Oct 2026):
+            the old labelled fields ate ~230px and squeezed the ticket items
+            into a sliver staff had to scroll to. Labels are sr-only now; the
+            placeholders carry the meaning. Items + checkout get the height. */}
+        <div className="p-3 border-b border-neutral-800 space-y-2 shrink-0">
+          {/* Order Type Selector — Room Service is distinct from restaurant
+              table dining because the GH₵ room charge applies only there. */}
+          <div className="flex gap-1 bg-neutral-950 p-1 rounded-xl border border-neutral-800 text-[0.625rem] min-[420px]:text-[0.6875rem] font-bold">
+            {([
+              ["dine_in", "Table"],
+              ["room_service", "Room Service"],
+              ["takeaway", "Takeaway"],
+              ["delivery", "Delivery"],
+            ] as const).map(([type, label]) => (
+              <button
+                key={type}
+                onClick={() => changeOrderType(type)}
+                className={`flex-1 h-11 px-0.5 rounded-lg leading-[1.05] flex items-center justify-center text-center transition active:scale-[0.97] ${
+                  orderType === type
+                    ? type === "room_service"
+                      ? "bg-sky-400 text-black shadow-xs"
+                      : "bg-amber-500 text-black shadow-xs"
+                    : "text-neutral-400 hover:text-white"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {/* Table / Room Number / Guest contact */}
+          <div className="grid grid-cols-2 gap-2 text-xs">
+            {orderType === "dine_in" ? (
+              <div>
+                <label className="sr-only">
+                  Table Number
+                </label>
+                <select
+                  value={selectedTableId || ""}
+                  onChange={(e) => setSelectedTableId(e.target.value ? Number(e.target.value) : null)}
+                  className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-2.5 h-11 text-white focus:outline-none focus:border-amber-500"
+                >
+                  <option value="">Select Table...</option>
+                  {tables.map((tbl) => (
+                    <option key={tbl.id} value={tbl.id}>
+                      {tbl.tableNumber} ({tbl.capacity}p - {tbl.status})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : orderType === "room_service" ? (
+              <div>
+                <label className="sr-only">
+                  Hotel Room Number *
+                </label>
+                <input
+                  type="text"
+                  value={roomNumber}
+                  onChange={(e) => setRoomNumber(e.target.value)}
+                  placeholder="Room · e.g. 204 *"
+                  className="w-full bg-neutral-800 border border-sky-500/40 rounded-lg px-3 h-11 text-white font-bold placeholder:text-neutral-500 focus:outline-none focus:border-sky-400"
+                />
+              </div>
+            ) : (
+              <div>
+                <label className="sr-only">
+                  Guest Phone (optional)
+                </label>
+                <div className="relative">
+                  <Phone className="w-3.5 h-3.5 text-neutral-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="tel"
+                    value={customerPhone}
+                    onChange={(e) => setCustomerPhone(e.target.value)}
+                    placeholder="024 410 0000"
+                    className="w-full bg-neutral-800 border border-neutral-700 rounded-lg pl-9 pr-2 h-11 text-white focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+              </div>
+            )}
+
+            <div>
+              <label className="sr-only">
+                Guest Name
+              </label>
+              <div className="relative">
+                <User className="w-3 h-3 text-neutral-500 absolute left-2 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={customerName}
+                  onChange={(e) => setCustomerName(e.target.value)}
+                  placeholder="Walk-in Guest"
+                  className="w-full bg-neutral-800 border border-neutral-700 rounded-lg pl-6 pr-2 h-11 text-white placeholder:text-neutral-500 focus:outline-none focus:border-amber-500"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Order note — saved with the order and printed on the kitchen
+              docket ("TICKET NOTE: ..."). Brought back Oct 2026 after staff
+              asked for a way to flag whole-order instructions (extra shito,
+              allergies) that per-item notes don't cover. */}
+          <div>
+            <label className="sr-only">
+              Order note (prints on kitchen docket)
+            </label>
+            <input
+              type="text"
+              value={orderNotes}
+              onChange={(e) => setOrderNotes(e.target.value)}
+              placeholder="Order note (prints on kitchen docket) — e.g. extra shito"
+              className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 h-11 text-xs text-white placeholder:text-neutral-500 focus:outline-none focus:border-amber-500"
+            />
+          </div>
+        </div>
+
+        {/* Cart Item List — the ONLY part of the panel that scrolls. */}
+        {loadedOrder && (
+          <div className="mx-2 mt-2 shrink-0 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-[0.6875rem] leading-snug text-amber-200">
+            <span className="font-bold">Open order {loadedOrder.orderNumber}</span>
+            {loadedOrder.paymentStatus === "partially_paid"
+              ? ` · GH₵${Number(loadedOrder.paidAmount).toFixed(2)} already paid`
+              : " · sent to kitchen, not yet paid"}
+            {" — add items, then Settle Bill to take payment."}
+          </div>
+        )}
+        <ScrollFadeList className="flex-1 min-h-0 overflow-y-auto p-2 space-y-2 custom-scrollbar">
+          {cart.length === 0 ? (
+            <div className="h-full flex flex-col items-center justify-center text-center text-neutral-500 p-6">
+              <Receipt className="w-12 h-12 mb-2 opacity-30 text-amber-500" />
+              <p className="text-sm font-semibold text-neutral-300">Ticket is empty</p>
+              <p className="text-xs text-neutral-500 mt-1">Tap Ghanaian dishes on the left to start the order</p>
+            </div>
+          ) : (
+            cart.map((it, idx) => (
+              <div
+                key={it.cartItemId || idx}
+                className="bg-neutral-855 border border-neutral-750 rounded-lg px-2.5 py-2 text-sm"
+              >
+                <div className="flex items-baseline justify-between gap-2">
+                  <span className="flex-1 font-semibold text-neutral-100 text-[0.8125rem] leading-tight">
+                    {it.itemName}
+                  </span>
+                  <span className="font-mono font-bold text-neutral-200 text-[0.8125rem] whitespace-nowrap">
+                    GH₵{Number(it.totalPrice).toFixed(2)}
+                  </span>
+                </div>
+                {it.modifiers && it.modifiers.length > 0 && (
+                  <div className="text-[0.6875rem] text-amber-400/90 mt-0.5">
+                    {it.modifiers.map((m: any, mIdx: number) => (
+                      <span key={mIdx} className="mr-2">
+                        + {m.name || m.optionName}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {it.specialInstructions && (
+                  <div className="text-[0.625rem] text-neutral-400 italic mt-0.5">
+                    * {it.specialInstructions}
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between mt-1.5">
+                  <span className="text-[0.625rem] text-neutral-500">
+                    GH₵{Number(it.unitPrice).toFixed(2)} ea
+                  </span>
+                  {/* Steppers stay finger-sized (the large display sizes floor
+                      tappables at 40px via globals.css); compactness comes
+                      from the single-row layout, not from shrinking targets. */}
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => updateQuantity(idx, -1)}
+                      aria-label="Decrease quantity"
+                      className="w-8 h-8 rounded-lg bg-neutral-800 hover:bg-neutral-700 active:bg-neutral-600 text-neutral-200 flex items-center justify-center transition active:scale-95"
+                    >
+                      <Minus className="w-4 h-4" strokeWidth={3} />
+                    </button>
+                    <span className="w-6 text-center font-bold text-white font-mono text-sm">
+                      {it.quantity}
+                    </span>
+                    <button
+                      onClick={() => updateQuantity(idx, 1)}
+                      aria-label="Increase quantity"
+                      className="w-8 h-8 rounded-lg bg-neutral-800 hover:bg-neutral-700 active:bg-amber-500 active:text-black text-neutral-200 flex items-center justify-center transition active:scale-95"
+                    >
+                      <Plus className="w-4 h-4" strokeWidth={3} />
+                    </button>
+                    <button
+                      onClick={() => removeCartItem(idx)}
+                      aria-label="Remove item"
+                      className="ml-1 w-8 h-8 rounded-lg text-neutral-500 hover:text-rose-400 hover:bg-rose-500/10 flex items-center justify-center transition"
+                      title="Remove item (Undo appears afterwards)"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
+        </ScrollFadeList>
+
+        {/* Order Calculations & Checkout Bar — shrink-0: totals and Settle
+            are always on screen; the panel never scrolls to reach them. */}
+        <div className="p-3 bg-neutral-900 border-t border-neutral-800 space-y-2.5 shrink-0">
+          {/* Quick Discount & Tip Triggers */}
+          <div className="flex gap-2 text-xs">
+            <button
+              onClick={() => {
+                setCartOpen(false);
+                setShowDiscountModal(true);
+              }}
+              className={`flex-1 h-11 px-2 rounded-xl border flex items-center justify-center gap-1.5 font-semibold text-[0.78125rem] transition active:scale-95 ${
+                calculatedDiscount > 0
+                  ? "bg-amber-500/10 border-amber-500/40 text-amber-400"
+                  : "bg-neutral-800 border-neutral-700 text-neutral-300 hover:bg-neutral-750"
+              }`}
+            >
+              <Percent className="w-3.5 h-3.5" />
+              <span>
+                {calculatedDiscount > 0 ? `-GH₵${calculatedDiscount.toFixed(2)} Disc` : "Discount"}
+              </span>
+            </button>
+
+            {/* Quick Tip selection */}
+            <div className="flex-1 flex gap-1">
+              {[0.05, 0.10, 0.15].map((pct) => {
+                const tipVal = subtotal * pct;
+                const isSelected = Math.abs(tipAmount - tipVal) < 0.05;
+                return (
+                  <button
+                    key={pct}
+                    onClick={() => setTipAmount(isSelected ? 0 : tipVal)}
+                    className={`flex-1 h-11 rounded-xl border text-[0.8125rem] font-bold transition active:scale-95 ${
+                      isSelected
+                        ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-400"
+                        : "bg-neutral-800 border-neutral-700 text-neutral-400 hover:text-white"
+                    }`}
+                  >
+                    {pct * 100}%
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Complimentary breakfast toggle */}
+          {orderType === "room_service" && billingConfig.compBreakfastEnabled && (
+            <button
+              onClick={() => {
+                  setCartOpen(false);
+                  return isComplimentary ? setIsComplimentary(false) : setShowCompModal(true);
+                }}
+              className={`w-full h-11 rounded-xl border text-[0.78125rem] font-bold flex items-center justify-center gap-2 transition active:scale-[0.98] ${
+                isComplimentary
+                  ? "bg-sky-500/20 border-sky-400 text-sky-200"
+                  : "bg-neutral-800 border-neutral-700 text-neutral-300 hover:bg-neutral-750"
+              }`}
+              title="Mark this order as a free breakfast for a room guest"
+            >
+              <Coffee className="w-4 h-4 shrink-0" />
+              <span>
+                {isComplimentary ? "✓ Complimentary Breakfast — tap to undo" : "Complimentary Breakfast (GH₵0.00)"}
+              </span>
+            </button>
+          )}
+
+          {/* Subtotals Breakdown (Ghanaian Tax + Room Charge) */}
+          <div className="space-y-1 text-xs text-neutral-400">
+            <div className="flex justify-between">
+              <span>Subtotal:</span>
+              <span className="font-mono text-neutral-200">GH₵{subtotal.toFixed(2)}</span>
+            </div>
+            {calculatedDiscount > 0 && !isComplimentary && (
+              <div className="flex justify-between text-amber-400 font-medium">
+                <span>Discount:</span>
+                <span className="font-mono">-GH₵{calculatedDiscount.toFixed(2)}</span>
+              </div>
+            )}
+
+            {/* Room-service charge — not applied to restaurant-table dining,
+                takeaway or delivery. */}
+            {orderType === "room_service" && !isComplimentary && (
+              <div className="flex justify-between text-sky-300 font-bold">
+                <span>Room Service Charge (Room {roomNumber || "—"}):</span>
+                <span className="font-mono">GH₵{roomCharge.toFixed(2)}</span>
+              </div>
+            )}
+
+            <div className="flex justify-between">
+              <span>GRA VAT ({billingConfig.taxRatePercent}%):</span>
+              <span className="font-mono text-neutral-200">GH₵{taxAmount.toFixed(2)}</span>
+            </div>
+            {tipAmount > 0 && !isComplimentary && (
+              <div className="flex justify-between text-emerald-400 font-medium">
+                <span>Tip:</span>
+                <span className="font-mono">+GH₵{tipAmount.toFixed(2)}</span>
+              </div>
+            )}
+
+            {isComplimentary ? (
+              <div className="pt-2 border-t border-neutral-800 space-y-1">
+                <div className="flex justify-between items-baseline font-bold text-sky-300 text-base">
+                  <span>COMPLIMENTARY:</span>
+                  <span className="font-mono text-lg">GH₵0.00</span>
+                </div>
+                <div className="flex justify-between text-[0.6875rem] text-neutral-500">
+                  <span>Food value given free:</span>
+                  <span className="font-mono">GH₵{fromCents(pricing.compValueCents)}</span>
+                </div>
+              </div>
+            ) : (
+              <div className="flex justify-between items-baseline pt-2 border-t border-neutral-800 font-bold text-white text-base">
+                <span>Total Payable:</span>
+                <span className="font-mono text-amber-400 text-lg">GH₵{totalAmount.toFixed(2)}</span>
+              </div>
+            )}
+          </div>
+
+          {/* Action Buttons — Settle is the hero; docket + drawer + clear sit
+              side-by-side underneath for one-thumb till operation. */}
+          <div className="space-y-2.5 pt-1">
+            {isComplimentary ? (
+              /* A comp order has nothing to collect, so it is sent straight
+                 through — no payment modal, no tender step. */
+              <TactileButton
+                onClick={() => requireShift(() => void handleProcessPayment())}
+                disabled={cart.length === 0 || isSubmitting}
+                toneClass="bg-sky-600 hover:bg-sky-500 text-white text-[0.9375rem] font-bold"
+                className="w-full h-14 px-4 disabled:cursor-not-allowed rounded-2xl"
+              >
+                <Coffee className="w-6 h-6 shrink-0" />
+                <span>{isSubmitting ? "Sending…" : "Send Comp Order · GH₵0.00"}</span>
+              </TactileButton>
+            ) : (
+              <TactileButton
+                onClick={() => requireShift(proceedToSettle)}
+                disabled={cart.length === 0 || isSubmitting}
+                toneClass="bg-emerald-600 hover:bg-emerald-500 text-white text-[0.9375rem] font-bold"
+                className="w-full h-14 px-4 disabled:cursor-not-allowed rounded-2xl"
+              >
+                <DollarSign className="w-6 h-6 text-amber-300 shrink-0" />
+                <span>Settle Bill · GH₵{totalAmount.toFixed(2)}</span>
+              </TactileButton>
+            )}
+
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={() => requireShift(() => void handleSendToKitchen())}
+                disabled={cart.length === 0 || isSubmitting}
+                className="h-12 px-3 bg-neutral-800 hover:bg-neutral-750 active:bg-neutral-700 disabled:opacity-40 disabled:cursor-not-allowed border border-neutral-700 text-white rounded-2xl text-[0.75rem] font-bold flex items-center justify-center gap-2 transition active:scale-[0.98]"
+                title="Print the kitchen docket without taking payment"
+              >
+                <Printer className="w-5 h-5 text-amber-400 shrink-0" />
+                <span>Kitchen Docket</span>
+              </button>
+              <button
+                onClick={requestNewTicket}
+                disabled={cart.length === 0 || isSubmitting}
+                className="h-12 px-3 bg-neutral-800 hover:bg-neutral-750 border border-neutral-700 text-neutral-300 rounded-2xl text-[0.75rem] font-bold flex items-center justify-center gap-2 transition active:scale-[0.98] disabled:opacity-40"
+                title="Clear the current ticket (asks first)"
+              >
+                <Trash2 className="w-5 h-5 shrink-0" />
+                <span>Clear Ticket</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {sharedModals}
       </div>
     </div>
   );
