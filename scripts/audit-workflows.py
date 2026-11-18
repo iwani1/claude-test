@@ -188,8 +188,8 @@ for path in sorted((ROOT / "migrations").glob("*.sql")):
 #    fact. The read permission is read out of the API's own gate, and every menu
 #    that offers that tab must ask the same question.
 TAB_GATES = [
-    ("orders", SRC / "app/api/orders/route.ts", [SRC / "components/Sidebar.tsx", SRC / "components/MobileTabBar.tsx"]),
-    ("shifts", SRC / "app/api/shifts/route.ts", [SRC / "components/Sidebar.tsx", SRC / "components/MobileTabBar.tsx"]),
+    ("orders", SRC / "app/api/orders/route.ts", [SRC / "components/nav-config.ts", SRC / "components/MobileTabBar.tsx"]),
+    ("shifts", SRC / "app/api/shifts/route.ts", [SRC / "components/nav-config.ts", SRC / "components/MobileTabBar.tsx"]),
 ]
 page_source = SRC / "app/page.tsx"
 for tab, api_path, clients in TAB_GATES:

@@ -11,8 +11,11 @@ async function main() {
   const directory = await mkdtemp(join(tmpdir(), "pos-preview-"));
   const password = randomBytes(24).toString("hex");
   const port = 15433;
+  // As root (containers), PostgreSQL runs as the system "postgres" user and is
+  // handed the data folder, as in the tests (P12 in docs/FINDINGS.md).
+  const asRoot = process.getuid?.() === 0;
   const postgres = new EmbeddedPostgres({ databaseDir: directory, user: "postgres", password, port,
-    persistent: false, postgresFlags: ["-h", "127.0.0.1"], onLog: () => {}, onError: () => {} });
+    persistent: false, createPostgresUser: asRoot, postgresFlags: ["-h", "127.0.0.1"], onLog: () => {}, onError: () => {} });
   let app: ReturnType<typeof spawn> | undefined;
   let admin: Pool | undefined;
   try {

@@ -9,7 +9,9 @@ import {
   WifiOff,
   ShieldAlert,
   RefreshCw,
+  Sparkles,
 } from "lucide-react";
+import { setUiDesign } from "@/lib/ui-preferences";
 import { ROLE_PERMISSIONS } from "@/lib/permissions";
 import { useOnlineStatus, useOfflineQueueCount } from "@/lib/use-terminal-status";
 import { syncOfflineQueueToServer } from "@/lib/offline-storage";
@@ -149,6 +151,16 @@ export const TerminalControls: React.FC<{
         aria-label="Toggle fullscreen"
       >
         <Maximize className="w-5 h-5" />
+      </button>
+      {/* Redesign preview (Nov 2026): per terminal, off until chosen here;
+          the new top bar's user menu has the way back. */}
+      <button
+        onClick={() => setUiDesign("new")}
+        className="h-11 px-3 shrink-0 text-neutral-200 hover:text-white hover:bg-neutral-800 rounded-xl border border-neutral-700/60 flex items-center gap-2 text-[0.75rem] font-semibold transition"
+        title="Try the new design on this terminal (you can switch back from the user menu)"
+      >
+        <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
+        <span className="hidden lg:inline">New design</span>
       </button>
 
       <PinSwitchModal

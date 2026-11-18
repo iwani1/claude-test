@@ -4,6 +4,8 @@ import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Loader2, Store, ShieldAlert } from "lucide-react";
 import { Navbar } from "@/components/Navbar";
 import { Sidebar, NavTab } from "@/components/Sidebar";
+import { TopNav } from "@/components/TopNav";
+import { useUiPreferences } from "@/lib/ui-preferences";
 import { TerminalControls } from "@/components/TerminalControls";
 import { MobileTabBar } from "@/components/MobileTabBar";
 import { LoginScreen } from "@/components/LoginScreen";
@@ -233,6 +235,10 @@ export default function App() {
   // < md the sidebar is a slide-in drawer, so it needs its own open/closed
   // state. md and up ignore it entirely (the rail is always in flow).
   const [menuOpen, setMenuOpen] = useState(false);
+  /** This terminal's look: the new top-bar shell replaces the sidebar and the
+   *  controls strip on md+ only while the new design is switched on. */
+  const { design } = useUiPreferences();
+  const newShell = design === "new";
   const [queuedOrders, setQueuedOrders] = useState(0);
   const isOnline = useOnlineStatus();
 
@@ -418,7 +424,7 @@ export default function App() {
             currentUser={currentUser}
             activeTableId={activeTableId}
             onOrderCreated={fetchOperationalData}
-            headerControls={terminalControls}
+            headerControls={newShell ? undefined : terminalControls}
             loadOrderId={posLoadOrderId}
           />
         );
@@ -540,6 +546,9 @@ export default function App() {
             aria-hidden="true"
           />
         )}
+        {/* With the new design on, the rail serves only as the phone drawer;
+            md+ uses the top bar instead. */}
+        <div className={newShell ? "contents md:hidden" : "contents"}>
         <Sidebar
           mobileOpen={menuOpen}
           onCloseMobile={() => setMenuOpen(false)}
@@ -551,6 +560,7 @@ export default function App() {
           userRole={currentUser?.role}
           userPermissions={currentUser?.permissions}
         />
+        </div>
 
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
           {/* Slim top strip (md+): user, Switch Staff, display size, online
@@ -558,7 +568,22 @@ export default function App() {
               screens. On the POS it is NOT rendered here: PosTerminal
               shows it above the menu column instead, so the bill panel
               extends to the very top (Oct 2026). Phones use the Navbar. */}
-          {activeTab !== "pos" && terminalControls}
+          {newShell ? (
+            <TopNav
+              activeTab={activeTab}
+              onTabChange={handleTabChange}
+              onNewOrder={handleStartNewOrder}
+              currentUser={currentUser}
+              userPermissions={currentUser?.permissions}
+              openTableCount={openTableCount}
+              shiftOpen={!!openShift}
+              lowStockCount={lowStockCount}
+              onUserChange={handleUserChange}
+              onLogout={handleLogout}
+            />
+          ) : (
+            activeTab !== "pos" && terminalControls
+          )}
           <main className="flex-1 flex flex-col min-h-0 overflow-hidden bg-neutral-950">
             {renderTab()}
           </main>

@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 import "./globals.css";
 import { ServiceWorkerRegistrar } from "@/components/ServiceWorkerRegistrar";
+import { UI_PREPAINT_SCRIPT } from "@/lib/ui-preferences-script";
 
 export const metadata: Metadata = {
   title: "Lush View Hotel | Restaurant, Bar & Hospitality POS",
@@ -30,7 +31,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" className="dark h-full" data-display-size="large" suppressHydrationWarning>
+    <html lang="en" className="dark h-full" data-display-size="large" data-ui="classic" data-ui-theme="light" suppressHydrationWarning>
       <head>
         {/* Applies the terminal's saved display size before first paint so
             every screen loads at the chosen size with no flash. Default on a
@@ -41,6 +42,9 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             __html: `try{var s=localStorage.getItem('pos.displaySize');document.documentElement.dataset.displaySize=(s==='standard'||s==='extra'||s==='large')?s:'large'}catch(e){/* audit-ok: display size is a per-device preference; failing keeps the default */}`,
           }}
         />
+        {/* Same idea for the look: classic design or the new one, and the
+            new design's light or dark theme (src/lib/ui-preferences.ts). */}
+        <script dangerouslySetInnerHTML={{ __html: UI_PREPAINT_SCRIPT }} />
       </head>
       <body className="h-full bg-neutral-950 text-neutral-100 antialiased overflow-hidden select-none">
         {children}
