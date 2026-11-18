@@ -9,7 +9,7 @@ import EmbeddedPostgres from "embedded-postgres";
 import { Pool, type PoolClient } from "pg";
 import { spawn } from "node:child_process";
 import { DatabaseSync } from "node:sqlite";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomBytes } from "node:crypto";
@@ -97,7 +97,11 @@ async function main() {
   const secret = randomBytes(48).toString("hex");
   process.env.AUTH_SECRET = secret;
   buildFixture(fixture);
-  const pg = new EmbeddedPostgres({ databaseDir: join(dir, "pgdata"), user: "postgres", password, port, persistent: false,
+  // As root, PostgreSQL runs as the system "postgres" user (P12): it must be
+  // able to enter this private temporary folder to reach its data folder.
+  const asRoot = process.getuid?.() === 0;
+  if (asRoot) await chmod(dir, 0o711);
+  const pg = new EmbeddedPostgres({ databaseDir: join(dir, "pgdata"), user: "postgres", password, port, persistent: false, createPostgresUser: asRoot,
     postgresFlags: ["-h", "127.0.0.1"], onLog: () => {}, onError: msg => { if (String(msg).includes("FATAL")) console.error(msg); } });
   let admin: Pool | undefined;
   try {
@@ -156,7 +160,7 @@ async function main() {
     check("credentials CSV lists 2 imported staff", pinRows.length === 2, csv);
     const adminRow = pinRows.find(r => r.name === "Admin");
     const waiterRow = pinRows.find(r => r.name === "Waiter One");
-    check("Admin is super_admin with fresh 4-digit PIN", adminRow?.role === "super_admin" && /^\d{4}$/.test(adminRow?.pin ?? ""), adminRow);
+    check("Admin is super_admin with a fresh 6-digit PIN (approvers need 6, N21)", adminRow?.role === "super_admin" && /^\d{6}$/.test(adminRow?.pin ?? ""), adminRow);
     check("Waiter One resolved case-insensitively", !!waiterRow, pinRows);
     if (adminRow) {
       const stored = await one("SELECT pin, pin_lookup FROM users WHERE email=$1".replace("$1", `'${adminRow.email}'`));

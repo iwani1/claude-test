@@ -1,4 +1,6 @@
 import { secureRoute, isDatabaseFailure } from "@/lib/api";
+import { photoLink } from "@/lib/menu-photo";
+import { auditActor } from "@/lib/audit";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import {
@@ -59,6 +61,8 @@ async function handleGET(req: Request) {
 
       return hideCost({
         ...item,
+        // An uploaded photo travels as a short link, not ~380 KB inline (N8).
+        imageUrl: item.imageUrl?.startsWith("data:") ? photoLink(item.id, item.imageUrl) : item.imageUrl,
         modifiers: itemMods,
       }, showCost);
     });
@@ -125,10 +129,11 @@ async function handlePOST(req: Request) {
     }
 
     await db.insert(auditLogs).values({
+      ...auditActor(),
       action: "menu_item_created",
       entityType: "menu",
       entityId: String(newItem.id),
-      details: `Created menu item "${newItem.name}" at $${newItem.price}`,
+      details: `Created menu item "${newItem.name}" at GH₵${newItem.price}`,
     });
 
     return NextResponse.json({ success: true, item: newItem });

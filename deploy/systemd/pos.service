@@ -1,0 +1,40 @@
+# Lush View POS web app. Installed to /etc/systemd/system/pos.service —
+# see docs/VPS_DEPLOYMENT.md, Phase 7.
+[Unit]
+Description=Restaurant POS
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pos
+Group=pos
+WorkingDirectory=/opt/pos
+# Secrets live in /etc/pos/app.env (root:pos, 0640), outside the code checkout.
+# /opt/pos/.env is still read for installs that have not moved it yet; the
+# later file wins where both set a value.
+EnvironmentFile=-/opt/pos/.env
+EnvironmentFile=-/etc/pos/app.env
+# Node directly (not `npm start`), so signals and restarts reach the server, and
+# bound to the loopback address only: nginx is the one way in.
+ExecStart=/usr/bin/node /opt/pos/node_modules/next/dist/bin/next start --hostname 127.0.0.1 --port 3000
+Restart=on-failure
+RestartSec=5
+
+# Hardening. Not MemoryDenyWriteExecute: Node's JIT needs writable code memory.
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ReadWritePaths=/opt/pos
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryMax=1500M
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

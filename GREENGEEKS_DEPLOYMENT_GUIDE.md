@@ -73,7 +73,7 @@ composite foreign keys prevent records from referencing another branch's data.
 ## 3. Bootstrap an owner — no demo credentials
 
 For a **new empty database**, supply `BOOTSTRAP_EMAIL`, `BOOTSTRAP_PASSWORD`
-(12–256 characters), optionally `BOOTSTRAP_PIN` (4–8 digits), and optionally
+(12–256 characters), optionally `BOOTSTRAP_PIN` (6–8 digits; the owner's PIN approves refunds), and optionally
 `BOOTSTRAP_RESTAURANT` through your secret manager/environment, then run:
 
 ```sh

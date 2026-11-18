@@ -14,8 +14,9 @@
  * Rules honoured by this importer:
  *  - Never overwrites existing rows (matches on natural keys; skips otherwise).
  *  - Never copies legacy PINs/passwords (they are plaintext in the old app);
- *    every imported staff member gets a fresh random 4-digit PIN and an
- *    unusable password that the owner replaces via Staff Manager.
+ *    every imported staff member gets a fresh random PIN (6 digits for the owner
+ *    and managers, whose PINs approve; 4 for everyone else) and an unusable
+ *    password that the owner replaces via Staff Manager.
  *  - Financial history is preserved as recorded (legacy tax was configured but
  *    never charged — totals carry tax = 0.00).
  *  - Everything runs in one transaction under a maintenance role (RLS FORCE).
@@ -25,7 +26,7 @@ import { randomBytes, randomInt } from "node:crypto";
 import { writeFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import { Pool, type PoolClient } from "pg";
-import { hashPassword, pinDigest } from "../src/lib/auth";
+import { APPROVER_PIN_MIN_LENGTH, hashPassword, needsApproverPin, pinDigest, type UserRole } from "../src/lib/auth";
 
 // ---------------------------------------------------------------------------
 // CLI
@@ -371,9 +372,11 @@ async function applyImport(src: SourceData, dbUrl: string): Promise<{ result: Im
       usedEmails.add(email.toLowerCase());
       return email;
     };
-    const makeUniquePin = (): string => {
+    // Approvers (owner, managers) get 6 digits: a shorter PIN can never approve (N19/N21).
+    const makeUniquePin = (role: string): string => {
+      const digits = needsApproverPin(role as UserRole) ? APPROVER_PIN_MIN_LENGTH : 4;
       for (let tries = 0; tries < 200; tries++) {
-        const pin = String(randomInt(1000, 10000));
+        const pin = String(randomInt(10 ** (digits - 1), 10 ** digits));
         const lookup = pinDigest(pin);
         if (!usedPinLookups.has(lookup)) { usedPinLookups.add(lookup); return pin; }
       }
@@ -394,7 +397,7 @@ async function applyImport(src: SourceData, dbUrl: string): Promise<{ result: Im
         return prior.rows[0].id;
       }
       const email = makeUniqueEmail(slugify(name));
-      const pin = withPin ? makeUniquePin() : null;
+      const pin = withPin ? makeUniquePin(role) : null;
       const passwordHash = hashPassword(randomBytes(24).toString("base64url"));
       const id: number = (await client.query(
         `INSERT INTO users(restaurant_id,branch_id,name,email,password_hash,pin,pin_lookup,role,is_active)

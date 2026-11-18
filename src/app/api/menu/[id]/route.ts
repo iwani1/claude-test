@@ -1,4 +1,6 @@
 import { secureRoute, isDatabaseFailure } from "@/lib/api";
+import { isPhotoLink } from "@/lib/menu-photo";
+import { auditActor } from "@/lib/audit";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { menuItems, auditLogs } from "@/db/schema";
@@ -38,7 +40,9 @@ async function handlePUT(req: Request, { params }: { params: Promise<{ id: strin
     const [updated] = await db
       .update(menuItems)
       .set({
-        ...Object.fromEntries(Object.entries(body).filter(([key]) => ["categoryId", "name", "description", "sku", "barcode", "imageUrl", "prepTimeMinutes", "station", "isAvailable", "isArchived", "isFeatured", "taxRate", "hasRecipe"].includes(key))),
+        // The editor sends back the photo link it was given when the photo did
+        // not change: keep the stored photo rather than overwrite it with the link.
+        ...Object.fromEntries(Object.entries(body).filter(([key, value]) => !(key === "imageUrl" && isPhotoLink(value))).filter(([key]) => ["categoryId", "name", "description", "sku", "barcode", "imageUrl", "prepTimeMinutes", "station", "isAvailable", "isArchived", "isFeatured", "taxRate", "hasRecipe"].includes(key))),
         price: body.price ? String(body.price) : undefined,
         costPrice: body.costPrice ? String(body.costPrice) : undefined,
       })
@@ -46,6 +50,7 @@ async function handlePUT(req: Request, { params }: { params: Promise<{ id: strin
       .returning();
 
     await db.insert(auditLogs).values({
+      ...auditActor(),
       action: "menu_item_updated",
       entityType: "menu",
       entityId: String(itemId),
@@ -90,6 +95,7 @@ async function handleDELETE(req: Request, { params }: { params: Promise<{ id: st
     }
 
     await db.insert(auditLogs).values({
+      ...auditActor(),
       action: "menu_item_deleted",
       entityType: "menu",
       entityId: String(itemId),

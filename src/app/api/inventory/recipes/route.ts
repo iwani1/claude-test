@@ -1,4 +1,5 @@
 import { secureRoute, isDatabaseFailure } from "@/lib/api";
+import { auditActor } from "@/lib/audit";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import {
@@ -141,10 +142,11 @@ async function handlePOST(req: Request) {
       .where(eq(menuItems.id, Number(menuItemId)));
 
     await db.insert(auditLogs).values({
+      ...auditActor(),
       action: "recipe_saved",
       entityType: "inventory",
       entityId: String(recipeId),
-      details: `Saved recipe for menu item #${menuItemId}. Cost: $${totalRecipeCost.toFixed(2)}`,
+      details: `Saved recipe for menu item #${menuItemId}. Cost: GH₵${totalRecipeCost.toFixed(2)}`,
     });
 
     return NextResponse.json({ success: true, recipeId });

@@ -105,6 +105,28 @@ export function databaseUnreachableMessage(code: string, detail: string): string
   return null;
 }
 
+/**
+ * A database time limit was reached (src/db/timeouts.ts): the request waited too
+ * long for a locked record, ran too long, sat idle in a transaction, or found
+ * no free connection. Nothing was saved. Each answer says what the person at the
+ * till can do; the server log carries the code for the operator.
+ */
+export function databaseBusyMessage(code: string, detail: string): string | null {
+  if (code === "55P03" || /lock timeout/i.test(detail)) {
+    return "Someone else is working on this same record right now. Nothing was saved. Wait a moment and try again.";
+  }
+  if (code === "57014" || /statement timeout|canceling statement/i.test(detail)) {
+    return "That took too long and was stopped. Nothing was saved. Try again; if it keeps happening, tell the manager.";
+  }
+  if (code === "25P03" || /idle-in-transaction timeout/i.test(detail)) {
+    return "The request was held open too long and was stopped. Nothing was saved. Try again.";
+  }
+  if (/timeout exceeded when trying to connect/i.test(detail)) {
+    return "The system is very busy right now. Nothing was saved. Wait a moment and try again.";
+  }
+  return null;
+}
+
 /** Anything that can run SQL: the connection pool, or the request's transaction. */
 export type Executor = { execute: (query: ReturnType<typeof sql>) => Promise<{ rows: Array<Record<string, unknown>> }> };
 

@@ -1,0 +1,14 @@
+# Lush View POS: restore the newest backup into a scratch database and check it
+# (scripts/restore-check.sh). Installed to /etc/systemd/system/.
+[Unit]
+Description=Restaurant POS weekly restore check
+After=postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=oneshot
+EnvironmentFile=-/etc/pos/backup.env
+ExecStart=/opt/pos/scripts/restore-check.sh
+Nice=10
+PrivateTmp=true
+NoNewPrivileges=true

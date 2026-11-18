@@ -34,6 +34,12 @@ timedatectl set-timezone Africa/Accra
 # 4. Create a daily-updates safety net
 apt install -y unattended-upgrades fail2ban
 dpkg-reconfigure -plow unattended-upgrades   # answer Yes
+# ...that never restarts PostgreSQL or reboots during service: install updates
+# at 03:00, and reboot (when an update needs it) at 03:30.
+mkdir -p /etc/systemd/system/apt-daily-upgrade.timer.d
+printf '[Timer]\nOnCalendar=\nOnCalendar=*-*-* 03:00\nRandomizedDelaySec=0\n' > /etc/systemd/system/apt-daily-upgrade.timer.d/quiet-hours.conf
+printf 'Unattended-Upgrade::Automatic-Reboot "true";\nUnattended-Upgrade::Automatic-Reboot-Time "03:30";\n' > /etc/apt/apt.conf.d/52pos-reboot
+systemctl daemon-reload
 
 # 5. Firewall: only SSH, HTTP, HTTPS
 apt install -y ufw
@@ -88,6 +94,15 @@ ss -lntp | grep 5432
 
 ## Phase 3 — Create the database and roles
 
+PostgreSQL must listen on this server only, and use password hashing that
+cannot be replayed. Ubuntu's PostgreSQL 16 does both by default; confirm it:
+
+```sh
+sudo -u postgres psql -Atc "SHOW listen_addresses"     # expect: localhost
+sudo -u postgres psql -Atc "SHOW password_encryption"  # expect: scram-sha-256
+ss -ltnp | grep 5432                                   # expect 127.0.0.1 / ::1 only
+```
+
 The app needs **two** database logins: a maintenance owner (migrations/bootstrap)
 and a restricted runtime login (the web app). The API refuses superuser or
 `BYPASSRLS` runtime connections — this is intentional.
@@ -138,15 +153,23 @@ Later updates are one command — `sudo ./scripts/deploy-vps.sh` — see
 
 ## Phase 5 — Configure the environment
 
+Secrets live in `/etc/pos/app.env`, outside the code checkout, readable by the
+app but not changeable by it:
+
 ```sh
-cd /opt/pos
-cp .env.production.example .env
+mkdir -p /etc/pos && chmod 755 /etc/pos
+cp /opt/pos/.env.production.example /etc/pos/app.env
 openssl rand -hex 48        # generate AUTH_SECRET — copy the output
-nano .env                   # or vim
-chmod 600 .env
+nano /etc/pos/app.env       # or vim
+chown root:pos /etc/pos/app.env && chmod 640 /etc/pos/app.env
 ```
 
-Fill `.env` like this (placeholders only):
+(Run `chown` after Phase 7 creates the `pos` user, or create the user first.)
+An older install with `/opt/pos/.env` keeps working; to move it, copy it to
+`/etc/pos/app.env` with the ownership above, check the app restarts healthy, then
+delete `/opt/pos/.env`.
+
+Fill it like this (placeholders only):
 
 ```env
 DATABASE_URL=postgresql://pos_runtime:RUNTIME_PASSWORD_HERE@127.0.0.1:5432/pos
@@ -187,6 +210,11 @@ GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO pos_runtime;
 REVOKE ALL ON schema_migrations FROM pos_runtime;
 REVOKE INSERT, UPDATE, DELETE ON security_meta FROM pos_runtime;
 REVOKE CREATE ON SCHEMA public FROM PUBLIC;
+-- Tables and sequences that later migrations create are usable at once, so a
+-- new release never needs this step repeated (migration 0011 sets the same
+-- when pos_runtime exists before migrating).
+ALTER DEFAULT PRIVILEGES FOR ROLE pos_owner IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO pos_runtime;
+ALTER DEFAULT PRIVILEGES FOR ROLE pos_owner IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO pos_runtime;
 SQL
 ```
 
@@ -196,7 +224,7 @@ Bootstrap the first owner (new empty database only; it refuses existing data):
 export MIGRATION_DATABASE_URL='postgresql://pos_owner:OWNER_PASSWORD_HERE@127.0.0.1:5432/pos'
 export BOOTSTRAP_EMAIL='owner@yourrestaurant.com'
 export BOOTSTRAP_PASSWORD='A-strong-password-12-plus-chars'
-export BOOTSTRAP_PIN='4567'                 # optional, 4–8 digits
+export BOOTSTRAP_PIN='456789'               # optional, 6–8 digits (the owner's PIN approves)
 export BOOTSTRAP_RESTAURANT='Your Restaurant Name'
 npm run db:bootstrap
 
@@ -225,29 +253,13 @@ useradd --system --home /opt/pos --shell /usr/sbin/nologin pos
 chown -R pos:pos /opt/pos
 ```
 
-Create `/etc/systemd/system/pos.service`:
+Install the service unit from the repository (`deploy/systemd/pos.service`). It
+runs Node directly, binds the app to `127.0.0.1` only (nginx is the one way in),
+reads secrets from `/etc/pos/app.env`, and applies systemd hardening (read-only
+system, no access to home directories or devices, a memory ceiling):
 
-```ini
-[Unit]
-Description=Restaurant POS
-After=network-online.target postgresql.service
-Wants=network-online.target
-
-[Service]
-Type=simple
-User=pos
-WorkingDirectory=/opt/pos
-EnvironmentFile=/opt/pos/.env
-ExecStart=/usr/bin/npm start
-Restart=on-failure
-RestartSec=5
-NoNewPrivileges=true
-PrivateTmp=true
-ProtectSystem=full
-ReadWritePaths=/opt/pos/.next
-
-[Install]
-WantedBy=multi-user.target
+```sh
+cp /opt/pos/deploy/systemd/pos.service /etc/systemd/system/pos.service
 ```
 
 ```sh
@@ -272,7 +284,21 @@ server {
     server_name pos.example.com;
 
     client_max_body_size 1m;
-    limit_req zone=req_limit burst=20 nodelay;
+    limit_req zone=req_limit burst=60 nodelay;
+    limit_req_status 429;
+
+    # Sign-in gets a much tighter per-address limit. The app also throttles
+    # wrong passwords per address and per account; this stops floods earlier.
+    location = /api/auth/login {
+        limit_req zone=auth_limit burst=5 nodelay;
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_read_timeout 60s;
+    }
 
     location / {
         proxy_pass http://127.0.0.1:3000;
@@ -289,8 +315,16 @@ server {
 Add the rate-limit zone at the top of `/etc/nginx/nginx.conf` inside `http {}`:
 
 ```nginx
-limit_req_zone $binary_remote_addr zone=req_limit:10m rate=10r/s;
+# Every till in the restaurant usually reaches the server from the venue's one
+# public address, so the general limit is sized for the whole venue, not one device.
+limit_req_zone $binary_remote_addr zone=req_limit:10m rate=30r/s;
+limit_req_zone $binary_remote_addr zone=auth_limit:10m rate=1r/s;
 ```
+
+`proxy_set_header X-Real-IP $remote_addr` is required, not optional: the app uses
+X-Real-IP to throttle wrong passwords per address. nginx overwrites whatever a
+client sends, and the firewall keeps port 3000 closed, so it cannot be forged.
+Never expose port 3000 directly.
 
 Point DNS `pos.example.com → YOUR_SERVER_IP` (A record), then:
 
@@ -300,7 +334,7 @@ rm -f /etc/nginx/sites-enabled/default
 nginx -t && systemctl reload nginx
 
 apt install -y certbot python3-certbot-nginx
-certbot --nginx -d pos.example.com
+certbot --nginx --redirect -d pos.example.com   # --redirect: plain HTTP always goes to HTTPS
 # certbot renews automatically; verify: certbot renew --dry-run
 ```
 
@@ -322,26 +356,160 @@ over HTTPS; don't test logins over plain HTTP.
 
 ## Phase 10 — Backups (do this on day one)
 
+The repository ships the backup job; this phase installs it. Without it the only
+backups are the ones `deploy-vps.sh` takes before a deploy, on the same disk as
+the database.
+
+What it does (`scripts/backup.sh`, every hour 07:00–23:00 plus 02:35):
+- `pg_dump -Fc`, verified with `pg_restore -l` before it is kept;
+- keeps 14 days of dumps in `/var/backups/pos/recent` and one per month (12 months)
+  in `/var/backups/pos/monthly`, root-only;
+- encrypts a copy with `age` and uploads **only that** to object storage with `rclone`;
+- pings a heartbeat URL on success and `/fail` on failure.
+
+Every Monday, `scripts/restore-check.sh` restores the newest dump into a scratch
+database, checks that the core tables came back, and drops it.
+
+### 1. Install the tools and the schedule
+
 ```sh
-# Daily logical backup as the postgres user
-sudo -u postgres pg_dump -Fc pos > /root/backups/pos-$(date +%F).dump
+apt install -y age rclone
+mkdir -p /etc/pos && chmod 700 /etc/pos
+cp /opt/pos/deploy/backup.env.example /etc/pos/backup.env && chmod 600 /etc/pos/backup.env
+cp /opt/pos/deploy/systemd/pos-backup.* /opt/pos/deploy/systemd/pos-restore-check.* /etc/systemd/system/
+systemctl daemon-reload
+systemctl enable --now pos-backup.timer pos-restore-check.timer
 ```
 
-Automate with a cron/systemd timer, copy backups **off the server** (Contabo
-Object Storage or another host) with restricted access, and rehearse a restore
-into a new database (never over production):
+### 2. Encryption key: make it on YOUR computer, not the server
 
 ```sh
-sudo -u postgres createdb pos_restore_test
-sudo -u postgres pg_restore --exit-on-error --no-owner -d pos_restore_test /root/backups/pos-YYYY-MM-DD.dump
+age-keygen -o pos-backup.key
 ```
 
-Full restore acceptance criteria are in `docs/PILOT_RUNBOOK.md`. Also consider
-Contabo's VPS Auto Backup in the panel as a second layer.
+It prints a public key (`age1...`). Put that in `BACKUP_AGE_RECIPIENT` in
+`/etc/pos/backup.env`. Keep `pos-backup.key` somewhere safe and **off the server**,
+such as a password manager plus a printed copy in the office safe. Without it the
+off-site backups cannot be read, by an attacker or by you.
+
+### 3. Off-site storage
+
+Create a bucket in Contabo Object Storage (or any S3-compatible provider), with an
+access key limited to that bucket. Then on the server:
+
+```sh
+rclone config      # new remote, name it "contabo", type "s3", provider "Other",
+                   # endpoint from the Contabo panel, the bucket's access key/secret
+```
+
+Set `BACKUP_REMOTE=contabo:pos-backups` in `/etc/pos/backup.env`. The script refuses
+to upload unless the encryption key is set.
+
+### 4. Alerts
+
+Create two free checks at healthchecks.io: "POS backup", period 1 hour, grace
+2 hours; and "POS restore check", period 1 week. Put their ping URLs in
+`BACKUP_HEARTBEAT_URL` and `RESTORE_HEARTBEAT_URL`, and set the checks to alert
+you by SMS, WhatsApp or email. A failed run, or a run that never happens, then
+reaches you instead of being found at the till.
+
+### 5. Prove it works, now and after any change
+
+```sh
+systemctl start pos-backup.service && journalctl -u pos-backup.service -n 20 --no-pager
+systemctl start pos-restore-check.service && journalctl -u pos-restore-check.service -n 30 --no-pager
+systemctl list-timers 'pos-*'
+```
+
+Then download one `.dump.age` from the bucket to your own computer and decrypt it
+(`age -d -i pos-backup.key FILE.dump.age > test.dump`), so you know the key works.
+Contabo's VPS Auto Backup in the panel is a useful second layer, not a replacement.
+
+### Restoring for real
+
+Stop the app first (`systemctl stop pos`), and make one more dump of the current
+state before overwriting it. Then:
+
+```sh
+sudo -u postgres dropdb pos && sudo -u postgres createdb -O pos_owner pos
+sudo -u postgres pg_restore --exit-on-error -d pos < /var/backups/pos/recent/pos-YYYY-MM-DDTHHMMZ.dump
+# or, from off-site: age -d -i pos-backup.key FILE.dump.age | sudo -u postgres pg_restore --exit-on-error -d pos
+systemctl start pos && curl -sS http://127.0.0.1:3000/api/health
+```
+
+Re-apply the `pos_runtime` grants from Phase 6 if they are missing. Full restore
+acceptance criteria are in `docs/PILOT_RUNBOOK.md`.
+
+---
+
+## Phase 11 — Alerts (so problems reach you, not the till)
+
+Three layers, all free at this size. Do them on day one with the backups.
+
+### 1. Outside check: is the till reachable?
+
+In any uptime monitor (for example UptimeRobot or Better Stack), add an
+**HTTP keyword** monitor:
+
+- URL: `https://pos.example.com/api/health`
+- keyword: `"ok":true`
+- interval: 1 minute; alert after 2 failures
+- alert contacts: SMS or WhatsApp to the owner, plus email
+
+This is the only check that notices the whole server being down or offline.
+
+### 2. Inside check: what only the server can see
+
+`scripts/monitor.sh` runs every 10 minutes and checks:
+- the app's health check, from the server itself;
+- the `pos` service is running;
+- disk space on `/` and on the backup disk;
+- days left on the HTTPS certificate;
+- the age of the newest backup;
+- a burst of server errors in the log.
+
+```sh
+cp /opt/pos/deploy/monitor.env.example /etc/pos/monitor.env && chmod 600 /etc/pos/monitor.env
+nano /etc/pos/monitor.env          # CERT_HOST and MONITOR_HEARTBEAT_URL
+cp /opt/pos/deploy/systemd/pos-monitor.* /etc/systemd/system/
+systemctl daemon-reload && systemctl enable --now pos-monitor.timer
+systemctl start pos-monitor.service && journalctl -u pos-monitor.service -n 20 --no-pager
+```
+
+At healthchecks.io create a check "POS server" with **period 10 minutes, grace
+20 minutes** and put its ping URL in `MONITOR_HEARTBEAT_URL`. All good pings it.
+A problem pings `/fail` with the list of what is wrong, which appears in the alert.
+A server that stops reporting alerts too. You are told once when a problem starts
+and once when it clears, not every 10 minutes.
+
+### 3. Backups
+
+The backup and restore-check heartbeats from Phase 10 alert on a failed or
+missed backup.
+
+### Keep logs from filling the disk
+
+```sh
+mkdir -p /etc/systemd/journald.conf.d
+printf '[Journal]\nSystemMaxUse=500M\n' > /etc/systemd/journald.conf.d/pos.conf
+systemctl restart systemd-journald
+```
+
+### Prove the alerts work
+
+Stop the app for two minutes (`systemctl stop pos`), confirm the outside check
+and the "POS server" check both alert, then `systemctl start pos` and confirm both
+report recovery. Do this once now, and again after changing phone numbers.
 
 ---
 
 ## Updating the app later
+
+> **Deploying the release with 6-digit approver PINs (PR #37):** managers' and
+> the owner's PINs must now be 6 to 8 digits. A 4-digit manager PIN stops working
+> for approvals and quick switch the moment the new release is live. Right after
+> deploying, the owner sets a new 6-digit PIN for each manager in Staff
+> Management (and their own), before anyone needs to approve a refund.
 
 ### The short way — one command
 
@@ -351,10 +519,33 @@ sudo ./scripts/deploy-vps.sh
 ```
 
 It takes the backup, pulls the branch, installs dependencies only if
-`package-lock.json` moved, builds, restarts the service, waits for
-`/api/health`, and prints the rollback for the commit it replaced. It is safe to
-re-run: if anything fails, the next run finishes the job instead of reporting
-"nothing to deploy".
+`package-lock.json` moved, then:
+
+- **builds while the app keeps serving.** The build goes into `.next-build`;
+  the running app reads only `.next`, so tills are not disturbed and a failed
+  build changes nothing;
+- **keeps the finished build** as `.next-release-<commit>-<time>`;
+- **switches over in one step**: `.next` becomes a link to the new release, the
+  service restarts (a few seconds), and the script waits for `/api/health`;
+- **switches straight back by itself** if the new release does not answer;
+- keeps the last three releases, so a rollback never needs a rebuild.
+
+It warns when shifts are open, because the restart briefly interrupts the tills;
+quiet hours are best. It is safe to re-run: if anything fails, the next run
+finishes the job instead of reporting "nothing to deploy".
+
+**Roll back** to the release that was live before (seconds, no rebuild):
+
+```sh
+sudo ./scripts/deploy-vps.sh --rollback
+```
+
+Run it again to return. The database is not rolled back: migrations here only
+add, so older code normally runs fine against the newer schema.
+
+The first deploy that *brings* this feature still runs the previous script and
+builds the old way; release folders start with the deploy after it, which also
+keeps the existing build as a release you can roll back to.
 
 | It refuses to run when | Why |
 |---|---|
@@ -381,8 +572,8 @@ Everything it needs can be overridden for a non-standard install:
 `POS_DB` (`pos`), `BACKUP_DIR` (`/var/backups/pos`).
 
 If a deploy fails after the checkout moved, the script leaves
-`/var/backups/pos/deploy-incomplete` and prints the exact commands to roll the
-code back to the previous commit. The database backup taken at the start of
+`/var/backups/pos/deploy-incomplete`; the live app keeps serving the release it
+had, and re-running the script finishes the job. The database backup taken at the start of
 that same run is named `pos-before-<commit>-<timestamp>.dump`.
 
 Ownership note: the script runs `git` as root and the app as `pos`, and it
@@ -446,7 +637,7 @@ Notes
   restart, health) and prints the rollback line. Add
   `git config --system --add safe.directory /opt/pos` once if root's git ever
   reports "detected dubious ownership".
-- If a new migration created tables, re-apply the `pos_runtime` grants (Phase 6).
+- New tables are granted to `pos_runtime` automatically (migration 0011 / Phase 6 default privileges). Only an install set up before that, without the Phase 6 `ALTER DEFAULT PRIVILEGES` lines, needs the grants re-applied.
 
 ---
 

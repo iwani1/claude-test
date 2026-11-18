@@ -35,6 +35,13 @@ jobs:
       - run: npm run audit:workflows
       - run: npm run audit:responsive
       - run: npm run test:legacy-import
+      # Backup and restore-check scripts, with stand-ins for the database and cloud.
+      - run: sudo apt-get install -y age
+      - run: npm run test:backup
+      # Release folders for deploys: switch-over, rollback, pruning, module links.
+      - run: npm run test:deploy
+      # Server health check used for alerts (scripts/monitor.sh).
+      - run: npm run test:monitor
       - run: npm run test:security
       - run: npm audit --omit=dev
       - uses: actions/upload-artifact@v7

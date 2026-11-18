@@ -5,9 +5,10 @@ import { NextResponse } from "next/server";
 import { eq, sql } from "drizzle-orm";
 import { rootDb, requestContext, Transaction } from "@/db";
 import { users, branches } from "@/db/schema";
-import { authSecret, effectivePermissions, sanitizePermissionOverrides, SessionUser, UserRole, verifyToken } from "./auth";
+import { authSecret, effectivePermissions, renewedSessionCookie, sanitizePermissionOverrides, SessionUser, TokenClaims, UserRole, verifyToken } from "./auth";
 import type { Permission } from "./guard";
-import { databaseUnreachableMessage, schemaDriftMessage } from "./schema-guard";
+import { databaseBusyMessage, databaseUnreachableMessage, schemaDriftMessage } from "./schema-guard";
+import { databaseTimeouts } from "@/db/timeouts";
 export class ApiError extends Error {
   constructor(public status: number, message: string) { super(message); }
 }
@@ -36,7 +37,8 @@ export function isDatabaseFailure(err: unknown): boolean {
   const message = String(driver.message || "");
   return ["23505", "23503", "23514"].includes(code) ||
     schemaDriftMessage(code, message) !== null ||
-    databaseUnreachableMessage(code, message) !== null;
+    databaseUnreachableMessage(code, message) !== null ||
+    databaseBusyMessage(code, message) !== null;
 }
 /** Every API answer is uncacheable — including failures. A cached 503 or 401
  *  once made a repaired system look broken for an hour, to the browser and to
@@ -88,8 +90,18 @@ function checkRequest(req: Request) {
   if (["GET", "HEAD", "OPTIONS"].includes(req.method)) return;
   const origin = req.headers.get("origin");
   const host = req.headers.get("host") || new URL(req.url).host;
-  if (origin && new URL(origin).host !== host && origin !== process.env.APP_ORIGIN) throw new ApiError(403, "Cross-origin request rejected");
+  if (origin && origin !== process.env.APP_ORIGIN) {
+    // "null" (sandboxed frames, some redirects) or anything unparsable is not
+    // this site: refuse it plainly rather than fail the request (N11).
+    let originHost: string | null = null;
+    try { originHost = new URL(origin).host; } catch { /* audit-ok: unparsable origin is refused just below */ }
+    if (originHost !== host) throw new ApiError(403, "Cross-origin request rejected");
+  }
   if (!req.headers.get("content-type")?.toLowerCase().startsWith("application/json")) throw new ApiError(415, "Use application/json");
+  // The 1 MB limit is checked against the declared length, so a body sent in
+  // chunks without one could slip past it: refuse those (N11). Browsers always
+  // declare the length of a JSON body.
+  if (req.headers.get("transfer-encoding") && !req.headers.get("content-length")) throw new ApiError(411, "Request body length required");
   if (Number(req.headers.get("content-length") || 0) > 1_000_000) throw new ApiError(413, "Request too large");
 }
 // Every business handler runs inside a branch-scoped transaction. Error responses
@@ -105,6 +117,7 @@ export function secureRoute(handler: Handler, permission: Permission | "session"
     try {
       authSecret();
       checkRequest(req);
+      let sessionClaims: TokenClaims | null = null;
       return await rootDb.transaction(async tx => requestContext.run({ tx, requestId }, async () => {
         const role = await tx.execute(sql`select rolsuper, rolbypassrls from pg_roles where rolname = current_user`);
         if (role.rows[0]?.rolsuper || role.rows[0]?.rolbypassrls) throw new Error("Runtime database role must not bypass row security");
@@ -118,11 +131,21 @@ export function secureRoute(handler: Handler, permission: Permission | "session"
           if (!fresh || fresh.sessionVersion !== claims.version) throw new ApiError(401, "Session revoked");
           const user = await activateUser(tx, fresh);
           if (permission !== "session" && !user.permissions?.[permission]) throw new ApiError(403, "Access denied");
+          sessionClaims = claims;
         }
         const params = (await context?.params) || {};
         const response = await handler(req, { params: Promise.resolve({ id: params.id || "" }) });
         if (response.status >= 400) throw new RollbackResponse(response);
-        response.headers.set("Cache-Control", "no-store");
+        // Uncacheable unless the route chose otherwise (only the dish-photo
+        // route does, with a versioned, private, immutable image).
+        if (!response.headers.has("Cache-Control")) response.headers.set("Cache-Control", "no-store");
+        // Keep an active session alive (P4). Routes that set the session cookie
+        // themselves (login, PIN switch, logout) are left alone.
+        const user = requestContext.getStore()?.user;
+        if (sessionClaims && user && !/(^|,\s*)pos_session=/.test(response.headers.get("set-cookie") || "")) {
+          const renewed = renewedSessionCookie(sessionClaims, user);
+          if (renewed) response.headers.append("Set-Cookie", renewed);
+        }
         return withRequestId(response);
       }));
     } catch (err) {
@@ -144,6 +167,15 @@ export function secureRoute(handler: Handler, permission: Permission | "session"
       // problem, not the user's, and it must not read as a wrong password.
       const unreachable = databaseUnreachableMessage(String(driver.code || ""), String(driver.message || detail));
       if (unreachable) { logRequestFailure(requestId, req, 503, err); return withRequestId(errorResponse({ error: unreachable, requestId }, 503)); }
+      // A time limit was reached (P5): the request is refused promptly instead
+      // of hanging the till. Nothing was saved; the transaction rolled back.
+      const busy = databaseBusyMessage(String(driver.code || ""), String(driver.message || detail || (err as any)?.message || ""));
+      if (busy) {
+        logRequestFailure(requestId, req, 503, err);
+        const response = withRequestId(errorResponse({ error: busy, requestId }, 503));
+        response.headers.set("Retry-After", "2");
+        return response;
+      }
       if (driver.code === "23505" || /duplicate key/i.test(detail)) {
         const label = /pin/i.test(detail) ? "That PIN is already used by another staff member in this branch. Choose a different PIN."
           : /email/i.test(detail) ? "That email is already registered."
@@ -180,10 +212,15 @@ function rateDb(): ReturnType<typeof drizzle> {
   if (!rateDbInstance) {
     const connectionString = process.env.DATABASE_URL;
     if (!connectionString) throw new Error("DATABASE_URL is required");
-    rateDbInstance = drizzle(new Pool({ connectionString, max: 2 }));
+    rateDbInstance = drizzle(new Pool({ connectionString, max: 2, ...databaseTimeouts() }));
   }
   return rateDbInstance;
 }
+/** Branch-wide ceiling on wrong PINs (switch, refund approval, manager
+ *  approval). Each person is limited to 10 first; this backstop still bounds
+ *  guessing across many people in one branch (N13). */
+export const BRANCH_PIN_BACKSTOP = 40;
+
 /** Refuses when `key` has already failed `maximum` times in the current window.
  *  Successful attempts are never counted, so a correct PIN or password is never
  *  throttled by earlier successes. */
@@ -191,10 +228,23 @@ export async function assertNotThrottled(key: string, maximum = 10) {
   const result = await rateDb().execute(sql`select count from auth_attempts where key = ${key} and reset_at > now()`);
   if (result.rows[0] && Number(result.rows[0].count) >= maximum) throw new ApiError(429, "Too many attempts. Try again in 15 minutes.");
 }
-/** Records one failed attempt against `key`. Call it only for a wrong credential. */
-export async function recordFailedAttempt(key: string) {
-  await rateDb().execute(sql`insert into auth_attempts (key, count, reset_at) values (${key}, 1, now() + interval '15 minutes')
+/** Records one failed attempt against `key` and returns the count in the current
+ *  window. Call it only for a wrong credential. */
+export async function recordFailedAttempt(key: string): Promise<number> {
+  const result = await rateDb().execute(sql`insert into auth_attempts (key, count, reset_at) values (${key}, 1, now() + interval '15 minutes')
     on conflict (key) do update set
       count = case when auth_attempts.reset_at <= now() then 1 else auth_attempts.count + 1 end,
-      reset_at = case when auth_attempts.reset_at <= now() then now() + interval '15 minutes' else auth_attempts.reset_at end`);
+      reset_at = case when auth_attempts.reset_at <= now() then now() + interval '15 minutes' else auth_attempts.reset_at end
+    returning count`);
+  return Number(result.rows[0]?.count ?? 0);
+}
+
+/** The client address as the reverse proxy reports it. nginx sets X-Real-IP to
+ *  $remote_addr, overwriting anything the client sent (docs/VPS_DEPLOYMENT.md,
+ *  Phase 8), and the firewall keeps the app port closed, so the header cannot be
+ *  forged from outside. Without a proxy every request shares one "direct" bucket,
+ *  which is never worse than the account limits on their own. */
+export function clientAddress(req: Request): string {
+  const value = req.headers.get("x-real-ip")?.trim() || "";
+  return /^[0-9a-fA-F:.]{2,45}$/.test(value) ? value.toLowerCase() : "direct";
 }

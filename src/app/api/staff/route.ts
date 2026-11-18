@@ -2,8 +2,17 @@ import { NextResponse } from "next/server";
 import { eq, and, asc, isNull, sql } from "drizzle-orm";
 import { db, requestContext } from "@/db";
 import { users, shifts, auditLogs } from "@/db/schema";
-import { effectivePermissions, hashPassword, permissionOverridesFor, pinDigest, PERMISSION_KEYS, ROLE_PERMISSIONS, sanitizePermissionOverrides, UserRole, type PermissionKey } from "@/lib/auth";
-import { ApiError, secureRoute } from "@/lib/api";
+import { APPROVER_PIN_MESSAGE, APPROVER_PIN_MIN_LENGTH, needsApproverPin, effectivePermissions, hashPasswordAsync, permissionOverridesFor, pinDigest, PERMISSION_KEYS, ROLE_PERMISSIONS, sanitizePermissionOverrides, UserRole, type PermissionKey } from "@/lib/auth";
+import { ApiError, assertNotThrottled, recordFailedAttempt, secureRoute } from "@/lib/api";
+
+// PINs are unique per branch, so choosing a PIN that is taken has to be refused,
+// and saying so is what lets the person fix it. It also tells them that someone
+// holds that PIN. Unlimited, that let a manager try every 4-digit PIN on a
+// cashier's account and learn every PIN in use, the owner's included (N5 in
+// docs/FINDINGS.md). Collisions are now limited per person setting PINs; the
+// counter lives outside the request transaction, so a refused attempt still counts.
+const PIN_COLLISION_LIMIT = 3;
+const pinCollisionKey = (actorId: number) => `pin-collision:actor:${actorId}`;
 import { columnExists } from "@/lib/schema-guard";
 const fields = { id: users.id, restaurantId: users.restaurantId, branchId: users.branchId, name: users.name, email: users.email, role: users.role,
   phone: users.phone, avatarUrl: users.avatarUrl, isActive: users.isActive, lastLogin: users.lastLogin, createdAt: users.createdAt };
@@ -68,6 +77,8 @@ export const POST = secureRoute(async req => {
   let employee;
   let note: string | null = null;
   let permissionAudit = "";
+  const setsPin = (action === "create_employee" && body.pin) || action === "update_pin";
+  if (setsPin) await assertNotThrottled(pinCollisionKey(actor.id), PIN_COLLISION_LIMIT);
   try {
   if (action === "create_employee") {
     const { name, email, password, pin, role, phone } = body;
@@ -82,8 +93,9 @@ export const POST = secureRoute(async req => {
       if (actor.role !== "super_admin") throw new ApiError(403, "Only the owner may select permissions");
       permissionOverrides = permissionOverridesFor(role as UserRole, selectedPermissions(body.permissions));
     }
+    if (pin && pin.length < APPROVER_PIN_MIN_LENGTH && needsApproverPin(role as UserRole, permissionOverrides)) throw new ApiError(400, APPROVER_PIN_MESSAGE);
     [employee] = await db.insert(users).values({ restaurantId: actor.restaurantId, branchId: actor.branchId, name: name.trim(), email: email.trim().toLowerCase(),
-      passwordHash: hashPassword(password), pin: pin ? hashPassword(pin) : null, pinLookup: pin ? pinDigest(pin) : null,
+      passwordHash: await hashPasswordAsync(password), pin: pin ? await hashPasswordAsync(pin) : null, pinLookup: pin ? pinDigest(pin) : null,
       role: role as UserRole, permissionOverrides, phone: typeof phone === "string" ? phone : null }).returning(fields);
     employee = withPermissions({ ...employee, permissionOverrides });
   } else if (["toggle_active", "update_pin", "reset_password", "delete_user", "update_permissions"].includes(action)) {
@@ -129,6 +141,10 @@ export const POST = secureRoute(async req => {
         // on the next sign-in; the server enforces the change immediately
         // either way, because every request re-reads the account.
         [employee] = await db.update(users).set({ permissionOverrides: overrides, sessionVersion: sql`${users.sessionVersion} + 1` }).where(eq(users.id, target.id)).returning(fields);
+        // PINs are stored hashed, so their length is unknown here: remind instead.
+        if (needsApproverPin(target.role as UserRole, overrides) && !needsApproverPin(target.role as UserRole, target.permissionOverrides)) {
+          note = `${target.name} can now approve with a PIN. Approval PINs must be 6 to 8 digits: if theirs is shorter, set a new one.`;
+        }
         employee = withPermissions({ ...employee, permissionOverrides: overrides });
       } else if (action === "toggle_active") {
         if (typeof body.isActive !== "boolean") throw new ApiError(400, "isActive must be a boolean");
@@ -136,11 +152,12 @@ export const POST = secureRoute(async req => {
         [employee] = await db.update(users).set({ isActive: body.isActive, sessionVersion: sql`${users.sessionVersion} + 1` }).where(eq(users.id, target.id)).returning(fields);
       } else if (action === "update_pin") {
         if (typeof body.pin !== "string" || !/^\d{4,8}$/.test(body.pin)) throw new ApiError(400, "PIN must contain 4–8 digits");
-        [employee] = await db.update(users).set({ pin: hashPassword(body.pin), pinLookup: pinDigest(body.pin), sessionVersion: sql`${users.sessionVersion} + 1` }).where(eq(users.id, target.id)).returning(fields);
+        if (body.pin.length < APPROVER_PIN_MIN_LENGTH && needsApproverPin(target.role as UserRole, target.permissionOverrides)) throw new ApiError(400, APPROVER_PIN_MESSAGE);
+        [employee] = await db.update(users).set({ pin: await hashPasswordAsync(body.pin), pinLookup: pinDigest(body.pin), sessionVersion: sql`${users.sessionVersion} + 1` }).where(eq(users.id, target.id)).returning(fields);
       } else {
         // Password reset (self or managed account) always revokes existing sessions.
         if (typeof body.password !== "string" || body.password.length < 12 || body.password.length > 256) throw new ApiError(400, "Password must be 12–256 characters");
-        [employee] = await db.update(users).set({ passwordHash: hashPassword(body.password), sessionVersion: sql`${users.sessionVersion} + 1` }).where(eq(users.id, target.id)).returning(fields);
+        [employee] = await db.update(users).set({ passwordHash: await hashPasswordAsync(body.password), sessionVersion: sql`${users.sessionVersion} + 1` }).where(eq(users.id, target.id)).returning(fields);
       }
     }
   } else throw new ApiError(400, "Invalid action");
@@ -150,7 +167,11 @@ export const POST = secureRoute(async req => {
     const driver = err?.code ? err : err?.cause?.code ? err.cause : {};
     const detail = String(driver.constraint || err?.message || err?.cause?.message || "");
     if (driver.code === "23505" || /duplicate key/i.test(detail)) {
-      if (/pin/i.test(detail)) throw new ApiError(409, "That PIN is already used by another staff member in this branch. Choose a different PIN.");
+      if (/pin/i.test(detail)) {
+        const collisions = await recordFailedAttempt(pinCollisionKey(actor.id));
+        console.error(JSON.stringify({ level: "warn", event: "pin_collision", actorId: actor.id, collisionsInWindow: collisions }));
+        throw new ApiError(409, "That PIN is already used by another staff member in this branch. Choose a different PIN.");
+      }
       if (/email/i.test(detail)) throw new ApiError(409, "That email is already registered.");
       throw new ApiError(409, "That record already exists.");
     }

@@ -1,4 +1,5 @@
 import { secureRoute, ApiError, isDatabaseFailure } from "@/lib/api";
+import { auditActor } from "@/lib/audit";
 import { moneyCents } from "@/lib/money";
 import { NextResponse } from "next/server";
 import { db, requestContext } from "@/db";
@@ -95,7 +96,7 @@ async function handlePOST(req: Request) {
         .returning();
 
       await db.insert(auditLogs).values({
-        userId: Number(userId || 1),
+        ...auditActor(),
         action: "shift_opened",
         entityType: "shift",
         entityId: String(newShift.id),
@@ -114,7 +115,8 @@ async function handlePOST(req: Request) {
       }
 
       if (shift.status !== "open") throw new ApiError(409, "Shift is closed");
-      if (shift.userId !== sessionUserId && !["manager", "super_admin"].includes(guard.user.role)) {
+      // Supervising a colleague's drawer is the owner's per-person choice (N15).
+      if (shift.userId !== sessionUserId && !guard.user.permissions?.canManageOthersShifts) {
         throw new ApiError(403, "You can only record payouts on your own shift");
       }
       if (body.refundId !== undefined || body.kind === "refund") throw new ApiError(400, "Use the refund endpoint; linked cash outflows are recorded automatically");
@@ -129,7 +131,7 @@ async function handlePOST(req: Request) {
         .returning();
 
       await db.insert(auditLogs).values({
-        userId: userId || 1,
+        ...auditActor(),
         action: "cash_payout",
         entityType: "shift",
         entityId: String(shift.id),
@@ -149,8 +151,8 @@ async function handlePOST(req: Request) {
 
       if (shift.status !== "open") throw new ApiError(409, "Shift is already closed");
       const closingForSelf = shift.userId === sessionUserId;
-      if (!closingForSelf && !["manager", "super_admin"].includes(guard.user.role)) {
-        throw new ApiError(403, "Only the cashier who opened a shift, or a manager, can close it");
+      if (!closingForSelf && !guard.user.permissions?.canManageOthersShifts) {
+        throw new ApiError(403, "Only the person who opened a shift, or someone allowed to manage others' shifts, can close it");
       }
       const opening = moneyCents(shift.openingCash, true);
       const cashSales = moneyCents(shift.totalCashSales || "0", true);

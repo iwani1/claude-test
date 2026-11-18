@@ -1,0 +1,16 @@
+# Lush View POS: one database backup run (scripts/backup.sh).
+# Installed to /etc/systemd/system/ — see docs/VPS_DEPLOYMENT.md, Phase 10.
+[Unit]
+Description=Restaurant POS database backup
+After=postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=oneshot
+EnvironmentFile=-/etc/pos/backup.env
+ExecStart=/opt/pos/scripts/backup.sh
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+PrivateTmp=true
+NoNewPrivileges=true

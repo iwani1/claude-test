@@ -40,13 +40,23 @@ export interface OfflineOrder {
   notes?: string;
 }
 
-export function saveMenuToCache(menuData: any, branchId: number) {
-  if (typeof window === "undefined") return;
+/** Keeps the menu for offline use. Returns false when the device could not
+ *  store it (storage full or blocked), so the till can say so instead of
+ *  quietly serving an older copy offline (N8 in docs/FINDINGS.md). */
+export function saveMenuToCache(menuData: any, branchId: number): boolean {
+  if (typeof window === "undefined") return true;
   try {
-    localStorage.setItem(scopedKey(MENU_CACHE_KEY, branchId), JSON.stringify(menuData));
+    // Photos travel as short links; an inline data URL (from an older server)
+    // would fill this device's storage, so it is never kept offline.
+    const items = Array.isArray(menuData?.items)
+      ? menuData.items.map((item: any) => (typeof item?.imageUrl === "string" && item.imageUrl.startsWith("data:") ? { ...item, imageUrl: null } : item))
+      : menuData?.items;
+    localStorage.setItem(scopedKey(MENU_CACHE_KEY, branchId), JSON.stringify({ ...menuData, items }));
+    return true;
   } catch (e) {
-    /* audit-ok: the cache is best effort — the live menu comes from the server */
+    /* audit-ok: reported to the caller, which tells the person at the till */
     console.warn("Failed to cache menu:", e);
+    return false;
   }
 }
 

@@ -7,7 +7,7 @@ async function main() {
   const email = process.env.BOOTSTRAP_EMAIL?.trim().toLowerCase();
   const password = process.env.BOOTSTRAP_PASSWORD;
   const pin = process.env.BOOTSTRAP_PIN;
-  if (!process.env.MIGRATION_DATABASE_URL || !email || !password || password.length < 12 || password.length > 256 || (pin && !/^\d{4,8}$/.test(pin))) throw new Error("Set MIGRATION_DATABASE_URL, BOOTSTRAP_EMAIL, BOOTSTRAP_PASSWORD (12–256 characters), and optionally BOOTSTRAP_PIN (4–8 digits)");
+  if (!process.env.MIGRATION_DATABASE_URL || !email || !password || password.length < 12 || password.length > 256 || (pin && !/^\d{6,8}$/.test(pin))) throw new Error("Set MIGRATION_DATABASE_URL, BOOTSTRAP_EMAIL, BOOTSTRAP_PASSWORD (12–256 characters), and optionally BOOTSTRAP_PIN (6–8 digits: the owner's PIN approves refunds)");
   const pool = new Pool({ connectionString: process.env.MIGRATION_DATABASE_URL });
   const client = await pool.connect();
   try {

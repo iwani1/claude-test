@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Loader2, Store, ShieldAlert } from "lucide-react";
 import { Navbar } from "@/components/Navbar";
 import { Sidebar, NavTab } from "@/components/Sidebar";
@@ -81,6 +81,8 @@ export default function App() {
 
   /** Loads all operational data the shell needs. Falls back to the cached
    *  menu snapshot when the network is unavailable (offline PWA mode). */
+  // Warn once per session if the offline menu copy cannot be stored.
+  const menuCacheWarned = useRef(false);
   const fetchOperationalData = useCallback(() => {
     if (!currentBranchId) return Promise.resolve();
     return Promise.all(["menu", "tables", "shifts", "inventory"].map(path =>
@@ -93,7 +95,10 @@ export default function App() {
     )).then(([menuData, tablesData, shiftsData, invData]) => {
       if (menuData.categories && menuData.items) {
         setCategories(menuData.categories); setMenuItems(menuData.items);
-        saveMenuToCache(menuData, currentBranchId);
+        if (!saveMenuToCache(menuData, currentBranchId) && !menuCacheWarned.current) {
+          menuCacheWarned.current = true;
+          notify("This device could not save the menu for offline use. If the connection drops, the till may show an older menu.", "warn");
+        }
       }
       const areas = tablesData.areas || [];
       const tables = tablesData.tables || [];

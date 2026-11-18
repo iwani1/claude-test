@@ -29,9 +29,9 @@ import type { CurrentUser } from "@/lib/api-types";
  * or pops the till stays with the till roles.
  */
 export const ShiftCashDrawer: React.FC<{ currentUser: CurrentUser; readOnly?: boolean }> = ({ currentUser, readOnly = false }) => {
-  /** Shifts belong to individual staff now; managers/owners also supervise
-   *  (and may close) colleagues' shifts from this screen. */
-  const canManageShifts = ["manager", "super_admin"].includes(currentUser?.role || "");
+  /** Shifts belong to individual staff; people the owner allows (managers and
+   *  the owner by default) also supervise, and may close, colleagues' shifts. */
+  const canManageShifts = currentUser?.permissions?.canManageOthersShifts === true;
   const [activeShift, setActiveShift] = useState<any | null>(null);
   const [shiftHistory, setShiftHistory] = useState<any[]>([]);
 

@@ -1,4 +1,5 @@
 import { secureRoute, ApiError, isDatabaseFailure } from "@/lib/api";
+import { auditActor } from "@/lib/audit";
 import { NextResponse } from "next/server";
 import { db, requestContext } from "@/db";
 import { stockCounts, ingredients, stockMovements, auditLogs, users } from "@/db/schema";
@@ -76,6 +77,7 @@ async function handlePOST(req: Request) {
     }
 
     await db.insert(auditLogs).values({
+      ...auditActor(),
       action: "stock_count_recorded",
       entityType: "inventory",
       entityId: String(newCount.id),

@@ -55,6 +55,15 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  // Deploys build into `.next-build` (NEXT_DIST_DIR, set only by
+  // scripts/deploy-vps.sh) while the live app keeps serving `.next`. The finished
+  // build is renamed to `.next-release-<commit>-<time>` (same depth as `.next`,
+  // so the build's relative links still resolve) and `.next` becomes a link to
+  // it: the switch-over is one atomic rename and rollback is pointing the link
+  // back (P3 in docs/FINDINGS.md). `.next-build` is listed in tsconfig.json so
+  // the build does not rewrite it; release folders are excluded from type checks.
+  // Unset, this is the normal `.next`.
+  distDir: process.env.NEXT_DIST_DIR || ".next",
   poweredByHeader: false,
   // Dev-only origin allowlist (HMR). Production cookies/CSRF use APP_ORIGIN.
   allowedDevOrigins: ["*.e2b.app", "127.0.0.1"],

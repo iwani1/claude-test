@@ -31,12 +31,21 @@ There are no generated demo/default passwords. Tokens contain only user ID,
 version and bounded timestamps; role/ownership never comes from client claims.
 Signatures use constant-time comparison. Cookies are HttpOnly, SameSite=Lax and
 Secure in production, and tokens are not duplicated in JSON responses.
+Sessions last 8 hours without use. A request from a session more than an hour
+old gets a fresh cookie, so a device in use stays signed in through a long shift,
+but no session is renewed past 16 hours from the original sign-in (the token
+carries that time as `auth`), so a copied cookie cannot be kept alive forever.
 
 Managers cannot create owners/managers, modify those privileged accounts, or see
 PINs. PIN change/account toggle increments session version; logout revokes all
 sessions for the current user. Anonymous PIN login is disabled by default.
 Database-backed throttles survive failed-login transaction rollback and multiple
-Node workers. Protect login endpoints with edge controls as well.
+Node workers. Wrong passwords are limited per client address (30 per 15 minutes,
+across all accounts), per account from one address (10), and per account overall
+(50, a backstop against distributed guessing). There is deliberately no site-wide
+lock: a site-wide failure count only logs a `login_failure_surge` alert, so a
+stranger cannot lock the whole venue out. The client address comes from nginx's
+X-Real-IP header (see docs/VPS_DEPLOYMENT.md); keep the edge `auth_limit` zone too.
 
 ## Financial and offline integrity
 
@@ -52,6 +61,23 @@ cumulative refunds against collected funds, and require a same-branch active
 manager's PIN. Partial refunds retain their own payment state. Stock restoration
 uses original stock movements, not a mutable recipe; insufficient stock during
 order creation causes rollback rather than a clamped/inaccurate ledger.
+
+## Removals and voids
+
+Taking items off a bill the kitchen already has, or cancelling such an order,
+needs the PIN of someone allowed to approve it (`canApproveVoids`) at the till
+(`src/lib/manager-approval.ts`); wrong PINs are throttled per branch. Refunds
+need a PIN from someone with `canApproveRefunds` (separate from requesting a
+refund, so finance cannot approve its own), and discounts or complimentary
+orders need `canApplyDiscounts`. All three default to managers and the owner,
+and the owner can change them per person. PINs that can approve (the owner's, and
+anyone's with either approval permission) must be 6 to 8 digits; a shorter PIN is
+refused by every approval before any lookup, and an approver's short legacy PIN no
+longer opens their account. Other staff may keep 4-digit PINs. Adding items and changing an order that never reached the
+kitchen need none. Holders of order-editing permission (the owner by default)
+are the approving authority and need no PIN. Every removal (`order_items_removed`)
+and cancel (`order_cancelled`) is written to the activity log with the person who
+did it, the approving manager, what was removed and whether stock went back.
 
 ## Tests
 

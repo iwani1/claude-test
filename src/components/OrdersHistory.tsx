@@ -877,7 +877,7 @@ export const OrdersHistory: React.FC<{
                   className="w-full bg-neutral-800 border border-neutral-700 rounded-xl px-3 py-2 text-white font-mono text-center tracking-widest text-lg"
                 />
                 <span className="text-[0.625rem] text-neutral-500 mt-0.5 block">
-                  Enter your assigned 4–8 digit Manager or Owner authorization PIN
+                  Enter the 6–8 digit approval PIN of a manager or the owner
                 </span>
               </div>
 

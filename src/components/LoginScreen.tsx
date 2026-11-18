@@ -145,7 +145,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onAuthenticated }) => 
           <div className="text-center lg:text-left">
             <h2 className="text-xl font-bold text-white">Staff Sign In</h2>
             <p className="text-xs text-neutral-400 mt-1">
-              Enter your authorized 4-digit PIN or work credentials to unlock the register.
+              Enter your PIN or work credentials to unlock the register.
             </p>
           </div>
 

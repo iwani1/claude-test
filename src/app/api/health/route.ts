@@ -6,8 +6,11 @@ import { findMissingSchema, MIGRATE_HINT } from "@/lib/schema-guard";
 
 export const dynamic = "force-dynamic";
 
-/** Baked in at build time by next.config.ts (see APP_BUILD_COMMIT). Server log only. */
-const COMMIT = process.env.APP_BUILD_COMMIT || "unknown";
+/** The commit this build was made from, baked in at build time by next.config.ts
+ *  (APP_BUILD_COMMIT). Reported in every answer so "is the new code live?" is one
+ *  request (F7 in docs/FINDINGS.md). A commit hash is public in the repository
+ *  anyway; anything that is not a hash is reported as "unknown", never echoed. */
+const COMMIT = /^[0-9a-f]{7,40}$/.test(process.env.APP_BUILD_COMMIT || "") ? process.env.APP_BUILD_COMMIT! : "unknown";
 
 type Where = { database?: string; schema?: string };
 
@@ -17,7 +20,8 @@ async function where(): Promise<Where> {
 }
 
 /**
- * This endpoint is public, so it answers only with a status and a reason code.
+ * This endpoint is public, so it answers only with a status, a reason code and
+ * the build's commit.
  * Which database, which schema and which missing columns are written to the
  * server log, where the operator reads them.
  */
@@ -32,17 +36,17 @@ export async function GET() {
     if (missing.length) {
       console.error(`Schema behind on ${place.database}.${place.schema} @ ${COMMIT}: missing ${missing.join(", ")}`);
       return Response.json(
-        { ok: false, reason: "schema-behind", hint: MIGRATE_HINT },
+        { ok: false, reason: "schema-behind", hint: MIGRATE_HINT, commit: COMMIT },
         { status: 503, headers: NO_STORE }
       );
     }
-    return Response.json({ ok: true }, { headers: NO_STORE });
+    return Response.json({ ok: true, commit: COMMIT }, { headers: NO_STORE });
   } catch (err) {
     // Name it in the log: a missing database is not the same failure as an app that never
     // started, and the deploy script and the operator both read this.
     const code = (() => { for (let node: any = err, depth = 0; node && depth < 5; node = node.cause, depth++) { if (node.code) return String(node.code); } return ""; })();
     console.error(`Health check failed on ${COMMIT}: ${code || (err as any)?.message}`);
-    return Response.json({ ok: false, reason: "database-unreachable" },
+    return Response.json({ ok: false, reason: "database-unreachable", commit: COMMIT },
       { status: 503, headers: NO_STORE });
   }
 }

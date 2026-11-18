@@ -1,0 +1,12 @@
+# Every 10 minutes, all day: problems at night (disk, certificate, backups)
+# should be known before the first shift.
+[Unit]
+Description=Restaurant POS health check schedule
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=10min
+AccuracySec=30s
+
+[Install]
+WantedBy=timers.target

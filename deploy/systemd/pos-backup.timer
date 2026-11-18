@@ -1,0 +1,14 @@
+# Hourly during trading hours, plus one overnight run (02:35). Ghana is UTC+0.
+# Persistent=true runs a missed backup as soon as the server is back up.
+[Unit]
+Description=Restaurant POS database backup schedule
+
+[Timer]
+OnCalendar=*-*-* 07..23:05:00
+# 02:35, before automatic updates (03:00) can restart PostgreSQL mid-dump.
+OnCalendar=*-*-* 02:35:00
+RandomizedDelaySec=120
+Persistent=true
+
+[Install]
+WantedBy=timers.target

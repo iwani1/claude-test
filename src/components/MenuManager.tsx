@@ -686,7 +686,7 @@ export const MenuManager: React.FC<MenuManagerProps> = ({
                 <input
                   type="text"
                   placeholder="…or paste an image address (optional)"
-                  value={imageUrl.startsWith("data:") ? "" : imageUrl}
+                  value={imageUrl.startsWith("data:") || imageUrl.startsWith("/api/menu/") ? "" : imageUrl}
                   onChange={(e) => setImageUrl(e.target.value)}
                   className="mt-2 w-full bg-neutral-800 border border-neutral-700 rounded-xl px-3 py-2 text-white"
                 />

@@ -13,11 +13,18 @@ async function run(command: string, args: string[], env = process.env) {
   });
 }
 async function main() {
+  // Ghana is UTC+0 and the server runs in UTC; pin it so date-based checks
+  // (reports, custom ranges) mean the same on any machine.
+  process.env.TZ = "UTC";
   // Only disposable resources; never use the developer's DATABASE_URL.
   const directory = await mkdtemp(join(tmpdir(), "pos-security-"));
   const password = randomBytes(24).toString("hex");
   const port = 15432;
-  const pg = new EmbeddedPostgres({ databaseDir: directory, user: "postgres", password, port, persistent: false,
+  // PostgreSQL refuses to run as root. As root (containers, some CI images) the
+  // library runs it as the system "postgres" user and hands it the data folder
+  // (P12 in docs/FINDINGS.md); as a normal user nothing changes.
+  const asRoot = process.getuid?.() === 0;
+  const pg = new EmbeddedPostgres({ databaseDir: directory, user: "postgres", password, port, persistent: false, createPostgresUser: asRoot,
     postgresFlags: ["-h", "127.0.0.1"], onLog: () => {}, onError: msg => { if (String(msg).includes("FATAL")) console.error(msg); } });
   let app: ReturnType<typeof spawn> | undefined;
   let admin: Pool | undefined;
@@ -33,7 +40,7 @@ async function main() {
     const { seedSecurityFixtures } = await import("./security-fixtures");
     await seedSecurityFixtures(admin);
     await run("node_modules/.bin/next", ["build"]);
-    app = spawn("node_modules/.bin/next", ["start", "--hostname", "0.0.0.0", "--port", "3100"], { env: { ...process.env, PIN_LOGIN_BRANCH_ID: "", NODE_ENV: "production" }, stdio: ["ignore", "pipe", "pipe"] });
+    app = spawn("node_modules/.bin/next", ["start", "--hostname", "0.0.0.0", "--port", "3100"], { env: { ...process.env, PIN_LOGIN_BRANCH_ID: "", NODE_ENV: "production", POS_DB_LOCK_TIMEOUT_MS: "1500" }, stdio: ["ignore", "pipe", "pipe"] });
     await new Promise<void>((resolve, reject) => {
       const timeout = setTimeout(() => reject(new Error("Next server startup timeout")), 90_000);
       app!.once("exit", code => { clearTimeout(timeout); reject(new Error(`Next exited ${code}`)); });

@@ -4,9 +4,9 @@ import { refundBalance } from "@/lib/refund-balance";
 import { eq, sql, and } from "drizzle-orm";
 import { db, requestContext } from "@/db";
 import { orders, refunds, auditLogs, users, diningTables, shifts, drawerMovements } from "@/db/schema";
-import { pinDigest, verifyPassword } from "@/lib/auth";
+import { APPROVER_PIN_MESSAGE, APPROVER_PIN_MIN_LENGTH, effectivePermissions, pinDigest, verifyPasswordAsync, type UserRole } from "@/lib/auth";
 import { reverseStockForOrder } from "@/lib/inventory-deduction";
-import { ApiError, assertNotThrottled, recordFailedAttempt, secureRoute } from "@/lib/api";
+import { ApiError, assertNotThrottled, BRANCH_PIN_BACKSTOP, recordFailedAttempt, secureRoute } from "@/lib/api";
 import { moneyCents } from "@/lib/money";
 export const POST = secureRoute(async (req, { params }) => {
   const actor = requestContext.getStore()!.user!;
@@ -32,17 +32,29 @@ export const POST = secureRoute(async (req, { params }) => {
     if (replay.requestFingerprint !== fingerprint) throw new ApiError(409, "Refund key already used for different details");
     return NextResponse.json({ success: true, refund: replay, duplicate: true });
   }
-  // Only wrong manager PINs are counted; a refund that is approved is never throttled.
-  const refundKey = `refund:branch:${actor.branchId}`;
+  // Only wrong approver PINs are counted; an approved refund is never throttled.
+  // They count against the person asking (N13) and a branch-wide backstop.
+  const refundKey = `refund:user:${actor.id}`;
+  const refundBranchKey = `refund:branch:${actor.branchId}`;
   await assertNotThrottled(refundKey);
+  await assertNotThrottled(refundBranchKey, BRANCH_PIN_BACKSTOP);
   if (typeof managerPin !== "string" || !/^\d{4,8}$/.test(managerPin)) {
     await recordFailedAttempt(refundKey);
+    await recordFailedAttempt(refundBranchKey);
     throw new ApiError(403, "Manager PIN required");
   }
-  // RLS restricts approval to managers in the caller's branch.
-  const [manager] = await db.select().from(users).where(eq(users.pinLookup, pinDigest(managerPin)));
-  if (!manager?.isActive || !["super_admin", "manager"].includes(manager.role) || !manager.pin || !verifyPassword(managerPin, manager.pin)) {
+  // No approver may have a PIN under 6 digits (N19): refuse before any lookup.
+  if (managerPin.length < APPROVER_PIN_MIN_LENGTH) {
     await recordFailedAttempt(refundKey);
+    await recordFailedAttempt(refundBranchKey);
+    throw new ApiError(403, APPROVER_PIN_MESSAGE);
+  }
+  // RLS keeps the lookup inside the caller's branch. Whose PIN may approve is
+  // the owner's per-person choice (canApproveRefunds, N6), not a job title.
+  const [manager] = await db.select().from(users).where(eq(users.pinLookup, pinDigest(managerPin)));
+  if (!manager?.isActive || !effectivePermissions(manager.role as UserRole, manager.permissionOverrides).canApproveRefunds || !manager.pin || !(await verifyPasswordAsync(managerPin, manager.pin))) {
+    await recordFailedAttempt(refundKey);
+    await recordFailedAttempt(refundBranchKey);
     throw new ApiError(403, "Invalid manager approval");
   }
   const [order] = await db.select().from(orders).where(eq(orders.id, orderId)).for("update");

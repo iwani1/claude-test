@@ -1,4 +1,5 @@
 import { secureRoute, isDatabaseFailure } from "@/lib/api";
+import { auditActor } from "@/lib/audit";
 import { NextResponse } from "next/server";
 import { documentNumber } from "@/lib/document-numbers";
 import { db, requestContext } from "@/db";
@@ -94,10 +95,11 @@ async function handlePOST(req: Request) {
     }
 
     await db.insert(auditLogs).values({
+      ...auditActor(),
       action: "purchase_order_created",
       entityType: "inventory",
       entityId: String(newPO.id),
-      details: `Created Purchase Order ${newPO.poNumber} ($${newPO.total})`,
+      details: `Created Purchase Order ${newPO.poNumber} (GH₵${newPO.total})`,
     });
 
     return NextResponse.json({ success: true, purchaseOrder: newPO });
@@ -206,7 +208,7 @@ async function handlePATCH(req: Request) {
             referenceId: po.poNumber,
             unitCost: item.unitPrice ? String(item.unitPrice) : ing.costPerUnit,
             reason: `Goods received from PO ${po.poNumber}`,
-            createdById: receivedBy || 1,
+            createdById: receivedBy,
           });
 
           await tx
@@ -219,7 +221,7 @@ async function handlePATCH(req: Request) {
         await tx.insert(goodsReceipts).values({
           grnNumber,
           purchaseOrderId: po.id,
-          receivedBy: receivedBy || 1,
+          receivedBy,
           invoiceNumber: invoiceNumber || "",
           itemsReceived: receivedItems,
         });
@@ -231,6 +233,7 @@ async function handlePATCH(req: Request) {
           .returning();
 
         await tx.insert(auditLogs).values({
+      ...auditActor(),
           action: "goods_receipt_processed",
           entityType: "inventory",
           entityId: String(po.id),
