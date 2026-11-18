@@ -213,20 +213,41 @@ if [[ "$NEW_SHA" == "$OLD_SHA" && "$FORCE" != "1" && ! -f "$MARKER" ]]; then
   info "Re-run with FORCE=1 to rebuild and restart anyway."
   exit 0
 fi
+RESUMING=0
 if [[ "$NEW_SHA" == "$OLD_SHA" && -f "$MARKER" ]]; then
-  warn "An earlier deploy did not finish ($(cat "$MARKER" 2>/dev/null || echo unknown)) — completing it."
+  RESUMING=1
+  warn "An earlier deploy did not finish ($(head -n 1 "$MARKER" 2>/dev/null || echo unknown)) — completing it."
 elif [[ "$NEW_SHA" == "$OLD_SHA" ]]; then
   info "Rebuilding $NEW_SHA because FORCE=1."
 fi
 
 git -C "$POS_DIR" log --oneline -1 "$NEW_SHA" | sed 's/^/    /'
-CHANGED="$(git -C "$POS_DIR" diff --name-only "$OLD_SHA" "$NEW_SHA")" || true
+# What this deploy changes. When finishing an interrupted deploy the checkout has
+# already moved, so compare from where that deploy started (recorded in the
+# marker), not from here: otherwise its migrations and dependency changes would
+# look like "nothing changed" and be skipped (N22 in docs/FINDINGS.md).
+DIFF_BASE="$OLD_SHA"
+CHANGES_UNKNOWN=0
+if [[ "$RESUMING" == "1" ]]; then
+  DIFF_BASE="$(sed -n 's/^from=//p' "$MARKER" 2>/dev/null | head -n 1)"
+  if [[ -z "$DIFF_BASE" ]] || ! git -C "$POS_DIR" rev-parse --verify -q "${DIFF_BASE}^{commit}" >/dev/null; then
+    # A marker from an older version of this script, without the start commit.
+    CHANGES_UNKNOWN=1
+    DIFF_BASE=""
+    warn "Cannot tell what the interrupted deploy changed: treating migrations and dependencies as possibly pending."
+  fi
+fi
+CHANGED=""
+[[ -n "$DIFF_BASE" ]] && { CHANGED="$(git -C "$POS_DIR" diff --name-only "$DIFF_BASE" "$NEW_SHA")" || true; }
 
 # ---------------------------------------------------------- 3. migrations ---
 # Checked BEFORE the working tree moves: a missing migration URL must leave the
 # checkout untouched so the same command can simply be re-run.
 step "3/6  Migrations"
 NEW_MIGRATIONS="$(printf '%s\n' "$CHANGED" | grep -E '^migrations/.*\.sql$' || true)"
+# Unknown changes: run the migration tool anyway. It applies only migrations the
+# database has not recorded, so it is safe when none are pending.
+[[ "$CHANGES_UNKNOWN" == "1" ]] && NEW_MIGRATIONS="(any not yet applied)"
 if [[ -n "$NEW_MIGRATIONS" && -z "${MIGRATION_DATABASE_URL:-}" ]]; then
   printf '%s\n' "$NEW_MIGRATIONS" | sed 's/^/    + /'
   die "This release adds migrations. Re-run with the owner connection string, e.g.:
@@ -248,8 +269,10 @@ fi
 
 # From here the deploy is mutating; a marker makes a re-run finish the job
 # instead of reporting "nothing to deploy" after a failure.
-if [[ "$DRY_RUN" != "1" ]]; then
-  printf 'started %s at %s -> %s\n' "$(date -Is)" "${OLD_SHA:0:7}" "${NEW_SHA:0:7}" > "$MARKER"
+# When finishing an interrupted deploy, keep its marker: it records where that
+# deploy started, which a later resume still needs.
+if [[ "$DRY_RUN" != "1" && "$RESUMING" != "1" ]]; then
+  printf 'started %s at %s -> %s\nfrom=%s\n' "$(date -Is)" "${OLD_SHA:0:7}" "${NEW_SHA:0:7}" "$OLD_SHA" > "$MARKER"
 fi
 
 if [[ -z "$NEW_MIGRATIONS" ]]; then
@@ -264,7 +287,7 @@ fi
 
 # -------------------------------------------------------- 4. dependencies ---
 step "4/6  Dependencies"
-if [[ ! -d "$POS_DIR/node_modules" ]] || [[ -n "$(printf '%s\n' "$CHANGED" | grep -E '^package(-lock)?\.json$' || true)" ]]; then
+if [[ ! -d "$POS_DIR/node_modules" || "$CHANGES_UNKNOWN" == "1" ]] || [[ -n "$(printf '%s\n' "$CHANGED" | grep -E '^package(-lock)?\.json$' || true)" ]]; then
   info "package.json / package-lock.json changed (or node_modules missing) — running npm ci"
   run chown -R "$POS_USER":"$POS_USER" "$POS_DIR"
   ( cd "$POS_DIR" && run as_user "$POS_USER" npm ci --no-audit --no-fund )
