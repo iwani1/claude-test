@@ -162,7 +162,7 @@ for path in sorted((ROOT / "migrations").glob("*.sql")):
 
 # 6. Every data table in the UI has a mobile card rendering, or is inside a
 #    scroller (structural, mirrors audit-responsive.py but only reports).
-for path in sorted((SRC / "components").glob("*.tsx")):
+for path in sorted((SRC / "components").rglob("*.tsx")):
     text = path.read_text()
     if "<table" not in text:
         continue

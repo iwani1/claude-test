@@ -30,7 +30,7 @@ import re
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-COMPONENTS = sorted((ROOT / "src" / "components").glob("*.tsx"))
+COMPONENTS = sorted((ROOT / "src" / "components").rglob("*.tsx"))  # subfolders too (components/pos/)
 APP = sorted((ROOT / "src" / "app").rglob("*.tsx"))
 
 failures: list[str] = []

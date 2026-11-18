@@ -262,6 +262,7 @@ export function PosNewLayout(p: PosNewLayoutProps) {
               {new Date().toLocaleDateString("en-GH", { day: "2-digit", month: "short", year: "numeric" })}
             </span>
           </div>
+          {/* responsive-ok: the new layout needs a 64rem+ screen; four short type labels */}
           <div role="tablist" aria-label="Order type" className="grid grid-cols-4 gap-1.5">
             {TYPES.map(([t, l]) => (
               <button
