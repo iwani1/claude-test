@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import type { PermissionOverrides, RolePermissionSet, UserRole } from "./permissions";
-export { ROLE_PERMISSIONS, PERMISSION_DEFINITIONS, PERMISSION_KEYS, effectivePermissions, hasTerminalAccess, permissionOverridesFor, sanitizePermissionOverrides, TERMINAL_ACCESS_DENIED_MESSAGE } from "./permissions";
+export { APPROVER_PIN_MESSAGE, APPROVER_PIN_MIN_LENGTH, needsApproverPin, ROLE_PERMISSIONS, PERMISSION_DEFINITIONS, PERMISSION_KEYS, effectivePermissions, hasTerminalAccess, permissionOverridesFor, sanitizePermissionOverrides, TERMINAL_ACCESS_DENIED_MESSAGE } from "./permissions";
 export type { PermissionKey, PermissionOverrides, RolePermissionSet, UserRole } from "./permissions";
 export interface SessionUser {
   id: number; restaurantId: number; branchId: number; name: string; email: string;

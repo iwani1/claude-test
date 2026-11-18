@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { db, requestContext } from "@/db";
 import { users, auditLogs } from "@/db/schema";
-import { cookieOptions, createToken, pinDigest, publicUser, verifyPasswordAsync } from "@/lib/auth";
+import { APPROVER_PIN_MESSAGE, APPROVER_PIN_MIN_LENGTH, cookieOptions, createToken, needsApproverPin, pinDigest, publicUser, verifyPasswordAsync, type UserRole } from "@/lib/auth";
 import { ApiError, activateUser, assertNotThrottled, BRANCH_PIN_BACKSTOP, recordFailedAttempt, secureRoute } from "@/lib/api";
 export const POST = secureRoute(async req => {
   const current = requestContext.getStore()!.user!;
@@ -29,6 +29,12 @@ export const POST = secureRoute(async req => {
   // manager who learned the owner's PIN could otherwise switch into full owner
   // powers (N5). The owner signs in with email and password.
   if (user.role === "super_admin") throw new ApiError(403, "The owner account signs in with email and password, not quick PIN switch.");
+  // An approver's short legacy PIN no longer opens their account (N19).
+  if (pin.length < APPROVER_PIN_MIN_LENGTH && needsApproverPin(user.role as UserRole, user.permissionOverrides)) {
+    await recordFailedAttempt(pinKey);
+    await recordFailedAttempt(branchKey);
+    throw new ApiError(403, APPROVER_PIN_MESSAGE);
+  }
   const session = await activateUser(requestContext.getStore()!.tx, user);
   // Name the person who is NOW signed in: they are the actor for everything
   // that follows, and a row that names the person who just left misleads

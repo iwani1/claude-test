@@ -7,7 +7,7 @@ export async function seedSecurityFixtures(pool: Pool) {
   for (let i = 0; i < roles.length; i++) {
     const id = i + 1, branch = id < 7 ? 1 : id < 9 ? 2 : 3;
     await pool.query(`INSERT INTO users(id,restaurant_id,branch_id,name,email,password_hash,pin,pin_lookup,role) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-      [id, branch === 3 ? 2 : 1, branch, `Test ${roles[i]}`, `user${id}@test.invalid`, hashPassword("Test-password-only-123!"), hashPassword(`${id}${id}${id}${id}`), pinDigest(`${id}${id}${id}${id}`), roles[i]]);
+      [id, branch === 3 ? 2 : 1, branch, `Test ${roles[i]}`, `user${id}@test.invalid`, hashPassword("Test-password-only-123!"), hashPassword(String(id).repeat(6)), pinDigest(String(id).repeat(6)), roles[i]]);
   }
   for (const branch of [1,2,3]) {
     await pool.query(`INSERT INTO menu_categories(id,branch_id,name,slug) VALUES($1,$1,'Food','food');

@@ -267,3 +267,19 @@ export const TERMINAL_ACCESS_DENIED_MESSAGE =
 export function hasTerminalAccess(role: UserRole, overrides?: unknown): boolean {
   return effectivePermissions(role, overrides).terminalAccess === true;
 }
+
+/** PINs that can approve money or removals must be 6–8 digits (N19 in
+ *  docs/FINDINGS.md): with per-person throttling, a 4-digit space is too small
+ *  for the accounts whose PIN authorises refunds, removals and cancels. Other
+ *  staff keep 4–8 digit PINs for quick switching. */
+export const APPROVER_PIN_MIN_LENGTH = 6;
+
+/** True for an account whose PIN can approve something: the owner, and anyone
+ *  allowed to approve refunds or removals/cancels. */
+export function needsApproverPin(role: UserRole, overrides?: unknown): boolean {
+  const perms = effectivePermissions(role, overrides);
+  return role === "super_admin" || perms.canApproveRefunds || perms.canApproveVoids;
+}
+
+export const APPROVER_PIN_MESSAGE =
+  "PINs that approve refunds, removals or cancels must be 6 to 8 digits. Ask the owner to set a 6-digit PIN for this account.";

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { eq, and, asc, isNull, sql } from "drizzle-orm";
 import { db, requestContext } from "@/db";
 import { users, shifts, auditLogs } from "@/db/schema";
-import { effectivePermissions, hashPasswordAsync, permissionOverridesFor, pinDigest, PERMISSION_KEYS, ROLE_PERMISSIONS, sanitizePermissionOverrides, UserRole, type PermissionKey } from "@/lib/auth";
+import { APPROVER_PIN_MESSAGE, APPROVER_PIN_MIN_LENGTH, needsApproverPin, effectivePermissions, hashPasswordAsync, permissionOverridesFor, pinDigest, PERMISSION_KEYS, ROLE_PERMISSIONS, sanitizePermissionOverrides, UserRole, type PermissionKey } from "@/lib/auth";
 import { ApiError, assertNotThrottled, recordFailedAttempt, secureRoute } from "@/lib/api";
 
 // PINs are unique per branch, so choosing a PIN that is taken has to be refused,
@@ -93,6 +93,7 @@ export const POST = secureRoute(async req => {
       if (actor.role !== "super_admin") throw new ApiError(403, "Only the owner may select permissions");
       permissionOverrides = permissionOverridesFor(role as UserRole, selectedPermissions(body.permissions));
     }
+    if (pin && pin.length < APPROVER_PIN_MIN_LENGTH && needsApproverPin(role as UserRole, permissionOverrides)) throw new ApiError(400, APPROVER_PIN_MESSAGE);
     [employee] = await db.insert(users).values({ restaurantId: actor.restaurantId, branchId: actor.branchId, name: name.trim(), email: email.trim().toLowerCase(),
       passwordHash: await hashPasswordAsync(password), pin: pin ? await hashPasswordAsync(pin) : null, pinLookup: pin ? pinDigest(pin) : null,
       role: role as UserRole, permissionOverrides, phone: typeof phone === "string" ? phone : null }).returning(fields);
@@ -140,6 +141,10 @@ export const POST = secureRoute(async req => {
         // on the next sign-in; the server enforces the change immediately
         // either way, because every request re-reads the account.
         [employee] = await db.update(users).set({ permissionOverrides: overrides, sessionVersion: sql`${users.sessionVersion} + 1` }).where(eq(users.id, target.id)).returning(fields);
+        // PINs are stored hashed, so their length is unknown here: remind instead.
+        if (needsApproverPin(target.role as UserRole, overrides) && !needsApproverPin(target.role as UserRole, target.permissionOverrides)) {
+          note = `${target.name} can now approve with a PIN. Approval PINs must be 6 to 8 digits: if theirs is shorter, set a new one.`;
+        }
         employee = withPermissions({ ...employee, permissionOverrides: overrides });
       } else if (action === "toggle_active") {
         if (typeof body.isActive !== "boolean") throw new ApiError(400, "isActive must be a boolean");
@@ -147,6 +152,7 @@ export const POST = secureRoute(async req => {
         [employee] = await db.update(users).set({ isActive: body.isActive, sessionVersion: sql`${users.sessionVersion} + 1` }).where(eq(users.id, target.id)).returning(fields);
       } else if (action === "update_pin") {
         if (typeof body.pin !== "string" || !/^\d{4,8}$/.test(body.pin)) throw new ApiError(400, "PIN must contain 4–8 digits");
+        if (body.pin.length < APPROVER_PIN_MIN_LENGTH && needsApproverPin(target.role as UserRole, target.permissionOverrides)) throw new ApiError(400, APPROVER_PIN_MESSAGE);
         [employee] = await db.update(users).set({ pin: await hashPasswordAsync(body.pin), pinLookup: pinDigest(body.pin), sessionVersion: sql`${users.sessionVersion} + 1` }).where(eq(users.id, target.id)).returning(fields);
       } else {
         // Password reset (self or managed account) always revokes existing sessions.

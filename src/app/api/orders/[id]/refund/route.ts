@@ -4,7 +4,7 @@ import { refundBalance } from "@/lib/refund-balance";
 import { eq, sql, and } from "drizzle-orm";
 import { db, requestContext } from "@/db";
 import { orders, refunds, auditLogs, users, diningTables, shifts, drawerMovements } from "@/db/schema";
-import { effectivePermissions, pinDigest, verifyPasswordAsync, type UserRole } from "@/lib/auth";
+import { APPROVER_PIN_MESSAGE, APPROVER_PIN_MIN_LENGTH, effectivePermissions, pinDigest, verifyPasswordAsync, type UserRole } from "@/lib/auth";
 import { reverseStockForOrder } from "@/lib/inventory-deduction";
 import { ApiError, assertNotThrottled, BRANCH_PIN_BACKSTOP, recordFailedAttempt, secureRoute } from "@/lib/api";
 import { moneyCents } from "@/lib/money";
@@ -42,6 +42,12 @@ export const POST = secureRoute(async (req, { params }) => {
     await recordFailedAttempt(refundKey);
     await recordFailedAttempt(refundBranchKey);
     throw new ApiError(403, "Manager PIN required");
+  }
+  // No approver may have a PIN under 6 digits (N19): refuse before any lookup.
+  if (managerPin.length < APPROVER_PIN_MIN_LENGTH) {
+    await recordFailedAttempt(refundKey);
+    await recordFailedAttempt(refundBranchKey);
+    throw new ApiError(403, APPROVER_PIN_MESSAGE);
   }
   // RLS keeps the lookup inside the caller's branch. Whose PIN may approve is
   // the owner's per-person choice (canApproveRefunds, N6), not a job title.

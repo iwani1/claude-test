@@ -60,7 +60,7 @@ const ManagerApprovalModal: React.FC<{
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            if (pin.length >= 4) onSubmit(pin);
+            if (pin.length >= 6) onSubmit(pin);
           }}
           className="space-y-4"
         >
@@ -101,7 +101,7 @@ const ManagerApprovalModal: React.FC<{
           </div>
 
           <p className="text-[0.71875rem] text-neutral-400 bg-neutral-800/80 p-3 rounded-xl text-left">
-            The manager types their own PIN. Their name is recorded in the activity log with this change.
+            The manager types their own 6- to 8-digit PIN. Their name is recorded in the activity log with this change.
           </p>
 
           <div className="flex gap-2">
@@ -109,7 +109,7 @@ const ManagerApprovalModal: React.FC<{
               className="flex-1 h-12 text-[0.8125rem] font-semibold bg-neutral-800 text-neutral-300 rounded-xl hover:bg-neutral-700 transition">
               Cancel
             </button>
-            <button type="submit" disabled={pin.length < 4}
+            <button type="submit" disabled={pin.length < 6}
               className="flex-1 h-12 text-[0.8125rem] font-bold bg-amber-500 text-black rounded-xl hover:bg-amber-400 disabled:opacity-50 transition">
               Approve
             </button>

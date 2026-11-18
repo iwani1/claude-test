@@ -304,7 +304,7 @@ export const StaffManager: React.FC<{ currentUser?: any }> = ({ currentUser }) =
             <span>Staff Roster & Role Permissions</span>
           </h2>
           <p className="text-xs text-neutral-400 mt-0.5">
-            Manage restaurant employee accounts, 4-digit quick POS unlock PINs, and security roles
+            Manage restaurant employee accounts, quick POS PINs, and security roles
           </p>
         </div>
 
@@ -593,7 +593,7 @@ export const StaffManager: React.FC<{ currentUser?: any }> = ({ currentUser }) =
               )}
 
               <div>
-                <label className="text-neutral-300 block mb-1">4–8 Digit Quick POS PIN</label>
+                <label className="text-neutral-300 block mb-1">Quick POS PIN (4–8 digits; 6–8 for managers and approvers)</label>
                 <input
                   type="password"
                   maxLength={8}

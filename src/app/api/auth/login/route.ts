@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { eq, and } from "drizzle-orm";
 import { db, requestContext } from "@/db";
 import { users, auditLogs } from "@/db/schema";
-import { createToken, verifyPasswordAsync, hashPasswordAsync, pinDigest, publicUser, cookieOptions } from "@/lib/auth";
+import { APPROVER_PIN_MIN_LENGTH, createToken, needsApproverPin, verifyPasswordAsync, hashPasswordAsync, pinDigest, publicUser, cookieOptions, type UserRole } from "@/lib/auth";
 import { activateUser, ApiError, assertNotThrottled, clientAddress, recordFailedAttempt, secureRoute } from "@/lib/api";
 // Only wrong credentials are counted. A sign-in that succeeds is never counted,
 // so a busy venue cannot lock itself out by signing in too often.
@@ -51,6 +51,8 @@ export const POST = secureRoute(async (req) => {
     if (typeof pin !== "string" || !/^\d{4,8}$/.test(pin)) await fail();
     [user] = await db.select().from(users).where(and(eq(users.branchId, branchId), eq(users.pinLookup, pinDigest(pin))));
     if (!user?.pin || !(await verifyPasswordAsync(pin, user.pin))) await fail();
+    // An approver's short legacy PIN does not sign in either (N19).
+    if (pin.length < APPROVER_PIN_MIN_LENGTH && needsApproverPin(user!.role as UserRole, user!.permissionOverrides)) await fail();
   } else {
     if (typeof email !== "string" || typeof password !== "string" || email.length > 254 || password.length > 256) throw new ApiError(400, "Email and password required");
     const normalized = email.trim().toLowerCase();

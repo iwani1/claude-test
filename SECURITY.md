@@ -70,7 +70,10 @@ needs the PIN of someone allowed to approve it (`canApproveVoids`) at the till
 need a PIN from someone with `canApproveRefunds` (separate from requesting a
 refund, so finance cannot approve its own), and discounts or complimentary
 orders need `canApplyDiscounts`. All three default to managers and the owner,
-and the owner can change them per person. Adding items and changing an order that never reached the
+and the owner can change them per person. PINs that can approve (the owner's, and
+anyone's with either approval permission) must be 6 to 8 digits; a shorter PIN is
+refused by every approval before any lookup, and an approver's short legacy PIN no
+longer opens their account. Other staff may keep 4-digit PINs. Adding items and changing an order that never reached the
 kitchen need none. Holders of order-editing permission (the owner by default)
 are the approving authority and need no PIN. Every removal (`order_items_removed`)
 and cancel (`order_cancelled`) is written to the activity log with the person who

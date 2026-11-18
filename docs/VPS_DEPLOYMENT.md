@@ -505,6 +505,12 @@ report recovery. Do this once now, and again after changing phone numbers.
 
 ## Updating the app later
 
+> **Deploying the release with 6-digit approver PINs (PR #37):** managers' and
+> the owner's PINs must now be 6 to 8 digits. A 4-digit manager PIN stops working
+> for approvals and quick switch the moment the new release is live. Right after
+> deploying, the owner sets a new 6-digit PIN for each manager in Staff
+> Management (and their own), before anyone needs to approve a refund.
+
 ### The short way — one command
 
 ```sh

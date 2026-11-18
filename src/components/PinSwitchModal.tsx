@@ -5,7 +5,7 @@ import { KeyRound } from "lucide-react";
 import { apiErrorMessage, apiFetch } from "@/lib/api-client";
 
 /**
- * Fast staff switch by 4-digit PIN. Shared by the phone top bar and the
+ * Fast staff switch by PIN (4–8 digits; 6–8 for managers and approvers). Shared by the phone top bar and the
  * desktop/tablet rail, which both offer "Switch Staff" — one implementation
  * so the two can never drift apart.
  */
@@ -53,14 +53,14 @@ export const PinSwitchModal: React.FC<{
             </div>
             <h3 className="text-lg font-bold text-white mb-1">Enter Employee PIN</h3>
             <p className="text-[0.8125rem] text-neutral-400 mb-5">
-              Enter your assigned 4-digit code to switch active operator
+              Enter your PIN to switch the active operator (managers use 6 digits or more)
             </p>
 
             <form onSubmit={handlePinSubmit} className="space-y-4">
               <input
                 type="password"
                 inputMode="numeric"
-                maxLength={4}
+                maxLength={8}
                 autoFocus
                 value={pinInput}
                 onChange={(e) => setPinInput(e.target.value)}
@@ -76,7 +76,7 @@ export const PinSwitchModal: React.FC<{
                   <button
                     key={d}
                     type="button"
-                    onClick={() => setPinInput((p) => (p.length < 4 ? p + d : p))}
+                    onClick={() => setPinInput((p) => (p.length < 8 ? p + d : p))}
                     className="h-14 rounded-xl bg-neutral-800 hover:bg-neutral-700 active:bg-amber-500 active:text-black border border-neutral-700 text-xl font-bold text-white transition"
                   >
                     {d}
@@ -91,7 +91,7 @@ export const PinSwitchModal: React.FC<{
                 </button>
                 <button
                   type="button"
-                  onClick={() => setPinInput((p) => (p.length < 4 ? p + "0" : p))}
+                  onClick={() => setPinInput((p) => (p.length < 8 ? p + "0" : p))}
                   className="h-14 rounded-xl bg-neutral-800 hover:bg-neutral-700 active:bg-amber-500 active:text-black border border-neutral-700 text-xl font-bold text-white transition"
                 >
                   0

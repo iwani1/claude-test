@@ -10,7 +10,7 @@ async function request(path: string, body?: unknown, session = cookie) {
   return { status: res.status, data: await res.json(), cookie: res.headers.get("set-cookie")?.split(";")[0] ?? "" };
 }
 async function ok(path: string, body?: unknown) { const r = await request(path, body); assert.equal(r.status, 200, `${path}: ${JSON.stringify(r.data)}`); return r.data; }
-const refund = (amount: string, cash: string, momo: string, extra = {}) => ({ amount, cashAmount: cash, momoAmount: momo, idempotencyKey: randomUUID(), reason: "Accounting acceptance", managerPin: "1111", ...extra });
+const refund = (amount: string, cash: string, momo: string, extra = {}) => ({ amount, cashAmount: cash, momoAmount: momo, idempotencyKey: randomUUID(), reason: "Accounting acceptance", managerPin: "111111", ...extra });
 async function sale() { return (await ok("orders", { orderType: "takeaway", idempotencyKey: randomUUID(), items: [{ menuItemId: 1, quantity: 1 }] })).order; }
 async function main() {
   // Reset only test throttles between independent suites, never application enforcement.
@@ -22,7 +22,7 @@ async function main() {
   const shiftA = (await ok("shifts", { action: "open_shift", openingCash: "100.00" })).shift;
   await ok(`orders/${order.id}/pay`, { paymentMethod: "split", amount: "10.00", cashAmount: "6.00", momoAmount: "4.00" });
   const path = `orders/${order.id}/refund`;
-  check((await request(path, { amount: "1", cashAmount: "1", momoAmount: "0", managerPin: "1111", reason: "No stable key" })).status === 400, "refund requires stable retry key");
+  check((await request(path, { amount: "1", cashAmount: "1", momoAmount: "0", managerPin: "111111", reason: "No stable key" })).status === 400, "refund requires stable retry key");
   check((await request(path, refund("2", "1", "0"))).status === 400, "tender allocation must equal refund");
   check((await request(path, refund("7", "7", "0"))).status === 409, "cannot refund MoMo collections as cash");
   const payload = refund("5", "3", "2");

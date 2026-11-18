@@ -52,8 +52,8 @@ async function main() {
   const { order: takeaway } = await api("orders", { idempotencyKey: "pilot-takeaway-001", orderType: "takeaway", items: [{ menuItemId: 1, quantity: 1 }] });
   const paid = await api(`orders/${takeaway.id}/pay`, { paymentMethod: "cash", amount: "10.00", cashTendered: "20.00" });
   check(paid.changeGiven, "10.00", "cash change calculated");
-  await api(`orders/${takeaway.id}/refund`, { amount: "2.00", managerPin: "1111", reason: "Pilot partial refund" });
-  await api(`orders/${takeaway.id}/refund`, { amount: "8.00", managerPin: "1111", reason: "Pilot final refund", returnStock: true });
+  await api(`orders/${takeaway.id}/refund`, { amount: "2.00", managerPin: "111111", reason: "Pilot partial refund" });
+  await api(`orders/${takeaway.id}/refund`, { amount: "8.00", managerPin: "111111", reason: "Pilot final refund", returnStock: true });
   check(Number((await admin.query("SELECT sum(amount) AS total FROM refunds WHERE order_id=$1", [takeaway.id])).rows[0].total), 10, "partial + final refunds total collected amount");
   check((await admin.query("SELECT count(*)::int AS count FROM drawer_movements WHERE shift_id=$1 AND kind='refund'", [shift.id])).rows[0].count, 2, "both cash refunds automatically create linked drawer outflows");
   await api("shifts", { action: "cash_payout", shiftId: shift.id, amount: "3.00", reason: "Pilot petty cash" });
@@ -251,7 +251,7 @@ async function main() {
   });
   await api(`orders/${erasedRefundOrder.id}/pay`, { paymentMethod: "cash", amount: "5.00", cashTendered: "5.00" });
   await api(`orders/${erasedRefundOrder.id}/refund`, {
-    amount: "2.00", cashAmount: "2.00", momoAmount: "0.00", managerPin: "1111",
+    amount: "2.00", cashAmount: "2.00", momoAmount: "0.00", managerPin: "111111",
     reason: "Erased-refund probe", idempotencyKey: "pilot-erase-refund-r-001",
   });
   const withRefund = (await api("shifts")).activeShift;

@@ -28,7 +28,7 @@ the VPS is **not** fixed: it is lost on the next deploy and invisible to audits.
 | Critical | 0 | 1 | 1 | 0 |
 | High | 0 | 1 | 4 | 0 |
 | Medium | 0 | 1 | 9 | 0 |
-| Low / Info | 2 | 2 | 14 | 0 |
+| Low / Info | 1 | 2 | 15 | 0 |
 
 ## Go-live blockers
 
@@ -57,7 +57,7 @@ N2 (owner action; owner has deferred making the repo private, see its row) and P
 | N16 | Medium | `deploy-vps.sh --rollback` ran `git reset` as the service user while the rest of the script runs git as root; it could fail on root-owned `.git` files and stop after switching the live link but before restarting | **Fixed** | PR #37 (found by the 2026-11-18 audit in PR #37's own P3 code): rollback runs git as root like the rest of the script, and a failure only warns; the automatic switch-back warns too | Confirmed `.git/index` is root-owned after a root git command; `bash -n` and `test:deploy` pass | `scripts/deploy-vps.sh` |
 | N17 | Low | Overnight backup at 03:05 overlapped unattended upgrades at 03:00, which can restart PostgreSQL mid-dump | **Fixed** | PR #37 (found by the 2026-11-18 audit): overnight backup moved to 02:35 | Timer and guide updated; `test:backup` passes | `deploy/systemd/pos-backup.timer`, `docs/VPS_DEPLOYMENT.md` Phase 10 |
 | N18 | Low | `shift_opened` audit row had no `userName` (and fell back to user 1); rule 9 accepted any row with a `userId` | **Fixed** | PR #37 (found by the 2026-11-18 audit): row uses `auditActor()`; rule 9 now requires id **and** name (or `auditActor()`); dead `|| 1` fallbacks in goods receiving removed | Rule 9 fails on a planted row with an id but no name; `test:security` passes | `src/app/api/shifts/route.ts`, `scripts/audit-workflows.py` rule 9 |
-| N19 | Low | Per-person PIN limits (N13) raise the most PIN guesses possible per branch from 40/h to up to 160/h for someone holding several colleagues' sessions | Open | Trade-off of N13 (one mistyping cashier no longer locks everyone). Recommended: 6-digit PINs for managers and owner, whose PINs approve refunds, removals and cancels; or lower `BRANCH_PIN_BACKSTOP` to 20 | 2026-11-18 @ `b99801b` | `src/lib/api.ts` `BRANCH_PIN_BACKSTOP`, `src/app/api/staff/route.ts` PIN rules |
+| N19 | Low | Per-person PIN limits (N13) raise the most PIN guesses possible per branch from 40/h to up to 160/h for someone holding several colleagues' sessions | **Fixed** | PR #37: PINs that can approve (owner, and anyone with `canApproveRefunds` or `canApproveVoids`) must be 6–8 digits: refused when set; a PIN under 6 digits is refused by the approval prompt and refunds before any lookup; an approver's short legacy PIN no longer works for quick switch or PIN login; granting approval power reminds the owner. A 6-digit space takes about 260 days at the maximum rate. **Deploy day:** set 6-digit PINs for managers before they need to approve | `tests/security.ts` N19 checks (8): short manager PIN refused at creation and change; cashier keeps 4 digits; legacy short manager PIN refused for switch; grant reminder; 4-digit PIN never approves a removal or a refund. Fixture PINs are now 6 digits | `src/lib/permissions.ts` `needsApproverPin`, `src/lib/manager-approval.ts`, refund, switch-pin, login and staff routes |
 
 ## Production findings — [`PRODUCTION_READINESS_2026-11-17.md`](PRODUCTION_READINESS_2026-11-17.md)
 

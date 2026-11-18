@@ -4,7 +4,7 @@ import { Pool } from "pg";
 import { readFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { createHmac, randomUUID } from "node:crypto";
-import { createToken, verifyToken, hashPassword, verifyPassword, hashPasswordAsync, verifyPasswordAsync } from "../src/lib/auth";
+import { createToken, verifyToken, hashPassword, verifyPassword, hashPasswordAsync, verifyPasswordAsync, pinDigest } from "../src/lib/auth";
 import { pbkdf2Sync } from "node:crypto";
 import { databaseUnreachableMessage } from "../src/lib/schema-guard";
 const base = "http://127.0.0.1:3100";
@@ -71,7 +71,7 @@ async function main() {
   check((await request(`/api/orders/${financeOrderId}/pay`, "POST", { amount: "1.00", method: "cash" }, accountant)).status === 403, "accountant cannot take a payment");
   check((await request(`/api/orders/${financeOrderId}/refund`, "GET", undefined, accountant)).status === 200, "accountant can load refundable balances");
   check((await request(`/api/orders/${financeOrderId}/refund`, "GET", undefined, cashier)).status === 403, "cashier cannot load refundable balances");
-  check((await request(`/api/orders/${financeOrderId}/refund`, "POST", { amount: "1.00", reason: "no", managerPin: "2222" }, cashier)).status === 403, "cashier cannot request refunds");
+  check((await request(`/api/orders/${financeOrderId}/refund`, "POST", { amount: "1.00", reason: "no", managerPin: "222222" }, cashier)).status === 403, "cashier cannot request refunds");
   check((await request(`/api/orders/${financeOrderId}`, "DELETE", {}, accountant)).status === 403, "accountant cannot erase an order");
   const financeDrawer = await request("/api/shifts", "GET", undefined, accountant);
   check(financeDrawer.status === 200 && "activeShift" in financeDrawer.body, "accountant reads the drawer ledger");
@@ -288,8 +288,24 @@ async function main() {
   collisionStatuses = [];
   // N5: the owner is never reachable by quick PIN switch, even with the right PIN
   // (the fixture owner's PIN is 1111; it still approves refunds below).
-  const ownerSwitch = await request("/api/auth/switch-pin", "POST", { pin: "1111" }, pinLogin2.cookie);
+  const ownerSwitch = await request("/api/auth/switch-pin", "POST", { pin: "111111" }, pinLogin2.cookie);
   check(ownerSwitch.status === 403 && !ownerSwitch.cookie, "N5: the owner's correct PIN does not switch a till into the owner account");
+  // --- N19: PINs that approve are 6-8 digits ----------------------------------
+  check((await request("/api/staff", "POST", { action: "create_employee", name: "Short Pin Manager", email: "shortpinmgr@test.invalid", role: "manager", password: "Short-pin-manager-123!", pin: "4321" }, owner)).status === 400,
+    "N19: a manager cannot be given a 4-digit PIN");
+  const longPinManager = await request("/api/staff", "POST", { action: "create_employee", name: "Long Pin Manager", email: "longpinmgr@test.invalid", role: "manager", password: "Long-pin-manager-123!", pin: "432165" }, owner);
+  check(longPinManager.status === 200, "N19: a manager with a 6-digit PIN is created");
+  check((await request("/api/staff", "POST", { action: "update_pin", userId: longPinManager.body.employee.id, pin: "1357" }, owner)).status === 400, "N19: nor changed to a short one later");
+  check((await request("/api/staff", "POST", { action: "update_pin", userId: pwStaff.body.employee.id, pin: "8081" }, owner)).status === 200, "N19: a cashier keeps a 4-digit PIN");
+  // A manager still holding a short PIN from before this change:
+  await admin.query("UPDATE users SET pin=$1, pin_lookup=$2 WHERE id=2", [hashPassword("2468"), pinDigest("2468")]);
+  const legacySwitch = await request("/api/auth/switch-pin", "POST", { pin: "2468" }, pinLogin2.cookie);
+  check(legacySwitch.status === 403 && /6 to 8 digits/.test(legacySwitch.body.error), "N19: a manager's short legacy PIN no longer opens their account by quick switch");
+  await admin.query("UPDATE users SET pin=$1, pin_lookup=$2 WHERE id=2", [hashPassword("222222"), pinDigest("222222")]);
+  await admin.query("DELETE FROM auth_attempts WHERE key LIKE 'pin:%'");
+  const grant = await request("/api/staff", "POST", { action: "update_permissions", userId: pwStaff.body.employee.id, permissions: { canApproveVoids: true } }, owner);
+  check(grant.status === 200 && /6 to 8 digits/.test(grant.body.note || ""), "N19: granting approval power reminds the owner about the PIN length");
+  await request("/api/staff", "POST", { action: "update_permissions", userId: pwStaff.body.employee.id, permissions: {} }, owner);
   const dupEmail = await request("/api/staff", "POST", { action: "create_employee", name: "Dup Email", email: "pintest@test.invalid", role: "cashier", password: "Dup-email-password-123!" }, owner);
   check(dupEmail.status === 409 && /already registered/i.test(dupEmail.body.error), "duplicate email rejected with clear message");
   // --- N3/N4: removing items from, or cancelling, a kitchen order -------------
@@ -307,9 +323,12 @@ async function main() {
   const unapproved = await request(`/api/orders/${sentId}/edit`, "PATCH", shrink, cashier);
   const sentQty = async () => Number((await admin.query("SELECT sum(quantity) AS q FROM order_items WHERE order_id=$1", [sentId])).rows[0].q);
   check(unapproved.status === 403 && unapproved.body.code === "manager_approval_required" && (await sentQty()) === 2, "N3: removing items from a kitchen order without a manager PIN is refused and changes nothing");
-  const wrongPin = await request(`/api/orders/${sentId}/edit`, "PATCH", { ...shrink, managerPin: "3333" }, cashier);
+  const shortApproval = await request(`/api/orders/${sentId}/edit`, "PATCH", { ...shrink, managerPin: "2222" }, cashier);
+  check(shortApproval.status === 403 && shortApproval.body.code === "manager_approval_invalid" && /6 to 8 digits/.test(shortApproval.body.error), "N19: a 4-digit PIN never approves a removal");
+  await admin.query("DELETE FROM auth_attempts WHERE key LIKE 'manager-approval:%'");
+  const wrongPin = await request(`/api/orders/${sentId}/edit`, "PATCH", { ...shrink, managerPin: "333333" }, cashier);
   check(wrongPin.status === 403 && wrongPin.body.code === "manager_approval_invalid" && (await counter("manager-approval:branch:1")) === 1, "N3: a non-manager PIN is refused and counted");
-  const approved = await request(`/api/orders/${sentId}/edit`, "PATCH", { ...shrink, managerPin: "2222" }, cashier);
+  const approved = await request(`/api/orders/${sentId}/edit`, "PATCH", { ...shrink, managerPin: "222222" }, cashier);
   const removalRow = await lastAudit("order_items_removed", sentId);
   check(approved.status === 200 && (await sentQty()) === 1, "N3: a manager's PIN approves the removal");
   check(removalRow?.user_id === 3 && /removed 1×/.test(removalRow?.details) && /Approved by manager Test manager/.test(removalRow?.details), "N3: the removal is logged with the cashier, what went, and the approving manager");
@@ -322,7 +341,7 @@ async function main() {
   const cancelNoPin = await request(`/api/orders/${sentId}`, "PATCH", { status: "cancelled" }, cashier);
   check(cancelNoPin.status === 403 && cancelNoPin.body.code === "manager_approval_required", "N4: cancelling a kitchen order without a manager PIN is refused");
   check((await admin.query("SELECT status FROM orders WHERE id=$1", [sentId])).rows[0].status !== "cancelled", "N4: the refused cancel left the order open");
-  check((await request(`/api/orders/${sentId}`, "PATCH", { status: "cancelled", managerPin: "2222" }, cashier)).status === 200, "N4: a manager's PIN approves the cancel");
+  check((await request(`/api/orders/${sentId}`, "PATCH", { status: "cancelled", managerPin: "222222" }, cashier)).status === 200, "N4: a manager's PIN approves the cancel");
   const cancelRow = await lastAudit("order_cancelled", sentId);
   check(cancelRow?.user_id === 3 && cancelRow?.user_name && /Approved by manager Test manager/.test(cancelRow?.details), "N4: the cancel is logged with the cashier and the approving manager");
   // (Editing the draft above opened a kitchen docket, as the till's edit does, so
@@ -433,19 +452,22 @@ async function main() {
   // (then stopped by the empty refundable balance).
   const unpaid = await request("/api/orders", "POST", order("n6-unpaid-probe"), owner);
   const refundWith = (pin: string) => request(`/api/orders/${unpaid.body.order.id}/refund`, "POST", { amount: "1.00", reason: "N6 probe", managerPin: pin }, owner);
-  check((await refundWith("2222")).status === 409, "N6: by default a manager's PIN can approve a refund");
+  check((await refundWith("222222")).status === 409, "N6: by default a manager's PIN can approve a refund");
+  const shortRefund = await refundWith("2222");
+  check(shortRefund.status === 403 && /6 to 8 digits/.test(shortRefund.body.error), "N19: a 4-digit PIN never approves a refund");
+  await admin.query("DELETE FROM auth_attempts WHERE key LIKE 'refund:%'");
   await setOverrides(2, { canApproveRefunds: false });
-  check((await refundWith("2222")).status === 403, "N6: a manager the owner barred from approving refunds cannot approve one with their PIN");
+  check((await refundWith("222222")).status === 403, "N6: a manager the owner barred from approving refunds cannot approve one with their PIN");
   await setOverrides(3, { canApproveRefunds: true });
-  check((await refundWith("3333")).status === 409, "N6: a cashier the owner allowed to approve refunds can approve one");
+  check((await refundWith("333333")).status === 409, "N6: a cashier the owner allowed to approve refunds can approve one");
   check((await request("/api/auth/me", "GET", undefined, accountant)).body.permissions?.canApproveRefunds === false, "N6: finance may request refunds but cannot approve them by default");
   const n6Kitchen = await request("/api/orders", "POST", order("n6-void-probe", { items: [{ menuItemId: 1, quantity: 2 }] }), cashier);
   const removeWith = (pin: string) => request(`/api/orders/${n6Kitchen.body.order.id}/edit`, "PATCH", { items: [{ menuItemId: 1, quantity: 1 }], managerPin: pin }, cashier);
   await setOverrides(2, { canApproveVoids: false });
-  const barredVoid = await removeWith("2222");
+  const barredVoid = await removeWith("222222");
   check(barredVoid.status === 403 && barredVoid.body.code === "manager_approval_invalid", "N6: a manager barred from approving removals is refused at the till prompt");
   await setOverrides(3, { canApproveVoids: true });
-  check((await removeWith("3333")).status === 200, "N6: someone allowed to approve removals can approve one");
+  check((await removeWith("333333")).status === 200, "N6: someone allowed to approve removals can approve one");
   await setOverrides(3, { canApplyDiscounts: true });
   check((await request("/api/orders", "POST", order("n6-discount-cashier", { discountAmount: "1.00" }), cashier)).status === 200, "N6: a cashier allowed to give discounts can ring one up");
   await setOverrides(2, { canApplyDiscounts: false });
@@ -522,12 +544,12 @@ async function main() {
   const tenderDetail = await request(`/api/orders/${id}`, "GET", undefined, cashier);
   check(tenderDetail.body.order.paymentBreakdown?.cash === "4.00" && tenderDetail.body.order.paymentBreakdown?.momo === "6.00" && tenderDetail.body.order.paymentBreakdown?.other === "0.00", "order details split paid money into cash and MoMo");
   check(Array.isArray(tenderDetail.body.order.paymentBreakdown?.payments) && tenderDetail.body.order.paymentBreakdown.payments.length === 2, "order details list each payment received");
-  for (const amount of ["-1", "0", "NaN", "0.001", "1e2"]) check((await request(`/api/orders/${id}/refund`, "POST", { amount, reason: "Test", managerPin: "2222" }, manager)).status === 400, `refund rejects ${amount}`);
+  for (const amount of ["-1", "0", "NaN", "0.001", "1e2"]) check((await request(`/api/orders/${id}/refund`, "POST", { amount, reason: "Test", managerPin: "222222" }, manager)).status === 400, `refund rejects ${amount}`);
   await admin.query("DELETE FROM auth_attempts WHERE key='refund:branch:1'");
-  check((await request(`/api/orders/${id}/refund`, "POST", { amount: "1", reason: "Test", managerPin: "8888" }, manager)).status === 403, "other-branch manager cannot authorize refund");
+  check((await request(`/api/orders/${id}/refund`, "POST", { amount: "1", reason: "Test", managerPin: "888888" }, manager)).status === 403, "other-branch manager cannot authorize refund");
   check((await counter("refund:branch:1")) === 1, "a wrong manager PIN counts once against the refund key");
-  check((await request(`/api/orders/${id}/refund`, "POST", { amount: "4", reason: "Partial", managerPin: "2222", returnStock: true }, manager)).status === 400, "partial refund cannot restore all stock");
-  const partial = await request(`/api/orders/${id}/refund`, "POST", { amount: "4", reason: "Partial", managerPin: "2222" }, manager);
+  check((await request(`/api/orders/${id}/refund`, "POST", { amount: "4", reason: "Partial", managerPin: "222222", returnStock: true }, manager)).status === 400, "partial refund cannot restore all stock");
+  const partial = await request(`/api/orders/${id}/refund`, "POST", { amount: "4", reason: "Partial", managerPin: "222222" }, manager);
   check(partial.status === 200, "partial refund succeeds");
   check((await counter("refund:branch:1")) === 1, "an approved refund is not counted against the refund key");
   // N13: wrong approver PINs lock out the person asking, not the whole branch.
@@ -535,11 +557,11 @@ async function main() {
     "INSERT INTO auth_attempts (key, count, reset_at) VALUES ($1, $2, now()+interval '15 minutes') ON CONFLICT (key) DO UPDATE SET count=$2, reset_at=now()+interval '15 minutes'", [key, count]);
   check((await counter("refund:user:2")) === 1, "N13: the wrong PIN also counted against the person asking");
   await lockKey("refund:user:2", 10);
-  check((await request(`/api/orders/${id}/refund`, "POST", { amount: "1", reason: "Test", managerPin: "2222" }, manager)).status === 429, "a person locked out by wrong approver PINs is refused even with a valid one");
+  check((await request(`/api/orders/${id}/refund`, "POST", { amount: "1", reason: "Test", managerPin: "222222" }, manager)).status === 429, "a person locked out by wrong approver PINs is refused even with a valid one");
   // 999 passes approval and is then refused for exceeding the balance (409), so no money moves.
-  check((await request(`/api/orders/${id}/refund`, "POST", { amount: "999", reason: "Test", managerPin: "2222" }, owner)).status === 409, "N13: a colleague can still get refunds approved");
+  check((await request(`/api/orders/${id}/refund`, "POST", { amount: "999", reason: "Test", managerPin: "222222" }, owner)).status === 409, "N13: a colleague can still get refunds approved");
   await lockKey("refund:branch:1", 40);
-  check((await request(`/api/orders/${id}/refund`, "POST", { amount: "999", reason: "Test", managerPin: "2222" }, owner)).status === 429, "N13: the branch-wide backstop still stops guessing across many people");
+  check((await request(`/api/orders/${id}/refund`, "POST", { amount: "999", reason: "Test", managerPin: "222222" }, owner)).status === 429, "N13: the branch-wide backstop still stops guessing across many people");
   await admin.query("DELETE FROM auth_attempts WHERE key LIKE 'refund:%'");
   // N13 (quick switch): same rule. pinStaff's PIN is 6677.
   check((await request("/api/auth/switch-pin", "POST", { pin: "0000" }, cashier)).status === 401 && (await counter("pin:user:3")) >= 1, "N13: a wrong switch PIN counts against the person typing");
@@ -552,7 +574,7 @@ async function main() {
   check((await admin.query("SELECT payment_status FROM orders WHERE id=$1", [id])).rows[0].payment_status === "partially_refunded", "partial refund preserves distinct state");
   // Change recipe after sale: restoration must use original ledger.
   await admin.query("UPDATE recipe_ingredients SET quantity=9 WHERE recipe_id=1");
-  const refund = await Promise.all([1,2].map(() => request(`/api/orders/${id}/refund`, "POST", { amount: "6", cashAmount: "0.00", momoAmount: "6.00", reason: "Remaining", managerPin: "2222", returnStock: true }, manager)));
+  const refund = await Promise.all([1,2].map(() => request(`/api/orders/${id}/refund`, "POST", { amount: "6", cashAmount: "0.00", momoAmount: "6.00", reason: "Remaining", managerPin: "222222", returnStock: true }, manager)));
   check(refund.filter(r => r.status === 200).length === 1 && refund.filter(r => r.status === 409).length === 1, "concurrent final refunds cannot over-refund");
   check(Number((await admin.query("SELECT current_stock FROM ingredients WHERE id=1")).rows[0].current_stock) === 100, "stock restored once using original deduction, not changed recipe");
 
@@ -588,7 +610,7 @@ async function main() {
   const beforeFaultPayouts = (await admin.query("SELECT cash_payouts FROM shifts WHERE branch_id=1 AND status='open' AND user_id=2")).rows[0].cash_payouts;
   const beforeFaultStock = (await admin.query("SELECT current_stock FROM ingredients WHERE id=1")).rows[0].current_stock;
   await admin.query(`CREATE FUNCTION test_refund_fault() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.action = 'order_refunded' THEN RAISE EXCEPTION 'Injected late audit failure'; END IF; RETURN NEW; END $$; CREATE TRIGGER test_refund_fault BEFORE INSERT ON audit_logs FOR EACH ROW EXECUTE FUNCTION test_refund_fault();`);
-  const fault = await request(`/api/orders/${faultId}/refund`, "POST", { amount: "10", reason: "Failure injection", managerPin: "2222", returnStock: true }, manager);
+  const fault = await request(`/api/orders/${faultId}/refund`, "POST", { amount: "10", reason: "Failure injection", managerPin: "222222", returnStock: true }, manager);
   check(fault.status === 500 && !JSON.stringify(fault.body).includes("Injected"), "late refund failure returns no database internals");
   check((await admin.query("SELECT id FROM refunds WHERE order_id=$1", [faultId])).rowCount === 0, "failed refund rolls back refund ledger");
   check((await admin.query("SELECT payment_status FROM orders WHERE id=$1", [faultId])).rows[0].payment_status === "paid", "failed refund rolls back order state");
@@ -601,7 +623,7 @@ async function main() {
   const acctOrder = await request("/api/orders", "POST", order("accountant-refund-order"), cashier);
   const acctOrderId = acctOrder.body.order.id;
   await request(`/api/orders/${acctOrderId}/pay`, "POST", { paymentMethod: "cash", amount: "10" }, cashier);
-  const acctRefund = await request(`/api/orders/${acctOrderId}/refund`, "POST", { amount: "4", cashAmount: "4", momoAmount: "0.00", reason: "Accountant cash refund", managerPin: "2222" }, accountant);
+  const acctRefund = await request(`/api/orders/${acctOrderId}/refund`, "POST", { amount: "4", cashAmount: "4", momoAmount: "0.00", reason: "Accountant cash refund", managerPin: "222222" }, accountant);
   check(acctRefund.status === 200, "accountant cash refund succeeds via the approving manager's shift");
   check(Number((await admin.query("SELECT user_id FROM shifts WHERE id=(SELECT shift_id FROM refunds WHERE order_id=$1)", [acctOrderId])).rows[0].user_id) === 2, "accountant cash refund is recorded on the manager's shift");
   const branchWrites = await Promise.all([
