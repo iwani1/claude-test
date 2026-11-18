@@ -208,7 +208,7 @@ async function handlePATCH(req: Request) {
             referenceId: po.poNumber,
             unitCost: item.unitPrice ? String(item.unitPrice) : ing.costPerUnit,
             reason: `Goods received from PO ${po.poNumber}`,
-            createdById: receivedBy || 1,
+            createdById: receivedBy,
           });
 
           await tx
@@ -221,7 +221,7 @@ async function handlePATCH(req: Request) {
         await tx.insert(goodsReceipts).values({
           grnNumber,
           purchaseOrderId: po.id,
-          receivedBy: receivedBy || 1,
+          receivedBy,
           invoiceNumber: invoiceNumber || "",
           itemsReceived: receivedItems,
         });

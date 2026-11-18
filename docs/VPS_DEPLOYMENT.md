@@ -360,7 +360,7 @@ The repository ships the backup job; this phase installs it. Without it the only
 backups are the ones `deploy-vps.sh` takes before a deploy, on the same disk as
 the database.
 
-What it does (`scripts/backup.sh`, every hour 07:00–23:00 plus 03:00):
+What it does (`scripts/backup.sh`, every hour 07:00–23:00 plus 02:35):
 - `pg_dump -Fc`, verified with `pg_restore -l` before it is kept;
 - keeps 14 days of dumps in `/var/backups/pos/recent` and one per month (12 months)
   in `/var/backups/pos/monthly`, root-only;

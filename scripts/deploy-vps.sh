@@ -116,8 +116,12 @@ if [[ "${1:-}" == "--rollback" ]]; then
   # Keep the source checkout in step with what is served, so the next deploy
   # compares against the right commit.
   TARGET_SHA="$(release_commit "$TARGET")"
+  # git runs as root here, like everywhere else in this script: root-run git
+  # leaves root-owned files in .git, so the service user could not rewrite them.
+  # A failure here must not stop the rollback half-way (the link is already
+  # switched): warn, restart, and let the operator fix the checkout.
   if git -C "$POS_DIR" rev-parse --verify -q "$TARGET_SHA^{commit}" >/dev/null; then
-    run as_user "$POS_USER" git -C "$POS_DIR" reset --hard -q "$TARGET_SHA"
+    run git -C "$POS_DIR" reset --hard -q "$TARGET_SHA" || warn "Could not move the source checkout to $TARGET_SHA; the build was switched. Fix with: git -C $POS_DIR reset --hard $TARGET_SHA"
   else
     warn "Commit $TARGET_SHA is not in the checkout; the build was switched but the source was left as it is."
   fi
@@ -316,7 +320,7 @@ else
     if [[ -n "$PREVIOUS_RELEASE" ]]; then
       warn "Release $RELEASE did not answer. Switching back to $PREVIOUS_RELEASE automatically."
       activate_release "$PREVIOUS_RELEASE"
-      as_user "$POS_USER" git -C "$POS_DIR" reset --hard -q "$OLD_SHA" || true
+      git -C "$POS_DIR" reset --hard -q "$OLD_SHA" || warn "Could not move the source checkout back to $OLD_SHA"
       systemctl restart "$POS_SERVICE"
       wait_for_health
       [[ "$HEALTHY" == "1" ]] && die "Release $RELEASE failed its health check; the app is back on $PREVIOUS_RELEASE and answering.

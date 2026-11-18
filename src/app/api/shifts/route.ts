@@ -96,7 +96,7 @@ async function handlePOST(req: Request) {
         .returning();
 
       await db.insert(auditLogs).values({
-        userId: Number(userId || 1),
+        ...auditActor(),
         action: "shift_opened",
         entityType: "shift",
         entityId: String(newShift.id),

@@ -241,8 +241,8 @@ for path in sorted(list((SRC / "app").rglob("*.ts")) + list((SRC / "lib").rglob(
             depth += {"(": 1, ")": -1}.get(text[end], 0)
             end += 1
         values = text[match.end():end]
-        if "userId" not in values and "auditActor()" not in values:
-            failures.append(f"{path.relative_to(ROOT)}:{line_of(text, match.start())} writes an activity-log row with no actor; spread auditActor()")
+        if "auditActor()" not in values and not ("userId" in values and "userName" in values):
+            failures.append(f"{path.relative_to(ROOT)}:{line_of(text, match.start())} writes an activity-log row without the actor's id and name; spread auditActor()")
 
 # ---------------------------------------------------------------- report ----
 print(f"Workflow audit: {len(list(SRC.rglob('*.ts')))} TS + {len(list(SRC.rglob('*.tsx')))} TSX files")
