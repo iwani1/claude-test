@@ -28,19 +28,7 @@ import { notify } from "@/lib/notify";
 import type { CurrentUser } from "@/lib/api-types";
 import { useUiPreferences } from "@/lib/ui-preferences";
 import { OrdersBoard } from "@/components/orders/OrdersBoard";
-
-const MD_QUERY = "(min-width: 48rem)";
-function useMdScreen() {
-  return React.useSyncExternalStore(
-    (fn) => {
-      const mq = window.matchMedia(MD_QUERY);
-      mq.addEventListener("change", fn);
-      return () => mq.removeEventListener("change", fn);
-    },
-    () => window.matchMedia(MD_QUERY).matches,
-    () => false,
-  );
-}
+import { MD_UP, useMediaQuery } from "@/lib/use-media-query";
 
 export const OrdersHistory: React.FC<{
   currentUser: CurrentUser;
@@ -51,7 +39,7 @@ export const OrdersHistory: React.FC<{
 }> = ({ currentUser, onOpenInPos, tables = [] }) => {
   /** The new design's board (redesign stage 3) wherever its top bar shows. */
   const { design } = useUiPreferences();
-  const mdScreen = useMdScreen();
+  const mdScreen = useMediaQuery(MD_UP);
   const newBoard = design === "new" && mdScreen;
   // Effective permissions: role defaults plus the owner's per-user selections.
   const perms = currentUser?.permissions ?? ROLE_PERMISSIONS[currentUser?.role as UserRole] ?? ROLE_PERMISSIONS.cashier;
