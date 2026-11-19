@@ -17,6 +17,9 @@ import {
 import { apiErrorMessage, apiFetch } from "@/lib/api-client";
 import { notify } from "@/lib/notify";
 import { FannedTicketStack } from "@/components/interface-studies";
+import { useUiPreferences } from "@/lib/ui-preferences";
+import { MD_UP, useMediaQuery } from "@/lib/use-media-query";
+import { TablesBoard } from "@/components/tables/TablesBoard";
 
 interface TableFloorPlanProps {
   areas: any[];
@@ -31,6 +34,10 @@ export const TableFloorPlan: React.FC<TableFloorPlanProps> = ({
   onOpenPosForTable,
   onRefresh,
 }) => {
+  /** The new design's board (redesign stage 4b) wherever its top bar shows. */
+  const { design } = useUiPreferences();
+  const mdScreen = useMediaQuery(MD_UP);
+  const newBoard = design === "new" && mdScreen;
   const [selectedAreaId, setSelectedAreaId] = useState<number | "all">("all");
   const [movingTable, setMovingTable] = useState<any | null>(null);
   const [targetTableId, setTargetTableId] = useState<number | "">("");
@@ -117,6 +124,156 @@ export const TableFloorPlan: React.FC<TableFloorPlanProps> = ({
   const occupiedCount = tables.filter((t) => t.status === "occupied").length;
   const reservedCount = tables.filter((t) => t.status === "reserved").length;
   const cleaningCount = tables.filter((t) => t.status === "cleaning").length;
+
+  /* Move-bill and add-table dialogs, shared by the classic plan and the new board. */
+  const tableModals = (
+    <>
+      {/* MODAL: Move Table */}
+      {movingTable && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/70 backdrop-blur-xs p-4 overflow-y-auto">
+          <div className="bg-neutral-900 border border-neutral-700 rounded-2xl p-5 w-full max-w-sm shadow-2xl space-y-4 max-h-[92dvh] overflow-y-auto my-auto">
+            <h3 className="text-sm font-bold text-white flex items-center gap-2">
+              <ArrowRightLeft className="w-4 h-4 text-amber-400" />
+              <span>Move Table {movingTable.tableNumber}</span>
+            </h3>
+            <p className="text-xs text-neutral-400">
+              Transfer active customer bill to an available table
+            </p>
+
+            <div>
+              <label className="text-xs text-neutral-300 block mb-1">Target Table</label>
+              <select
+                value={targetTableId}
+                onChange={(e) => setTargetTableId(Number(e.target.value))}
+                className="w-full bg-neutral-800 border border-neutral-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500"
+              >
+                <option value="">Choose target table...</option>
+                {tables
+                  .filter((t) => t.id !== movingTable.id && t.status === "available")
+                  .map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.tableNumber} ({t.capacity} seats)
+                    </option>
+                  ))}
+              </select>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-neutral-800">
+              <button
+                onClick={() => setMovingTable(null)}
+                className="px-3 py-1.5 text-xs text-neutral-400 hover:text-white"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleMoveOrder}
+                disabled={!targetTableId}
+                className="px-4 py-1.5 text-xs font-semibold bg-amber-500 text-black disabled:opacity-40 rounded-lg"
+              >
+                Confirm Move
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: Add Table */}
+      {showAddTableModal && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/70 backdrop-blur-xs p-4 overflow-y-auto">
+          <form
+            onSubmit={handleAddTable}
+            className="bg-neutral-900 border border-neutral-700 rounded-2xl p-5 w-full max-w-sm shadow-2xl space-y-4 max-h-[92dvh] overflow-y-auto my-auto"
+          >
+            <div className="flex justify-between items-center">
+              <h3 className="text-sm font-bold text-white">Add New Table</h3>
+              <button
+                type="button"
+                onClick={() => setShowAddTableModal(false)}
+                className="text-neutral-400 hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div>
+                <label className="text-neutral-300 block mb-1">Dining Area</label>
+                <select
+                  value={newTableAreaId}
+                  onChange={(e) => setNewTableAreaId(Number(e.target.value))}
+                  className="w-full bg-neutral-800 border border-neutral-700 rounded-xl px-3 py-2 text-white"
+                >
+                  {areas.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-neutral-300 block mb-1">Table Label / Number</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. T-09 or PATIO-5"
+                  value={newTableNumber}
+                  onChange={(e) => setNewTableNumber(e.target.value)}
+                  className="w-full bg-neutral-800 border border-neutral-700 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-amber-500"
+                />
+              </div>
+
+              <div>
+                <label className="text-neutral-300 block mb-1">Seating Capacity</label>
+                <input
+                  type="number"
+                        inputMode="decimal"
+                  min={1}
+                  max={24}
+                  value={newTableCapacity}
+                  onChange={(e) => setNewTableCapacity(Number(e.target.value))}
+                  className="w-full bg-neutral-800 border border-neutral-700 rounded-xl px-3 py-2 text-white"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-neutral-800">
+              <button
+                type="button"
+                onClick={() => setShowAddTableModal(false)}
+                className="px-3 py-1.5 text-xs text-neutral-400 hover:text-white"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="px-4 py-1.5 text-xs font-semibold bg-amber-500 text-black rounded-lg"
+              >
+                Create Table
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+    </>
+  );
+
+  if (newBoard) {
+    return (
+      <div className="flex-1 flex flex-col h-full overflow-hidden">
+        <TablesBoard
+          areas={areas}
+          tables={tables}
+          onOpen={onOpenPosForTable}
+          onStatus={(id, status) => void handleUpdateStatus(id, status)}
+          onMove={(t) => setMovingTable(t)}
+          onAdd={() => setShowAddTableModal(true)}
+        />
+        {/* Classic dialogs, re-coloured for the light theme (globals.css). */}
+        <div className="ui-bridge contents">{tableModals}</div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex-1 flex flex-col h-full bg-neutral-950 overflow-hidden">
@@ -285,6 +442,9 @@ export const TableFloorPlan: React.FC<TableFloorPlanProps> = ({
                       </>
                     ) : (
                       <>
+                        {/* Not on a table being cleaned: it read "Reserve" there but
+                            set the table available. "Ready" below does that. */}
+                        {!isCleaning && (
                         <button
                           onClick={() =>
                             handleUpdateStatus(
@@ -296,6 +456,7 @@ export const TableFloorPlan: React.FC<TableFloorPlanProps> = ({
                         >
                           {isReserved ? "Available" : "Reserve"}
                         </button>
+                        )}
                         {isCleaning && (
                           <button
                             onClick={() => handleUpdateStatus(tbl.id, "available")}
@@ -314,133 +475,7 @@ export const TableFloorPlan: React.FC<TableFloorPlanProps> = ({
         </div>
       </div>
 
-      {/* MODAL: Move Table */}
-      {movingTable && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/70 backdrop-blur-xs p-4 overflow-y-auto">
-          <div className="bg-neutral-900 border border-neutral-700 rounded-2xl p-5 w-full max-w-sm shadow-2xl space-y-4 max-h-[92dvh] overflow-y-auto my-auto">
-            <h3 className="text-sm font-bold text-white flex items-center gap-2">
-              <ArrowRightLeft className="w-4 h-4 text-amber-400" />
-              <span>Move Table {movingTable.tableNumber}</span>
-            </h3>
-            <p className="text-xs text-neutral-400">
-              Transfer active customer bill to an available table
-            </p>
-
-            <div>
-              <label className="text-xs text-neutral-300 block mb-1">Target Table</label>
-              <select
-                value={targetTableId}
-                onChange={(e) => setTargetTableId(Number(e.target.value))}
-                className="w-full bg-neutral-800 border border-neutral-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500"
-              >
-                <option value="">Choose target table...</option>
-                {tables
-                  .filter((t) => t.id !== movingTable.id && t.status === "available")
-                  .map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.tableNumber} ({t.capacity} seats)
-                    </option>
-                  ))}
-              </select>
-            </div>
-
-            <div className="flex justify-end gap-2 pt-2 border-t border-neutral-800">
-              <button
-                onClick={() => setMovingTable(null)}
-                className="px-3 py-1.5 text-xs text-neutral-400 hover:text-white"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleMoveOrder}
-                disabled={!targetTableId}
-                className="px-4 py-1.5 text-xs font-semibold bg-amber-500 text-black disabled:opacity-40 rounded-lg"
-              >
-                Confirm Move
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL: Add Table */}
-      {showAddTableModal && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/70 backdrop-blur-xs p-4 overflow-y-auto">
-          <form
-            onSubmit={handleAddTable}
-            className="bg-neutral-900 border border-neutral-700 rounded-2xl p-5 w-full max-w-sm shadow-2xl space-y-4 max-h-[92dvh] overflow-y-auto my-auto"
-          >
-            <div className="flex justify-between items-center">
-              <h3 className="text-sm font-bold text-white">Add New Table</h3>
-              <button
-                type="button"
-                onClick={() => setShowAddTableModal(false)}
-                className="text-neutral-400 hover:text-white"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="space-y-3 text-xs">
-              <div>
-                <label className="text-neutral-300 block mb-1">Dining Area</label>
-                <select
-                  value={newTableAreaId}
-                  onChange={(e) => setNewTableAreaId(Number(e.target.value))}
-                  className="w-full bg-neutral-800 border border-neutral-700 rounded-xl px-3 py-2 text-white"
-                >
-                  {areas.map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {a.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="text-neutral-300 block mb-1">Table Label / Number</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. T-09 or PATIO-5"
-                  value={newTableNumber}
-                  onChange={(e) => setNewTableNumber(e.target.value)}
-                  className="w-full bg-neutral-800 border border-neutral-700 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-amber-500"
-                />
-              </div>
-
-              <div>
-                <label className="text-neutral-300 block mb-1">Seating Capacity</label>
-                <input
-                  type="number"
-                        inputMode="decimal"
-                  min={1}
-                  max={24}
-                  value={newTableCapacity}
-                  onChange={(e) => setNewTableCapacity(Number(e.target.value))}
-                  className="w-full bg-neutral-800 border border-neutral-700 rounded-xl px-3 py-2 text-white"
-                />
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-2 pt-2 border-t border-neutral-800">
-              <button
-                type="button"
-                onClick={() => setShowAddTableModal(false)}
-                className="px-3 py-1.5 text-xs text-neutral-400 hover:text-white"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                className="px-4 py-1.5 text-xs font-semibold bg-amber-500 text-black rounded-lg"
-              >
-                Create Table
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
+      {tableModals}
     </div>
   );
 };
