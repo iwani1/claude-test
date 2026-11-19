@@ -2,14 +2,18 @@ import { secureRoute, isDatabaseFailure } from "@/lib/api";
 import { NextResponse } from "next/server";
 import { db, requestContext } from "@/db";
 import { diningAreas, diningTables, orders } from "@/db/schema";
-import { eq, asc } from "drizzle-orm";
+import { eq, asc, desc, and, inArray, notInArray, isNotNull } from "drizzle-orm";
 
 async function handleGET() {
   try {
     const areas = await db.select().from(diningAreas).orderBy(asc(diningAreas.sortOrder));
     const tables = await db.select().from(diningTables).orderBy(asc(diningTables.tableNumber));
 
-    // Fetch active orders linked to tables
+    // A table's open bill uses the till's rule for an open order (see
+    // attachLoadedOrder in PosTerminal): not yet fully paid and not cancelled
+    // or refunded. A part-paid split stays on its table so staff can collect
+    // the balance (N23). Newest first, so if several open orders share a
+    // table the most recent one is chosen, the same way every time.
     const activeOrders = await db
       .select({
         id: orders.id,
@@ -17,11 +21,18 @@ async function handleGET() {
         tableId: orders.tableId,
         customerName: orders.customerName,
         totalAmount: orders.totalAmount,
+        paidAmount: orders.paidAmount,
+        paymentStatus: orders.paymentStatus,
         status: orders.status,
         createdAt: orders.createdAt,
       })
       .from(orders)
-      .where(eq(orders.paymentStatus, "unpaid"));
+      .where(and(
+        isNotNull(orders.tableId),
+        inArray(orders.paymentStatus, ["unpaid", "partially_paid"]),
+        notInArray(orders.status, ["cancelled", "refunded"]),
+      ))
+      .orderBy(desc(orders.createdAt), desc(orders.id));
 
     const tablesWithOrders = tables.map((tbl) => {
       const currentOrder = activeOrders.find((o) => o.tableId === tbl.id);
