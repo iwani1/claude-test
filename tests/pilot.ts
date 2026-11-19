@@ -111,6 +111,23 @@ async function main() {
   const rollbackClose = await api("shifts", { action: "close_shift", shiftId: rollbackShift.id, actualClosingCash: "50.00" });
   check(rollbackClose.difference, "0.00", "drawer still reconciles after the deleted sale");
 
+  // --- N23: a part-paid bill stays on its table ----------------------------
+  // Tables used to attach only fully unpaid orders, so a part-paid bill
+  // vanished from its table and could not be reopened there to collect the rest.
+  const { shift: tableShift } = await api("shifts", { action: "open_shift", openingCash: "0.00", notes: "Part-paid table probe" });
+  const { order: tableBill } = await api("orders", { idempotencyKey: "pilot-n23-001", orderType: "dine_in", tableId: 1, items: [{ menuItemId: 1, quantity: 2 }] });
+  await api(`orders/${tableBill.id}/pay`, { paymentMethod: "cash", amount: "8.00", cashTendered: "8.00" });
+  const partTable = (await api("tables")).tables.find((t: any) => t.id === 1);
+  check(partTable.activeOrder?.id, tableBill.id, "N23: a part-paid bill is still its table's open bill");
+  check(partTable.activeOrder?.paymentStatus, "partially_paid", "N23: the table's bill says it is part paid");
+  check(partTable.activeOrder?.paidAmount, "8.00", "N23: the table's bill carries what is already paid");
+  await api(`orders/${tableBill.id}/pay`, { paymentMethod: "cash", amount: "12.00", cashTendered: "12.00" });
+  const settledTable = (await api("tables")).tables.find((t: any) => t.id === 1);
+  check(settledTable.activeOrder, null, "N23: a fully paid bill leaves its table");
+  check(settledTable.status, "available", "N23: paying the balance releases the table");
+  const tableClose = await api("shifts", { action: "close_shift", shiftId: tableShift.id, actualClosingCash: "20.00" });
+  check(tableClose.difference, "0.00", "N23: the probe's drawer reconciles (8 + 12)");
+
   // --- Owner-only order editing ------------------------------------------
   const stock = async () => Number((await admin.query("SELECT current_stock FROM ingredients WHERE id=1")).rows[0].current_stock);
   const recipeQty = Number((await admin.query("SELECT quantity FROM recipe_ingredients WHERE recipe_id=1")).rows[0].quantity);
