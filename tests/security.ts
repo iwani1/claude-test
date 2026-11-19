@@ -538,6 +538,24 @@ async function main() {
   check(cashierShiftOpen.status === 200, "cashier opens their own shift before selling");
   const managerShiftOpen = await request("/api/shifts", "POST", { action: "open_shift", openingCash: "0.00" }, manager);
   check(managerShiftOpen.status === 200, "manager opens their own shift before refunding");
+  // --- N23: a part-paid dine-in bill stays on its table --------------------
+  const partTable = await request("/api/orders", "POST", { idempotencyKey: "n23-part-paid-0001", orderType: "dine_in", tableId: 1, items: [{ menuItemId: 1, quantity: 2 }] }, cashier);
+  check(partTable.status === 200 && partTable.body.order?.id > 0, "N23: cashier opens a dine-in bill on table 1");
+  const partId = partTable.body.order.id;
+  const partPay = await request(`/api/orders/${partId}/pay`, "POST", { paymentMethod: "cash", amount: "5", cashTendered: "5", idempotencyKey: "n23-part-pay-0001" }, cashier);
+  check(partPay.status === 200 && (await admin.query("SELECT payment_status FROM orders WHERE id=$1", [partId])).rows[0].payment_status === "partially_paid", "N23: part of the bill is taken, the order is partially paid");
+  const tableOne = async () => (await request("/api/tables", "GET", undefined, cashier)).body.tables.find((t: any) => t.id === 1)?.activeOrder;
+  const partActive = await tableOne();
+  check(partActive?.id === partId && partActive.paidAmount === "5.00" && Number(partActive.totalAmount) > 5, "N23: Tables shows the part-paid bill as table 1's open order, with what is already paid");
+  // Two open orders on one table: the newest wins; cancelled orders never do.
+  const strays = await admin.query(
+    `INSERT INTO orders(order_number, branch_id, table_id, user_id, order_type, status, payment_status, total_amount, created_at)
+     VALUES ('N23-OLDER', 1, 1, 1, 'dine_in', 'confirmed', 'unpaid', 10, now() - interval '1 hour'),
+            ('N23-CANCELLED', 1, 1, 1, 'dine_in', 'cancelled', 'unpaid', 10, now() + interval '1 hour')
+     RETURNING id`);
+  check((await tableOne())?.id === partId, "N23: with several open orders on a table, the most recent open one is shown, never a cancelled one");
+  await admin.query("DELETE FROM orders WHERE id = ANY($1)", [strays.rows.map((r: any) => r.id)]);
+  check((await request(`/api/orders/${partId}`, "DELETE", {}, owner)).status === 200, "N23: the probe bill erases cleanly");
   const pay = await Promise.all([1,2].map(() => request(`/api/orders/${id}/pay`, "POST", { paymentMethod: "split", amount: "10", cashAmount: "4", momoAmount: "6" }, cashier)));
   check(pay.filter(r => r.status === 200).length === 1 && pay.filter(r => r.status === 409).length === 1, "concurrent payments cannot overpay");
   check(Number((await admin.query("SELECT sum(amount) AS amount FROM payments WHERE order_id=$1", [id])).rows[0].amount) === 10, "split payment ledger equals sale total");
