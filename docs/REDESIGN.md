@@ -48,6 +48,9 @@ page), in light and dark.
   `MD_UP` where the top bar shows, `LAPTOP_UP` for the POS layout.
 - `audit:responsive` and the table check in `audit:workflows` scan component
   subfolders (`src/components/pos/`).
+- New-design dialogs use the kit in `src/components/ui/NewDialog.tsx`. Amount
+  fields use `step="0.01"`: with a `min`, the browser measures `step` from it,
+  so `step="1.00" min="0.01"` would refuse GH₵5.
 - Touch targets stay at least 44px; the bar's labels drop by container width in
   `rem` (they scale with the terminal's text size), not by screen breakpoints.
 
@@ -61,6 +64,7 @@ page), in light and dark.
 | 3 | Orders page (demo 9): count cards, tabs with counts, cards or a board by kitchen state, date presets, search, pages. Same actions under the same permissions; kitchen status stays on the Kitchen screen; no cancel action is added (the app has none). Its pop-ups stay classic through the bridge | PR #42 |
 | 4a | Kitchen board: columns by step (New shown only when pending tickets exist, Preparing, Ready), ticket age (amber 8 min, overdue 15), items, options, notes, one next-step button, reprint. The classic screen's sound toggle, which did nothing, is not carried over | PR #43 |
 | 4b | Tables: area tabs, status counts that filter, tiles by state with the open bill (docket, total, time open), one fitting action per state; fixes the classic "Reserve" button that set a table being cleaned to available | PR #44 |
-| 4c | Cash Drawer: the cash that should be in the drawer first, with the sum spelled out (float + cash sales − cash out), MoMo shown apart, colleagues on shift (managers close them), history as responsive rows. Its open, payout and close dialogs stay classic through the bridge | This PR |
+| 4c | Cash Drawer: the cash that should be in the drawer first, with the sum spelled out (float + cash sales − cash out), MoMo shown apart, colleagues on shift (managers close them), history as responsive rows. Its open, payout and close dialogs stay classic through the bridge | PR #46 |
+| 4d | The daily screens' dialogs in the new design: open shift, payout, count & close (sum, live over/short, colleague note); order details and the manager-PIN refund (tender caps, retry lock unchanged); move bill (free tables as tiles) and add table. Shared kit `src/components/ui/NewDialog.tsx`. Receipt, docket and the owner's order editor and delete stay classic through the bridge | This PR |
 | 5 | Menu, stock, purchasing, reports, staff, settings | Planned |
 | 6 | Phones; make the new design the default; remove the classic shell | Planned |
