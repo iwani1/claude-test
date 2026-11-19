@@ -26,12 +26,33 @@ import { ROLE_PERMISSIONS, UserRole } from "@/lib/permissions";
 import { apiErrorMessage, apiFetch } from "@/lib/api-client";
 import { notify } from "@/lib/notify";
 import type { CurrentUser } from "@/lib/api-types";
+import { useUiPreferences } from "@/lib/ui-preferences";
+import { OrdersBoard } from "@/components/orders/OrdersBoard";
+
+const MD_QUERY = "(min-width: 48rem)";
+function useMdScreen() {
+  return React.useSyncExternalStore(
+    (fn) => {
+      const mq = window.matchMedia(MD_QUERY);
+      mq.addEventListener("change", fn);
+      return () => mq.removeEventListener("change", fn);
+    },
+    () => window.matchMedia(MD_QUERY).matches,
+    () => false,
+  );
+}
 
 export const OrdersHistory: React.FC<{
   currentUser: CurrentUser;
   /** Reopens an open order on the till's bill panel to add items / settle. */
   onOpenInPos?: (order: any) => void;
-}> = ({ currentUser, onOpenInPos }) => {
+  /** Dining tables, so the new board can name an order's table. */
+  tables?: any[];
+}> = ({ currentUser, onOpenInPos, tables = [] }) => {
+  /** The new design's board (redesign stage 3) wherever its top bar shows. */
+  const { design } = useUiPreferences();
+  const mdScreen = useMdScreen();
+  const newBoard = design === "new" && mdScreen;
   // Effective permissions: role defaults plus the owner's per-user selections.
   const perms = currentUser?.permissions ?? ROLE_PERMISSIONS[currentUser?.role as UserRole] ?? ROLE_PERMISSIONS.cashier;
   /** Finance and stock roles read this screen; only till roles can act on it.
@@ -198,6 +219,392 @@ export const OrdersHistory: React.FC<{
       o.customerName?.toLowerCase().includes(searchQuery.toLowerCase());
     return matchStatus && matchSearch;
   });
+
+  /* Details, refund, receipt, editor, delete and docket: shared by the
+     classic table and the new board, so both run the same actions. */
+  const historyModals = (
+    <>
+      {/* Order details — available to every history reader. Read-only: it
+          shows what was sold, what was paid and what was refunded. */}
+      {detailsOrder && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/70 backdrop-blur-xs p-4 overflow-y-auto">
+          <div className="bg-neutral-900 border border-neutral-700 rounded-2xl p-6 w-full max-w-lg shadow-2xl space-y-4 max-h-[92dvh] overflow-y-auto my-auto">
+            <div className="flex justify-between items-start gap-3">
+              <div className="min-w-0">
+                <h3 className="text-base font-bold text-white flex items-center gap-2">
+                  <Eye className="w-5 h-5 text-amber-500" />
+                  <span>Order Details</span>
+                </h3>
+                <p className="text-xs text-neutral-400 mt-0.5 font-mono break-all">{detailsOrder.orderNumber}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDetailsOrder(null)}
+                className="h-11 w-11 shrink-0 rounded-xl bg-neutral-800 border border-neutral-700 text-neutral-300 flex items-center justify-center transition active:bg-neutral-700"
+                aria-label="Close order details"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <div className="bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2">
+                <div className="text-neutral-500 font-bold uppercase tracking-wider text-[0.625rem]">Date &amp; time</div>
+                <div className="text-neutral-200 font-medium mt-0.5">{new Date(detailsOrder.createdAt).toLocaleString()}</div>
+              </div>
+              <div className="bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2">
+                <div className="text-neutral-500 font-bold uppercase tracking-wider text-[0.625rem]">Type / Table</div>
+                <div className="text-neutral-200 font-medium mt-0.5 capitalize">
+                  {detailsOrder.orderType?.replace("_", " ")}{detailsOrder.tableId ? ` · T-#${detailsOrder.tableId}` : ""}
+                </div>
+              </div>
+              <div className="bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2">
+                <div className="text-neutral-500 font-bold uppercase tracking-wider text-[0.625rem]">Guest</div>
+                <div className="text-neutral-200 font-medium mt-0.5">{detailsOrder.customerName || "Walk-in Guest"}</div>
+              </div>
+              <div className="bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2">
+                <div className="text-neutral-500 font-bold uppercase tracking-wider text-[0.625rem]">Created by</div>
+                <div className="text-neutral-200 font-medium mt-0.5">{detailsOrder.userName || "Unknown"}</div>
+              </div>
+              <div className="bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2">
+                <div className="text-neutral-500 font-bold uppercase tracking-wider text-[0.625rem]">Order status</div>
+                <div className="text-neutral-200 font-medium mt-0.5 capitalize">{detailsOrder.status}</div>
+              </div>
+              <div className="bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2">
+                <div className="text-neutral-500 font-bold uppercase tracking-wider text-[0.625rem]">Payment</div>
+                <div className="text-neutral-200 font-medium mt-0.5 capitalize">{detailsOrder.paymentStatus}</div>
+              </div>
+            </div>
+
+            <div>
+              <div className="text-[0.625rem] font-bold uppercase tracking-wider text-neutral-500 mb-1.5">Items</div>
+              <div className="divide-y divide-neutral-800 border border-neutral-800 rounded-xl overflow-hidden">
+                {(detailsOrder.items || []).map((it: any, i: number) => (
+                  <div key={it.id ?? i} className="flex items-center gap-3 px-3 py-2.5 bg-neutral-950 text-xs">
+                    <span className="flex-1 min-w-0">
+                      <span className="block font-medium text-neutral-100 truncate">{it.itemName || it.name}</span>
+                      <span className="block text-neutral-500">GH₵{Number(it.unitPrice ?? it.price ?? 0).toFixed(2)} each</span>
+                    </span>
+                    <span className="font-semibold text-neutral-300">×{it.quantity}</span>
+                    <span className="font-mono font-bold text-white w-20 text-right">
+                      GH₵{Number(it.totalPrice ?? Number(it.unitPrice ?? 0) * Number(it.quantity ?? 1)).toFixed(2)}
+                    </span>
+                  </div>
+                ))}
+                {(detailsOrder.items || []).length === 0 && (
+                  <div className="px-3 py-4 bg-neutral-950 text-xs text-neutral-500 text-center">No items on this order.</div>
+                )}
+              </div>
+            </div>
+
+            {detailsOrder.notes && (
+              <div className="text-xs bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2">
+                <span className="text-neutral-500 font-bold uppercase tracking-wider text-[0.625rem] block">Note</span>
+                <span className="text-neutral-300">{detailsOrder.notes}</span>
+              </div>
+            )}
+
+            <div className="space-y-1.5 text-xs border-t border-neutral-800 pt-3">
+              <div className="flex justify-between font-bold text-sm text-white">
+                <span>Total</span>
+                <span className="font-mono">GH₵{Number(detailsOrder.totalAmount).toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between text-neutral-300">
+                <span>Paid</span>
+                <span className="font-mono">GH₵{Number(detailsOrder.paidAmount).toFixed(2)}</span>
+              </div>
+              {/* Tender split: how the paid money actually came in. */}
+              {Number(detailsOrder.paymentBreakdown?.cash) > 0 && (
+                <div className="flex justify-between text-neutral-400 pl-3">
+                  <span>Paid by Cash</span>
+                  <span className="font-mono text-emerald-300">GH₵{Number(detailsOrder.paymentBreakdown.cash).toFixed(2)}</span>
+                </div>
+              )}
+              {Number(detailsOrder.paymentBreakdown?.momo) > 0 && (
+                <div className="flex justify-between text-neutral-400 pl-3">
+                  <span>Paid by MoMo</span>
+                  <span className="font-mono text-sky-300">GH₵{Number(detailsOrder.paymentBreakdown.momo).toFixed(2)}</span>
+                </div>
+              )}
+              {Number(detailsOrder.paymentBreakdown?.other) > 0 && (
+                <div className="flex justify-between text-neutral-400 pl-3">
+                  <span>Paid by Card / Other</span>
+                  <span className="font-mono text-neutral-200">GH₵{Number(detailsOrder.paymentBreakdown.other).toFixed(2)}</span>
+                </div>
+              )}
+              {Number(detailsOrder.refundedAmount) > 0 && (
+                <div className="flex justify-between text-rose-300">
+                  <span>
+                    Refunded
+                    {(Number(detailsOrder.paymentBreakdown?.refundedCash) > 0 || Number(detailsOrder.paymentBreakdown?.refundedMomo) > 0) && (
+                      <span className="text-rose-300/70">
+                        {" "}(Cash GH₵{Number(detailsOrder.paymentBreakdown?.refundedCash ?? 0).toFixed(2)} · MoMo GH₵{Number(detailsOrder.paymentBreakdown?.refundedMomo ?? 0).toFixed(2)})
+                      </span>
+                    )}
+                  </span>
+                  <span className="font-mono">GH₵{Number(detailsOrder.refundedAmount).toFixed(2)}</span>
+                </div>
+              )}
+              {Number(detailsOrder.totalAmount) - Number(detailsOrder.paidAmount) > 0 && (
+                <div className="flex justify-between text-amber-300 font-semibold">
+                  <span>Balance due</span>
+                  <span className="font-mono">GH₵{(Number(detailsOrder.totalAmount) - Number(detailsOrder.paidAmount)).toFixed(2)}</span>
+                </div>
+              )}
+            </div>
+
+            {(detailsOrder.paymentBreakdown?.payments || []).length > 0 && (
+              <div>
+                <div className="text-[0.625rem] font-bold uppercase tracking-wider text-neutral-500 mb-1.5">Payments received</div>
+                <div className="divide-y divide-neutral-800 border border-neutral-800 rounded-xl overflow-hidden">
+                  {detailsOrder.paymentBreakdown.payments.map((pay: any, i: number) => (
+                    <div key={i} className="flex items-center gap-3 px-3 py-2 bg-neutral-950 text-xs">
+                      <span className={`px-2 py-0.5 rounded-md text-[0.625rem] font-bold capitalize ${
+                        pay.method === "cash"
+                          ? "bg-emerald-500/10 text-emerald-300"
+                          : pay.method === "momo"
+                          ? "bg-sky-500/10 text-sky-300"
+                          : "bg-neutral-800 text-neutral-300"
+                      }`}>
+                        {pay.method === "momo" ? "MoMo" : pay.method}
+                      </span>
+                      <span className="flex-1 min-w-0 text-neutral-400 truncate">
+                        {new Date(pay.createdAt).toLocaleString()}
+                        {pay.referenceNumber ? ` · Ref ${pay.referenceNumber}` : ""}
+                      </span>
+                      <span className="font-mono font-bold text-white">GH₵{Number(pay.amount).toFixed(2)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 1: Refund Processing with Manager Authorization */}
+      {refundOrderTarget && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/70 backdrop-blur-xs p-4 overflow-y-auto">
+          <form
+            onSubmit={handleProcessRefund}
+            className="bg-neutral-900 border border-neutral-700 rounded-2xl p-6 w-full max-w-md shadow-2xl space-y-4 max-h-[92dvh] overflow-y-auto my-auto"
+          >
+            <div className="flex justify-between items-start">
+              <div>
+                <h3 className="text-base font-bold text-white flex items-center gap-2">
+                  <ShieldCheck className="w-5 h-5 text-rose-400" />
+                  <span>Manager Refund Authorization</span>
+                </h3>
+                <p className="text-xs text-neutral-400 mt-0.5">
+                  Order {refundOrderTarget.orderNumber} - Amount: GH₵{Number(refundOrderTarget.totalAmount).toFixed(2)}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setRefundOrderTarget(null)}
+                className="text-neutral-400 hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <p className="text-amber-300">Record money actually returned. Cash is automatically deducted from the current drawer; do not create another payout. MoMo transfers must be completed and verified separately.</p>
+              <div className="grid grid-cols-2 gap-3">
+                <label>Cash returned (max GH₵{refundLimits.cashRemaining})
+                  <input aria-label="Cash refund" type="number"
+                        inputMode="decimal" min="0" step="0.01" max={refundLimits.cashRemaining} required disabled={refundLocked} value={refundCash} onChange={e => setRefundCash(e.target.value)} className="w-full bg-neutral-800 p-2 rounded mt-1" />
+                </label>
+                <label>MoMo returned (max GH₵{refundLimits.momoRemaining})
+                  <input aria-label="MoMo refund" type="number"
+                        inputMode="decimal" min="0" step="0.01" max={refundLimits.momoRemaining} required disabled={refundLocked} value={refundMomo} onChange={e => setRefundMomo(e.target.value)} className="w-full bg-neutral-800 p-2 rounded mt-1" />
+                </label>
+              </div>
+              {refundLocked && !refundBusy && <p role="alert" className="text-amber-300">Retry the unchanged request to resolve its status before starting another refund.</p>}
+              <div>
+                <label className="text-neutral-300 block mb-1">Reason for Refund</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Dissatisfied with dish, order error"
+                  disabled={refundLocked}
+                  value={refundReason}
+                  onChange={(e) => setRefundReason(e.target.value)}
+                  className="w-full bg-neutral-800 border border-neutral-700 rounded-xl px-3 py-2 text-white"
+                />
+              </div>
+
+              <div>
+                <label className="text-neutral-300 block mb-1">Manager PIN Authorization</label>
+                <input
+                  type="password"
+                  maxLength={8}
+                  required
+                  value={refundManagerPin}
+                  onChange={(e) => setRefundManagerPin(e.target.value)}
+                  className="w-full bg-neutral-800 border border-neutral-700 rounded-xl px-3 py-2 text-white font-mono text-center tracking-widest text-lg"
+                />
+                <span className="text-[0.625rem] text-neutral-500 mt-0.5 block">
+                  Enter the 6–8 digit approval PIN of a manager or the owner
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2 pt-1">
+                <input
+                  type="checkbox"
+                  id="returnStockCheck"
+                  disabled={refundLocked}
+                  checked={returnStock}
+                  onChange={(e) => setReturnStock(e.target.checked)}
+                  className="rounded border-neutral-700 text-amber-500 focus:ring-0"
+                />
+                <label htmlFor="returnStockCheck" className="text-neutral-300 text-xs">
+                  Return Recipe Ingredients to Active Stock
+                </label>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-neutral-800">
+              <button
+                type="button"
+                onClick={() => setRefundOrderTarget(null)}
+                className="px-3 py-1.5 text-xs text-neutral-400 hover:text-white"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={refundBusy}
+                className="px-4 py-2 text-xs font-semibold bg-rose-600 hover:bg-rose-500 text-white rounded-xl shadow-xs"
+              >
+                {refundBusy ? "Recording…" : refundLocked ? "Retry Same Refund" : "Authorize & Record Refund"}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* MODAL 2: Reprint Receipt */}
+      {showReceiptModal && receiptOrder && (
+        <ReceiptModal
+          isOpen={showReceiptModal}
+          onClose={() => setShowReceiptModal(false)}
+          order={receiptOrder}
+        />
+      )}
+      {/* OWNER-ONLY ORDER EDITOR */}
+      {editTarget && (
+        <EditOrderModal
+          order={editTarget}
+          onClose={() => setEditTarget(null)}
+          onSaved={(result) => {
+            const number = editTarget?.orderNumber;
+            setEditTarget(null);
+            const due = Number(result?.balanceDue || 0);
+            const collected = Number(result?.collected || 0);
+            setNoticeTone("ok");
+            setNotice(
+              due > 0
+                ? collected > 0
+                  ? `Order ${number} updated. Collect GH₵${due.toFixed(2)} more from the guest.`
+                  : `Order ${number} updated. GH₵${due.toFixed(2)} is still to be paid.`
+                : `Order ${number} updated.`
+            );
+            fetchOrders(0, false);
+          }}
+        />
+      )}
+
+      {/* OWNER-ONLY PERMANENT DELETE */}
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title={deleteTarget ? `Delete order ${deleteTarget.orderNumber}?` : "Delete order?"}
+        message={
+          deleteTarget
+            ? `Permanent: GH₵${Number(deleteTarget.totalAmount || 0).toFixed(2)} disappears from history, reports and collections, and any stock it used goes back to inventory. A minimal deletion record (order number, amount, who deleted it) is kept for accounting. This cannot be undone.`
+            : ""
+        }
+        confirmLabel="Hold to delete"
+        holdToConfirm
+        cancelLabel="Keep it"
+        busy={deleteBusy}
+        busyLabel="Deleting…"
+        error={deleteError}
+        onCancel={() => {
+          setDeleteTarget(null);
+          setDeleteError("");
+        }}
+        onConfirm={confirmDeleteOrder}
+      />
+
+      {/* KITCHEN DOCKET REPRINT */}
+      {showDocketModal && docketOrder && (
+        <KitchenTicketModal
+          isOpen={showDocketModal}
+          onClose={() => {
+            setShowDocketModal(false);
+            setDocketOrder(null);
+          }}
+          order={docketOrder}
+        />
+      )}
+    </>
+  );
+
+  if (newBoard) {
+    return (
+      <div className="flex-1 flex flex-col h-full overflow-hidden">
+        <OrdersBoard
+          orders={orders}
+          total={total}
+          loading={loading}
+          loadError={loadError}
+          from={from}
+          to={to}
+          onRange={(f, t) => {
+            setFrom(f);
+            setTo(t);
+          }}
+          search={searchQuery}
+          onSearch={setSearchQuery}
+          onRefresh={() => fetchOrders(0, false)}
+          onLoadMore={() => fetchOrders(orders.length, true)}
+          tables={tables}
+          canWorkTill={canWorkTill}
+          readOnlyNote={
+            canRefund
+              ? undefined
+              : canWorkTill
+                ? "Refunds are requested by a restaurant manager, the owner, or an accountant."
+                : "Read-only: edits and deletions are done at the till by the owner or a manager."
+          }
+          notice={notice ? { text: notice, tone: noticeTone, onClose: () => setNotice("") } : null}
+          actions={{
+            onView: openDetails,
+            onDocket: (o) => {
+              setDocketOrder(o);
+              setShowDocketModal(true);
+            },
+            onReceipt: (o) => {
+              setReceiptOrder(o);
+              setShowReceiptModal(true);
+            },
+            onOpenInPos: canWorkTill ? onOpenInPos : undefined,
+            onRefund: canRefund ? openRefund : undefined,
+            onEdit: perms.canEditOrders ? (o) => setEditTarget(o) : undefined,
+            onDelete: perms.canDeleteOrders
+              ? (o) => {
+                  setDeleteError("");
+                  setDeleteTarget(o);
+                }
+              : undefined,
+          }}
+        />
+        {/* Classic pop-ups, re-coloured for the light theme (globals.css). */}
+        <div className="ui-bridge contents">{historyModals}</div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex-1 flex flex-col h-full bg-neutral-950 overflow-hidden">
@@ -656,330 +1063,7 @@ export const OrdersHistory: React.FC<{
         </div>
       </div>
 
-      {/* Order details — available to every history reader. Read-only: it
-          shows what was sold, what was paid and what was refunded. */}
-      {detailsOrder && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/70 backdrop-blur-xs p-4 overflow-y-auto">
-          <div className="bg-neutral-900 border border-neutral-700 rounded-2xl p-6 w-full max-w-lg shadow-2xl space-y-4 max-h-[92dvh] overflow-y-auto my-auto">
-            <div className="flex justify-between items-start gap-3">
-              <div className="min-w-0">
-                <h3 className="text-base font-bold text-white flex items-center gap-2">
-                  <Eye className="w-5 h-5 text-amber-500" />
-                  <span>Order Details</span>
-                </h3>
-                <p className="text-xs text-neutral-400 mt-0.5 font-mono break-all">{detailsOrder.orderNumber}</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setDetailsOrder(null)}
-                className="h-11 w-11 shrink-0 rounded-xl bg-neutral-800 border border-neutral-700 text-neutral-300 flex items-center justify-center transition active:bg-neutral-700"
-                aria-label="Close order details"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              <div className="bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2">
-                <div className="text-neutral-500 font-bold uppercase tracking-wider text-[0.625rem]">Date &amp; time</div>
-                <div className="text-neutral-200 font-medium mt-0.5">{new Date(detailsOrder.createdAt).toLocaleString()}</div>
-              </div>
-              <div className="bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2">
-                <div className="text-neutral-500 font-bold uppercase tracking-wider text-[0.625rem]">Type / Table</div>
-                <div className="text-neutral-200 font-medium mt-0.5 capitalize">
-                  {detailsOrder.orderType?.replace("_", " ")}{detailsOrder.tableId ? ` · T-#${detailsOrder.tableId}` : ""}
-                </div>
-              </div>
-              <div className="bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2">
-                <div className="text-neutral-500 font-bold uppercase tracking-wider text-[0.625rem]">Guest</div>
-                <div className="text-neutral-200 font-medium mt-0.5">{detailsOrder.customerName || "Walk-in Guest"}</div>
-              </div>
-              <div className="bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2">
-                <div className="text-neutral-500 font-bold uppercase tracking-wider text-[0.625rem]">Created by</div>
-                <div className="text-neutral-200 font-medium mt-0.5">{detailsOrder.userName || "Unknown"}</div>
-              </div>
-              <div className="bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2">
-                <div className="text-neutral-500 font-bold uppercase tracking-wider text-[0.625rem]">Order status</div>
-                <div className="text-neutral-200 font-medium mt-0.5 capitalize">{detailsOrder.status}</div>
-              </div>
-              <div className="bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2">
-                <div className="text-neutral-500 font-bold uppercase tracking-wider text-[0.625rem]">Payment</div>
-                <div className="text-neutral-200 font-medium mt-0.5 capitalize">{detailsOrder.paymentStatus}</div>
-              </div>
-            </div>
-
-            <div>
-              <div className="text-[0.625rem] font-bold uppercase tracking-wider text-neutral-500 mb-1.5">Items</div>
-              <div className="divide-y divide-neutral-800 border border-neutral-800 rounded-xl overflow-hidden">
-                {(detailsOrder.items || []).map((it: any, i: number) => (
-                  <div key={it.id ?? i} className="flex items-center gap-3 px-3 py-2.5 bg-neutral-950 text-xs">
-                    <span className="flex-1 min-w-0">
-                      <span className="block font-medium text-neutral-100 truncate">{it.itemName || it.name}</span>
-                      <span className="block text-neutral-500">GH₵{Number(it.unitPrice ?? it.price ?? 0).toFixed(2)} each</span>
-                    </span>
-                    <span className="font-semibold text-neutral-300">×{it.quantity}</span>
-                    <span className="font-mono font-bold text-white w-20 text-right">
-                      GH₵{Number(it.totalPrice ?? Number(it.unitPrice ?? 0) * Number(it.quantity ?? 1)).toFixed(2)}
-                    </span>
-                  </div>
-                ))}
-                {(detailsOrder.items || []).length === 0 && (
-                  <div className="px-3 py-4 bg-neutral-950 text-xs text-neutral-500 text-center">No items on this order.</div>
-                )}
-              </div>
-            </div>
-
-            {detailsOrder.notes && (
-              <div className="text-xs bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2">
-                <span className="text-neutral-500 font-bold uppercase tracking-wider text-[0.625rem] block">Note</span>
-                <span className="text-neutral-300">{detailsOrder.notes}</span>
-              </div>
-            )}
-
-            <div className="space-y-1.5 text-xs border-t border-neutral-800 pt-3">
-              <div className="flex justify-between font-bold text-sm text-white">
-                <span>Total</span>
-                <span className="font-mono">GH₵{Number(detailsOrder.totalAmount).toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between text-neutral-300">
-                <span>Paid</span>
-                <span className="font-mono">GH₵{Number(detailsOrder.paidAmount).toFixed(2)}</span>
-              </div>
-              {/* Tender split: how the paid money actually came in. */}
-              {Number(detailsOrder.paymentBreakdown?.cash) > 0 && (
-                <div className="flex justify-between text-neutral-400 pl-3">
-                  <span>Paid by Cash</span>
-                  <span className="font-mono text-emerald-300">GH₵{Number(detailsOrder.paymentBreakdown.cash).toFixed(2)}</span>
-                </div>
-              )}
-              {Number(detailsOrder.paymentBreakdown?.momo) > 0 && (
-                <div className="flex justify-between text-neutral-400 pl-3">
-                  <span>Paid by MoMo</span>
-                  <span className="font-mono text-sky-300">GH₵{Number(detailsOrder.paymentBreakdown.momo).toFixed(2)}</span>
-                </div>
-              )}
-              {Number(detailsOrder.paymentBreakdown?.other) > 0 && (
-                <div className="flex justify-between text-neutral-400 pl-3">
-                  <span>Paid by Card / Other</span>
-                  <span className="font-mono text-neutral-200">GH₵{Number(detailsOrder.paymentBreakdown.other).toFixed(2)}</span>
-                </div>
-              )}
-              {Number(detailsOrder.refundedAmount) > 0 && (
-                <div className="flex justify-between text-rose-300">
-                  <span>
-                    Refunded
-                    {(Number(detailsOrder.paymentBreakdown?.refundedCash) > 0 || Number(detailsOrder.paymentBreakdown?.refundedMomo) > 0) && (
-                      <span className="text-rose-300/70">
-                        {" "}(Cash GH₵{Number(detailsOrder.paymentBreakdown?.refundedCash ?? 0).toFixed(2)} · MoMo GH₵{Number(detailsOrder.paymentBreakdown?.refundedMomo ?? 0).toFixed(2)})
-                      </span>
-                    )}
-                  </span>
-                  <span className="font-mono">GH₵{Number(detailsOrder.refundedAmount).toFixed(2)}</span>
-                </div>
-              )}
-              {Number(detailsOrder.totalAmount) - Number(detailsOrder.paidAmount) > 0 && (
-                <div className="flex justify-between text-amber-300 font-semibold">
-                  <span>Balance due</span>
-                  <span className="font-mono">GH₵{(Number(detailsOrder.totalAmount) - Number(detailsOrder.paidAmount)).toFixed(2)}</span>
-                </div>
-              )}
-            </div>
-
-            {(detailsOrder.paymentBreakdown?.payments || []).length > 0 && (
-              <div>
-                <div className="text-[0.625rem] font-bold uppercase tracking-wider text-neutral-500 mb-1.5">Payments received</div>
-                <div className="divide-y divide-neutral-800 border border-neutral-800 rounded-xl overflow-hidden">
-                  {detailsOrder.paymentBreakdown.payments.map((pay: any, i: number) => (
-                    <div key={i} className="flex items-center gap-3 px-3 py-2 bg-neutral-950 text-xs">
-                      <span className={`px-2 py-0.5 rounded-md text-[0.625rem] font-bold capitalize ${
-                        pay.method === "cash"
-                          ? "bg-emerald-500/10 text-emerald-300"
-                          : pay.method === "momo"
-                          ? "bg-sky-500/10 text-sky-300"
-                          : "bg-neutral-800 text-neutral-300"
-                      }`}>
-                        {pay.method === "momo" ? "MoMo" : pay.method}
-                      </span>
-                      <span className="flex-1 min-w-0 text-neutral-400 truncate">
-                        {new Date(pay.createdAt).toLocaleString()}
-                        {pay.referenceNumber ? ` · Ref ${pay.referenceNumber}` : ""}
-                      </span>
-                      <span className="font-mono font-bold text-white">GH₵{Number(pay.amount).toFixed(2)}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* MODAL 1: Refund Processing with Manager Authorization */}
-      {refundOrderTarget && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/70 backdrop-blur-xs p-4 overflow-y-auto">
-          <form
-            onSubmit={handleProcessRefund}
-            className="bg-neutral-900 border border-neutral-700 rounded-2xl p-6 w-full max-w-md shadow-2xl space-y-4 max-h-[92dvh] overflow-y-auto my-auto"
-          >
-            <div className="flex justify-between items-start">
-              <div>
-                <h3 className="text-base font-bold text-white flex items-center gap-2">
-                  <ShieldCheck className="w-5 h-5 text-rose-400" />
-                  <span>Manager Refund Authorization</span>
-                </h3>
-                <p className="text-xs text-neutral-400 mt-0.5">
-                  Order {refundOrderTarget.orderNumber} - Amount: GH₵{Number(refundOrderTarget.totalAmount).toFixed(2)}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setRefundOrderTarget(null)}
-                className="text-neutral-400 hover:text-white"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="space-y-3 text-xs">
-              <p className="text-amber-300">Record money actually returned. Cash is automatically deducted from the current drawer; do not create another payout. MoMo transfers must be completed and verified separately.</p>
-              <div className="grid grid-cols-2 gap-3">
-                <label>Cash returned (max GH₵{refundLimits.cashRemaining})
-                  <input aria-label="Cash refund" type="number"
-                        inputMode="decimal" min="0" step="0.01" max={refundLimits.cashRemaining} required disabled={refundLocked} value={refundCash} onChange={e => setRefundCash(e.target.value)} className="w-full bg-neutral-800 p-2 rounded mt-1" />
-                </label>
-                <label>MoMo returned (max GH₵{refundLimits.momoRemaining})
-                  <input aria-label="MoMo refund" type="number"
-                        inputMode="decimal" min="0" step="0.01" max={refundLimits.momoRemaining} required disabled={refundLocked} value={refundMomo} onChange={e => setRefundMomo(e.target.value)} className="w-full bg-neutral-800 p-2 rounded mt-1" />
-                </label>
-              </div>
-              {refundLocked && !refundBusy && <p role="alert" className="text-amber-300">Retry the unchanged request to resolve its status before starting another refund.</p>}
-              <div>
-                <label className="text-neutral-300 block mb-1">Reason for Refund</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Dissatisfied with dish, order error"
-                  disabled={refundLocked}
-                  value={refundReason}
-                  onChange={(e) => setRefundReason(e.target.value)}
-                  className="w-full bg-neutral-800 border border-neutral-700 rounded-xl px-3 py-2 text-white"
-                />
-              </div>
-
-              <div>
-                <label className="text-neutral-300 block mb-1">Manager PIN Authorization</label>
-                <input
-                  type="password"
-                  maxLength={8}
-                  required
-                  value={refundManagerPin}
-                  onChange={(e) => setRefundManagerPin(e.target.value)}
-                  className="w-full bg-neutral-800 border border-neutral-700 rounded-xl px-3 py-2 text-white font-mono text-center tracking-widest text-lg"
-                />
-                <span className="text-[0.625rem] text-neutral-500 mt-0.5 block">
-                  Enter the 6–8 digit approval PIN of a manager or the owner
-                </span>
-              </div>
-
-              <div className="flex items-center gap-2 pt-1">
-                <input
-                  type="checkbox"
-                  id="returnStockCheck"
-                  disabled={refundLocked}
-                  checked={returnStock}
-                  onChange={(e) => setReturnStock(e.target.checked)}
-                  className="rounded border-neutral-700 text-amber-500 focus:ring-0"
-                />
-                <label htmlFor="returnStockCheck" className="text-neutral-300 text-xs">
-                  Return Recipe Ingredients to Active Stock
-                </label>
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-2 pt-2 border-t border-neutral-800">
-              <button
-                type="button"
-                onClick={() => setRefundOrderTarget(null)}
-                className="px-3 py-1.5 text-xs text-neutral-400 hover:text-white"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={refundBusy}
-                className="px-4 py-2 text-xs font-semibold bg-rose-600 hover:bg-rose-500 text-white rounded-xl shadow-xs"
-              >
-                {refundBusy ? "Recording…" : refundLocked ? "Retry Same Refund" : "Authorize & Record Refund"}
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
-
-      {/* MODAL 2: Reprint Receipt */}
-      {showReceiptModal && receiptOrder && (
-        <ReceiptModal
-          isOpen={showReceiptModal}
-          onClose={() => setShowReceiptModal(false)}
-          order={receiptOrder}
-        />
-      )}
-      {/* OWNER-ONLY ORDER EDITOR */}
-      {editTarget && (
-        <EditOrderModal
-          order={editTarget}
-          onClose={() => setEditTarget(null)}
-          onSaved={(result) => {
-            const number = editTarget?.orderNumber;
-            setEditTarget(null);
-            const due = Number(result?.balanceDue || 0);
-            const collected = Number(result?.collected || 0);
-            setNoticeTone("ok");
-            setNotice(
-              due > 0
-                ? collected > 0
-                  ? `Order ${number} updated. Collect GH₵${due.toFixed(2)} more from the guest.`
-                  : `Order ${number} updated. GH₵${due.toFixed(2)} is still to be paid.`
-                : `Order ${number} updated.`
-            );
-            fetchOrders(0, false);
-          }}
-        />
-      )}
-
-      {/* OWNER-ONLY PERMANENT DELETE */}
-      <ConfirmDialog
-        open={!!deleteTarget}
-        title={deleteTarget ? `Delete order ${deleteTarget.orderNumber}?` : "Delete order?"}
-        message={
-          deleteTarget
-            ? `Permanent: GH₵${Number(deleteTarget.totalAmount || 0).toFixed(2)} disappears from history, reports and collections, and any stock it used goes back to inventory. A minimal deletion record (order number, amount, who deleted it) is kept for accounting. This cannot be undone.`
-            : ""
-        }
-        confirmLabel="Hold to delete"
-        holdToConfirm
-        cancelLabel="Keep it"
-        busy={deleteBusy}
-        busyLabel="Deleting…"
-        error={deleteError}
-        onCancel={() => {
-          setDeleteTarget(null);
-          setDeleteError("");
-        }}
-        onConfirm={confirmDeleteOrder}
-      />
-
-      {/* KITCHEN DOCKET REPRINT */}
-      {showDocketModal && docketOrder && (
-        <KitchenTicketModal
-          isOpen={showDocketModal}
-          onClose={() => {
-            setShowDocketModal(false);
-            setDocketOrder(null);
-          }}
-          order={docketOrder}
-        />
-      )}
+      {historyModals}
     </div>
   );
 };

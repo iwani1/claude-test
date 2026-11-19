@@ -440,7 +440,7 @@ export default function App() {
       case "kds":
         return <KitchenDisplaySystem />;
       case "orders":
-        return <OrdersHistory currentUser={currentUser} onOpenInPos={handleOpenOrderInPos} />;
+        return <OrdersHistory currentUser={currentUser} onOpenInPos={handleOpenOrderInPos} tables={tables} />;
       case "menu":
         return (
           <MenuManager
