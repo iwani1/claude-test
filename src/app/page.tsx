@@ -476,7 +476,11 @@ export default function App() {
   };
 
   return (
-    <div className="flex flex-col h-dvh w-full pt-safe overflow-hidden bg-neutral-950 text-white font-sans">
+    // With the new design on, the whole shell sits in the colour bridge: on
+    // phones the classic bar, tabs, drawer, notices and screens take the
+    // terminal's theme (redesign stage 6a); md+ uses the new top bar, which is
+    // drawn with the theme tokens and is unaffected.
+    <div className={`flex flex-col h-dvh w-full pt-safe overflow-hidden bg-neutral-950 text-white font-sans ${newShell ? "ui-bridge" : ""}`}>
       {/* Top bar is phone-only now: on md+ its brand, register state, display
           size, online state, fullscreen, Switch Staff and user controls live
           in the rail (Sidebar), which frees the bar's 72px for the work area
@@ -584,10 +588,7 @@ export default function App() {
           ) : (
             activeTab !== "pos" && terminalControls
           )}
-          {/* With the new design on, screens not yet redrawn (the back office)
-              take the terminal's theme through the colour bridge (globals.css);
-              redrawn screens use the theme tokens directly. */}
-          <main className={`flex-1 flex flex-col min-h-0 overflow-hidden bg-neutral-950 ${newShell ? "ui-bridge" : ""}`}>
+          <main className="flex-1 flex flex-col min-h-0 overflow-hidden bg-neutral-950">
             {renderTab()}
           </main>
         </div>

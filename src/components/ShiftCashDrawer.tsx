@@ -21,7 +21,6 @@ import { apiErrorMessage, apiFetch } from "@/lib/api-client";
 import { notify } from "@/lib/notify";
 import type { CurrentUser } from "@/lib/api-types";
 import { useUiPreferences } from "@/lib/ui-preferences";
-import { MD_UP, useMediaQuery } from "@/lib/use-media-query";
 import { DrawerBoard } from "@/components/drawer/DrawerBoard";
 import { CloseShiftDialog, OpenShiftDialog, PayoutDialog } from "@/components/drawer/DrawerDialogs";
 
@@ -33,10 +32,9 @@ import { CloseShiftDialog, OpenShiftDialog, PayoutDialog } from "@/components/dr
  * or pops the till stays with the till roles.
  */
 export const ShiftCashDrawer: React.FC<{ currentUser: CurrentUser; readOnly?: boolean }> = ({ currentUser, readOnly = false }) => {
-  /** The new design's board (redesign stage 4c) wherever its top bar shows. */
+  /** The new design's board (redesign stage 4c), on every screen size. */
   const { design } = useUiPreferences();
-  const mdScreen = useMediaQuery(MD_UP);
-  const newBoard = design === "new" && mdScreen;
+  const newBoard = design === "new";
   /** Shifts belong to individual staff; people the owner allows (managers and
    *  the owner by default) also supervise, and may close, colleagues' shifts. */
   const canManageShifts = currentUser?.permissions?.canManageOthersShifts === true;

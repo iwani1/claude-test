@@ -29,7 +29,6 @@ import type { CurrentUser } from "@/lib/api-types";
 import { useUiPreferences } from "@/lib/ui-preferences";
 import { OrdersBoard } from "@/components/orders/OrdersBoard";
 import { OrderDetailsDialog, RefundDialog } from "@/components/orders/OrderDialogs";
-import { MD_UP, useMediaQuery } from "@/lib/use-media-query";
 
 export const OrdersHistory: React.FC<{
   currentUser: CurrentUser;
@@ -38,10 +37,9 @@ export const OrdersHistory: React.FC<{
   /** Dining tables, so the new board can name an order's table. */
   tables?: any[];
 }> = ({ currentUser, onOpenInPos, tables = [] }) => {
-  /** The new design's board (redesign stage 3) wherever its top bar shows. */
+  /** The new design's board (redesign stage 3), on every screen size. */
   const { design } = useUiPreferences();
-  const mdScreen = useMediaQuery(MD_UP);
-  const newBoard = design === "new" && mdScreen;
+  const newBoard = design === "new";
   // Effective permissions: role defaults plus the owner's per-user selections.
   const perms = currentUser?.permissions ?? ROLE_PERMISSIONS[currentUser?.role as UserRole] ?? ROLE_PERMISSIONS.cashier;
   /** Finance and stock roles read this screen; only till roles can act on it.

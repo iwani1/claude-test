@@ -18,7 +18,6 @@ import { apiErrorMessage, apiFetch } from "@/lib/api-client";
 import { notify } from "@/lib/notify";
 import { FannedTicketStack } from "@/components/interface-studies";
 import { useUiPreferences } from "@/lib/ui-preferences";
-import { MD_UP, useMediaQuery } from "@/lib/use-media-query";
 import { TablesBoard } from "@/components/tables/TablesBoard";
 import { AddTableDialog, MoveBillDialog } from "@/components/tables/TableDialogs";
 
@@ -35,10 +34,9 @@ export const TableFloorPlan: React.FC<TableFloorPlanProps> = ({
   onOpenPosForTable,
   onRefresh,
 }) => {
-  /** The new design's board (redesign stage 4b) wherever its top bar shows. */
+  /** The new design's board (redesign stage 4b), on every screen size. */
   const { design } = useUiPreferences();
-  const mdScreen = useMediaQuery(MD_UP);
-  const newBoard = design === "new" && mdScreen;
+  const newBoard = design === "new";
   const [selectedAreaId, setSelectedAreaId] = useState<number | "all">("all");
   const [movingTable, setMovingTable] = useState<any | null>(null);
   const [targetTableId, setTargetTableId] = useState<number | "">("");

@@ -19,9 +19,10 @@ page), in light and dark.
 - **Light or dark**, chosen per terminal in the account menu.
 - When every screen is done, the default flips to the new design and the
   classic shell is removed in its own pull request.
-- Phones keep the current layout until a later stage. The new POS screen needs
-  a 64rem-wide screen (laptop or landscape till); narrower screens keep the
-  classic till and its slide-up order sheet.
+- Phones and portrait tablets get the new design too (stage 6a): the classic
+  phone bar, tabs and drawer take the theme through the bridge, and the new
+  boards show at every width. The new POS layout needs a 64rem-wide screen;
+  narrower screens keep the till's slide-up order sheet, themed.
 
 ## Rules for new-design code
 
@@ -69,6 +70,8 @@ page), in light and dark.
 | 4c | Cash Drawer: the cash that should be in the drawer first, with the sum spelled out (float + cash sales − cash out), MoMo shown apart, colleagues on shift (managers close them), history as responsive rows. Its open, payout and close dialogs stay classic through the bridge | PR #46 |
 | 4d | The daily screens' dialogs in the new design: open shift, payout, count & close (sum, live over/short, colleague note); order details and the manager-PIN refund (tender caps, retry lock unchanged); move bill (free tables as tiles) and add table. Shared kit `src/components/ui/NewDialog.tsx`. Receipt, docket and the owner's order editor and delete stay classic through the bridge | PR #48 |
 | 5a | Back office (dashboard, reports, menu, recipes, stock, purchasing, staff, audit, hardware, settings, deploy) in the new shell: the work area takes the terminal's theme through the colour bridge, which now also maps the shades those screens use. Checked screen by screen, with their dialogs, in light and dark | PR #49 |
-| 5b | Owner dashboard (money first, cash/MoMo split, floor and kitchen now, low stock, top sellers, categories, period switch; refused panels say so) and Reports (money received, sales and margin, top sellers, categories, free breakfasts, custom dates, exports). Shared chart marks in `dashboard/charts.tsx`, colours validated per theme (`ui-chart-*`) | This PR |
+| 5b | Owner dashboard (money first, cash/MoMo split, floor and kitchen now, low stock, top sellers, categories, period switch; refused panels say so) and Reports (money received, sales and margin, top sellers, categories, free breakfasts, custom dates, exports). Shared chart marks in `dashboard/charts.tsx`, colours validated per theme (`ui-chart-*`) | PR #50 |
 | 5c | Other back-office screens redrawn where it pays off | Planned |
-| 6 | Phones; make the new design the default; remove the classic shell | Planned |
+| 6a | Phones and portrait tablets: the whole shell (phone bar, bottom tabs, drawer, notices) sits in the colour bridge, and the new boards (orders, kitchen, tables, drawer, dashboard, reports) show at every width. The till keeps its slide-up order sheet below 64rem, themed. Checked on a 390×844 phone and a 768×1024 tablet in light and dark | This PR |
+| 6b | Make the new design the default (after a trial shift on a real till) | Planned |
+| 6c | Remove the classic shell and the bridge | Planned |

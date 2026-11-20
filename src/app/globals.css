@@ -151,6 +151,17 @@
   --color-emerald-50: var(--ui-success);
   --color-pink-400: #be185d;
 }
+/* Dark chips laid over photos (e.g. the till's "Recipe" badge) stay dark in
+   the light theme, so the text on them keeps its light colours. */
+[data-ui-theme="light"] .ui-bridge :is([class*="bg-black/"], [class*="bg-neutral-950/"]) {
+  --color-white: #ffffff;
+  --color-amber-300: #fcd34d;
+  --color-amber-400: #fbbf24;
+  --color-emerald-400: #34d399;
+  --color-rose-300: #fda4af;
+  --color-neutral-200: #e5e5e5;
+  --color-neutral-300: #d4d4d4;
+}
 [data-ui-theme="light"] .ui-bridge .text-black,
 [data-ui-theme="light"] .ui-bridge :is(.bg-emerald-600, .bg-rose-600, .bg-sky-600, .bg-amber-500).text-white {
   color: #ffffff;
