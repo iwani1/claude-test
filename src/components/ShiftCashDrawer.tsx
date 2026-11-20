@@ -20,6 +20,9 @@ import {
 import { apiErrorMessage, apiFetch } from "@/lib/api-client";
 import { notify } from "@/lib/notify";
 import type { CurrentUser } from "@/lib/api-types";
+import { useUiPreferences } from "@/lib/ui-preferences";
+import { MD_UP, useMediaQuery } from "@/lib/use-media-query";
+import { DrawerBoard } from "@/components/drawer/DrawerBoard";
 
 /**
  * Shift operations and the reconciliation ledger.
@@ -29,6 +32,10 @@ import type { CurrentUser } from "@/lib/api-types";
  * or pops the till stays with the till roles.
  */
 export const ShiftCashDrawer: React.FC<{ currentUser: CurrentUser; readOnly?: boolean }> = ({ currentUser, readOnly = false }) => {
+  /** The new design's board (redesign stage 4c) wherever its top bar shows. */
+  const { design } = useUiPreferences();
+  const mdScreen = useMediaQuery(MD_UP);
+  const newBoard = design === "new" && mdScreen;
   /** Shifts belong to individual staff; people the owner allows (managers and
    *  the owner by default) also supervise, and may close, colleagues' shifts. */
   const canManageShifts = currentUser?.permissions?.canManageOthersShifts === true;
@@ -199,6 +206,295 @@ export const ShiftCashDrawer: React.FC<{ currentUser: CurrentUser; readOnly?: bo
   const cPayouts = Number(closeShiftFor?.cashPayouts || 0);
   const cExpected = cOpening + cCashSales - cPayouts;
   const cVariance = counted - cExpected;
+
+  /* Open shift, payout and close & reconcile: shared by the classic screen
+     and the new board, so both send exactly the same requests. */
+  const drawerModals = (
+    <>
+      {/* MODAL 1: Open Shift */}
+      {showOpenModal && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/70 backdrop-blur-xs p-4 overflow-y-auto">
+          <form
+            onSubmit={handleOpenShift}
+            className="bg-neutral-900 border border-neutral-700 rounded-2xl p-6 w-full max-w-sm shadow-2xl space-y-4 max-h-[92dvh] overflow-y-auto my-auto"
+          >
+            <h3 className="text-base font-bold text-white flex items-center gap-2">
+              <Unlock className="w-5 h-5 text-amber-400" />
+              <span>Open My Shift</span>
+            </h3>
+
+            <div className="space-y-3 text-xs">
+              <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2.5">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="font-semibold text-emerald-200">Opening float</span>
+                  <span className="font-mono text-sm font-bold text-emerald-300">
+                    GH₵{startsWithCash ? Number(openingCashInput || 0).toFixed(2) : "0.00"}
+                  </span>
+                </div>
+                <p className="mt-1 text-[0.6875rem] leading-relaxed text-emerald-100/70">
+                  Standard for this company: shifts start with an empty drawer.
+                </p>
+              </div>
+
+              <label className="flex min-h-11 cursor-pointer items-center gap-2.5 rounded-xl border border-neutral-700 bg-neutral-800/60 px-3 py-2">
+                <input
+                  type="checkbox"
+                  checked={startsWithCash}
+                  onChange={(e) => setStartsWithCash(e.target.checked)}
+                  className="h-4 w-4 shrink-0 accent-amber-500"
+                />
+                <span className="font-medium text-neutral-200">Drawer starts with cash</span>
+              </label>
+
+              {startsWithCash && (
+                <div>
+                  <label className="text-neutral-300 block mb-1">Starting Cash Float (GH₵)</label>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    step="10.00"
+                    min="0"
+                    required
+                    autoFocus
+                    value={openingCashInput}
+                    onChange={(e) => setOpeningCashInput(e.target.value)}
+                    className="w-full bg-neutral-800 border border-neutral-700 rounded-xl px-3 py-2 text-white font-mono font-bold text-lg"
+                  />
+                </div>
+              )}
+
+              <div>
+                <label className="text-neutral-300 block mb-1">Shift Notes</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Lunch shift register #1 opened by Akosua"
+                  value={openNotes}
+                  onChange={(e) => setOpenNotes(e.target.value)}
+                  className="w-full bg-neutral-800 border border-neutral-700 rounded-xl px-3 py-2 text-white"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-neutral-800">
+              <button
+                type="button"
+                onClick={() => setShowOpenModal(false)}
+                className="px-3 py-1.5 text-xs text-neutral-400 hover:text-white"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="px-4 py-1.5 text-xs font-semibold bg-amber-500 text-black rounded-lg"
+              >
+                {startsWithCash ? "Open Shift" : "Open Shift — Zero Float"}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* MODAL 2: Record Cash Payout */}
+      {showPayoutModal && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/70 backdrop-blur-xs p-4 overflow-y-auto">
+          <form
+            onSubmit={handleRecordPayout}
+            className="bg-neutral-900 border border-neutral-700 rounded-2xl p-6 w-full max-w-sm shadow-2xl space-y-4 max-h-[92dvh] overflow-y-auto my-auto"
+          >
+            <h3 className="text-base font-bold text-white flex items-center gap-2">
+              <ArrowDownRight className="w-5 h-5 text-rose-400" />
+              <span>Record Non-refund Cash Payout</span>
+            </h3>
+
+            <div className="space-y-3 text-xs">
+              <div>
+                <label className="text-neutral-300 block mb-1">Payout Amount (GH₵)</label>
+                <input
+                  type="number"
+                        inputMode="decimal"
+                  step="1.00"
+                  required
+                  placeholder="0.00"
+                  value={payoutAmount}
+                  onChange={(e) => setPayoutAmount(e.target.value)}
+                  className="w-full bg-neutral-800 border border-neutral-700 rounded-xl px-3 py-2 text-white font-mono font-bold text-lg"
+                />
+              </div>
+
+              <div>
+                <label className="text-neutral-300 block mb-1">Reason / Voucher Description</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Makola market tomatoes cash, ice block, safe drop"
+                  value={payoutReason}
+                  onChange={(e) => setPayoutReason(e.target.value)}
+                  className="w-full bg-neutral-800 border border-neutral-700 rounded-xl px-3 py-2 text-white"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-neutral-800">
+              <button
+                type="button"
+                onClick={() => setShowPayoutModal(false)}
+                className="px-3 py-1.5 text-xs text-neutral-400 hover:text-white"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="px-4 py-1.5 text-xs font-semibold bg-rose-600 text-white rounded-lg"
+              >
+                Record Payout
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* MODAL 3: Close Shift & Reconciliation */}
+      {showCloseModal && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/70 backdrop-blur-xs p-4 overflow-y-auto">
+          <form
+            onSubmit={handleCloseShift}
+            className="bg-neutral-900 border border-neutral-700 rounded-2xl p-6 w-full max-w-md shadow-2xl space-y-4 max-h-[92dvh] overflow-y-auto my-auto"
+          >
+            <h3 className="text-base font-bold text-white flex items-center gap-2">
+              <Lock className="w-5 h-5 text-rose-400" />
+              <span>End Shift & Cash Drawer Audit</span>
+            </h3>
+            {closeTarget && closeTarget.userId !== currentUser?.id && (
+              <p className="text-xs text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-xl px-3 py-2">
+                Closing <strong>{closeTarget.userName}</strong>&apos;s shift — count the cash they hand over and enter it below.
+              </p>
+            )}
+
+            <div className="p-3 bg-neutral-850 border border-neutral-800 rounded-xl space-y-1.5 text-xs">
+              <div className="flex justify-between text-neutral-400">
+                <span>Opening Cash Float:</span>
+                <span className="font-mono">GH₵{cOpening.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between text-neutral-400">
+                <span>Total Cash Sales:</span>
+                <span className="font-mono text-emerald-400">+GH₵{cCashSales.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between text-neutral-400">
+                <span>Total Cash Outflows (incl. refunds):</span>
+                <span className="font-mono text-rose-400">-GH₵{cPayouts.toFixed(2)}</span>
+              </div>
+              <div className="pt-2 border-t border-neutral-750 flex justify-between font-bold text-white text-sm">
+                <span>Expected Drawer Total:</span>
+                <span className="font-mono text-amber-400">GH₵{cExpected.toFixed(2)}</span>
+              </div>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div>
+                <label className="text-neutral-300 block mb-1">
+                  Physically Counted Cash in Drawer (GH₵)
+                </label>
+                <input
+                  type="number"
+                        inputMode="decimal"
+                  step="1.00"
+                  required
+                  value={countedCashInput}
+                  onChange={(e) => setCountedCashInput(e.target.value)}
+                  className="w-full bg-neutral-800 border border-neutral-700 rounded-xl px-3 py-2 text-white font-mono font-bold text-xl"
+                />
+              </div>
+
+              {/* Difference feedback */}
+              <div
+                className={`p-2.5 rounded-xl text-xs font-semibold flex items-center justify-between ${
+                  Math.abs(cVariance) < 0.01
+                    ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30"
+                    : cVariance > 0
+                    ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
+                    : "bg-rose-500/20 text-rose-300 border border-rose-500/40"
+                }`}
+              >
+                <span>Reconciliation Discrepancy:</span>
+                <span className="font-mono text-sm">
+                  {cVariance > 0 ? `+GH₵${cVariance.toFixed(2)} (Surplus)` : cVariance < 0 ? `-GH₵${Math.abs(cVariance).toFixed(2)} (Shortage)` : "GH₵0.00 (Balanced)"}
+                </span>
+              </div>
+
+              <div>
+                <label className="text-neutral-300 block mb-1">Manager Reconciliation Notes</label>
+                <textarea
+                  rows={2}
+                  value={closeNotes}
+                  onChange={(e) => setCloseNotes(e.target.value)}
+                  placeholder="Notes on discrepancy or register hand-over..."
+                  className="w-full bg-neutral-800 border border-neutral-700 rounded-xl p-2.5 text-xs text-white"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-neutral-800">
+              <button
+                type="button"
+                onClick={() => setShowCloseModal(false)}
+                className="px-3 py-1.5 text-xs text-neutral-400 hover:text-white"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="px-5 py-2 text-xs font-semibold bg-rose-600 hover:bg-rose-500 text-white rounded-xl shadow-xs"
+              >
+                Confirm Shift Close
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+    </>
+  );
+
+  /** Starts reconciling a shift: the count starts at the expected cash. */
+  const startClose = (shift: any, expected: number) => {
+    setCloseTarget(shift);
+    setCountedCashInput(expected.toFixed(2));
+    setShowCloseModal(true);
+  };
+
+  if (newBoard) {
+    return (
+      <div className="flex-1 flex flex-col h-full overflow-hidden">
+        <DrawerBoard
+          activeShift={activeShift}
+          staffName={currentUser?.name || "You"}
+          readOnly={readOnly}
+          canManageShifts={canManageShifts}
+          figures={{
+            opening: openingFloat,
+            cashSales,
+            momoSales: cardSales,
+            outflows: payouts,
+            refunds: Number(activeShift?.cashRefunds || 0),
+            expected: expectedInDrawer,
+          }}
+          otherOpenShifts={otherOpenShifts}
+          history={shiftHistory}
+          drawerMessage={drawerMessage}
+          loadError={loadError}
+          onRefresh={() => void fetchShifts()}
+          onOpenShift={() => setShowOpenModal(true)}
+          onOpenDrawer={() => void handleOpenDrawer()}
+          onPayout={() => setShowPayoutModal(true)}
+          onCloseMine={() => startClose(activeShift, expectedInDrawer)}
+          onCloseOther={(o) =>
+            startClose(o, Number(o.openingCash || 0) + Number(o.totalCashSales || 0) - Number(o.cashPayouts || 0))
+          }
+        />
+        {/* Classic dialogs, re-coloured for the light theme (globals.css). */}
+        <div className="ui-bridge contents">{drawerModals}</div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex-1 flex flex-col h-full bg-neutral-950 overflow-hidden">
@@ -550,246 +846,7 @@ export const ShiftCashDrawer: React.FC<{ currentUser: CurrentUser; readOnly?: bo
         </div>
       </div>
 
-      {/* MODAL 1: Open Shift */}
-      {showOpenModal && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/70 backdrop-blur-xs p-4 overflow-y-auto">
-          <form
-            onSubmit={handleOpenShift}
-            className="bg-neutral-900 border border-neutral-700 rounded-2xl p-6 w-full max-w-sm shadow-2xl space-y-4 max-h-[92dvh] overflow-y-auto my-auto"
-          >
-            <h3 className="text-base font-bold text-white flex items-center gap-2">
-              <Unlock className="w-5 h-5 text-amber-400" />
-              <span>Open My Shift</span>
-            </h3>
-
-            <div className="space-y-3 text-xs">
-              <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2.5">
-                <div className="flex items-center justify-between gap-3">
-                  <span className="font-semibold text-emerald-200">Opening float</span>
-                  <span className="font-mono text-sm font-bold text-emerald-300">
-                    GH₵{startsWithCash ? Number(openingCashInput || 0).toFixed(2) : "0.00"}
-                  </span>
-                </div>
-                <p className="mt-1 text-[0.6875rem] leading-relaxed text-emerald-100/70">
-                  Standard for this company: shifts start with an empty drawer.
-                </p>
-              </div>
-
-              <label className="flex min-h-11 cursor-pointer items-center gap-2.5 rounded-xl border border-neutral-700 bg-neutral-800/60 px-3 py-2">
-                <input
-                  type="checkbox"
-                  checked={startsWithCash}
-                  onChange={(e) => setStartsWithCash(e.target.checked)}
-                  className="h-4 w-4 shrink-0 accent-amber-500"
-                />
-                <span className="font-medium text-neutral-200">Drawer starts with cash</span>
-              </label>
-
-              {startsWithCash && (
-                <div>
-                  <label className="text-neutral-300 block mb-1">Starting Cash Float (GH₵)</label>
-                  <input
-                    type="number"
-                    inputMode="decimal"
-                    step="10.00"
-                    min="0"
-                    required
-                    autoFocus
-                    value={openingCashInput}
-                    onChange={(e) => setOpeningCashInput(e.target.value)}
-                    className="w-full bg-neutral-800 border border-neutral-700 rounded-xl px-3 py-2 text-white font-mono font-bold text-lg"
-                  />
-                </div>
-              )}
-
-              <div>
-                <label className="text-neutral-300 block mb-1">Shift Notes</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Lunch shift register #1 opened by Akosua"
-                  value={openNotes}
-                  onChange={(e) => setOpenNotes(e.target.value)}
-                  className="w-full bg-neutral-800 border border-neutral-700 rounded-xl px-3 py-2 text-white"
-                />
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-2 pt-2 border-t border-neutral-800">
-              <button
-                type="button"
-                onClick={() => setShowOpenModal(false)}
-                className="px-3 py-1.5 text-xs text-neutral-400 hover:text-white"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                className="px-4 py-1.5 text-xs font-semibold bg-amber-500 text-black rounded-lg"
-              >
-                {startsWithCash ? "Open Shift" : "Open Shift — Zero Float"}
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
-
-      {/* MODAL 2: Record Cash Payout */}
-      {showPayoutModal && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/70 backdrop-blur-xs p-4 overflow-y-auto">
-          <form
-            onSubmit={handleRecordPayout}
-            className="bg-neutral-900 border border-neutral-700 rounded-2xl p-6 w-full max-w-sm shadow-2xl space-y-4 max-h-[92dvh] overflow-y-auto my-auto"
-          >
-            <h3 className="text-base font-bold text-white flex items-center gap-2">
-              <ArrowDownRight className="w-5 h-5 text-rose-400" />
-              <span>Record Non-refund Cash Payout</span>
-            </h3>
-
-            <div className="space-y-3 text-xs">
-              <div>
-                <label className="text-neutral-300 block mb-1">Payout Amount (GH₵)</label>
-                <input
-                  type="number"
-                        inputMode="decimal"
-                  step="1.00"
-                  required
-                  placeholder="0.00"
-                  value={payoutAmount}
-                  onChange={(e) => setPayoutAmount(e.target.value)}
-                  className="w-full bg-neutral-800 border border-neutral-700 rounded-xl px-3 py-2 text-white font-mono font-bold text-lg"
-                />
-              </div>
-
-              <div>
-                <label className="text-neutral-300 block mb-1">Reason / Voucher Description</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Makola market tomatoes cash, ice block, safe drop"
-                  value={payoutReason}
-                  onChange={(e) => setPayoutReason(e.target.value)}
-                  className="w-full bg-neutral-800 border border-neutral-700 rounded-xl px-3 py-2 text-white"
-                />
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-2 pt-2 border-t border-neutral-800">
-              <button
-                type="button"
-                onClick={() => setShowPayoutModal(false)}
-                className="px-3 py-1.5 text-xs text-neutral-400 hover:text-white"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                className="px-4 py-1.5 text-xs font-semibold bg-rose-600 text-white rounded-lg"
-              >
-                Record Payout
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
-
-      {/* MODAL 3: Close Shift & Reconciliation */}
-      {showCloseModal && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/70 backdrop-blur-xs p-4 overflow-y-auto">
-          <form
-            onSubmit={handleCloseShift}
-            className="bg-neutral-900 border border-neutral-700 rounded-2xl p-6 w-full max-w-md shadow-2xl space-y-4 max-h-[92dvh] overflow-y-auto my-auto"
-          >
-            <h3 className="text-base font-bold text-white flex items-center gap-2">
-              <Lock className="w-5 h-5 text-rose-400" />
-              <span>End Shift & Cash Drawer Audit</span>
-            </h3>
-            {closeTarget && closeTarget.userId !== currentUser?.id && (
-              <p className="text-xs text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-xl px-3 py-2">
-                Closing <strong>{closeTarget.userName}</strong>&apos;s shift — count the cash they hand over and enter it below.
-              </p>
-            )}
-
-            <div className="p-3 bg-neutral-850 border border-neutral-800 rounded-xl space-y-1.5 text-xs">
-              <div className="flex justify-between text-neutral-400">
-                <span>Opening Cash Float:</span>
-                <span className="font-mono">GH₵{cOpening.toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between text-neutral-400">
-                <span>Total Cash Sales:</span>
-                <span className="font-mono text-emerald-400">+GH₵{cCashSales.toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between text-neutral-400">
-                <span>Total Cash Outflows (incl. refunds):</span>
-                <span className="font-mono text-rose-400">-GH₵{cPayouts.toFixed(2)}</span>
-              </div>
-              <div className="pt-2 border-t border-neutral-750 flex justify-between font-bold text-white text-sm">
-                <span>Expected Drawer Total:</span>
-                <span className="font-mono text-amber-400">GH₵{cExpected.toFixed(2)}</span>
-              </div>
-            </div>
-
-            <div className="space-y-3 text-xs">
-              <div>
-                <label className="text-neutral-300 block mb-1">
-                  Physically Counted Cash in Drawer (GH₵)
-                </label>
-                <input
-                  type="number"
-                        inputMode="decimal"
-                  step="1.00"
-                  required
-                  value={countedCashInput}
-                  onChange={(e) => setCountedCashInput(e.target.value)}
-                  className="w-full bg-neutral-800 border border-neutral-700 rounded-xl px-3 py-2 text-white font-mono font-bold text-xl"
-                />
-              </div>
-
-              {/* Difference feedback */}
-              <div
-                className={`p-2.5 rounded-xl text-xs font-semibold flex items-center justify-between ${
-                  Math.abs(cVariance) < 0.01
-                    ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30"
-                    : cVariance > 0
-                    ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
-                    : "bg-rose-500/20 text-rose-300 border border-rose-500/40"
-                }`}
-              >
-                <span>Reconciliation Discrepancy:</span>
-                <span className="font-mono text-sm">
-                  {cVariance > 0 ? `+GH₵${cVariance.toFixed(2)} (Surplus)` : cVariance < 0 ? `-GH₵${Math.abs(cVariance).toFixed(2)} (Shortage)` : "GH₵0.00 (Balanced)"}
-                </span>
-              </div>
-
-              <div>
-                <label className="text-neutral-300 block mb-1">Manager Reconciliation Notes</label>
-                <textarea
-                  rows={2}
-                  value={closeNotes}
-                  onChange={(e) => setCloseNotes(e.target.value)}
-                  placeholder="Notes on discrepancy or register hand-over..."
-                  className="w-full bg-neutral-800 border border-neutral-700 rounded-xl p-2.5 text-xs text-white"
-                />
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-2 pt-2 border-t border-neutral-800">
-              <button
-                type="button"
-                onClick={() => setShowCloseModal(false)}
-                className="px-3 py-1.5 text-xs text-neutral-400 hover:text-white"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                className="px-5 py-2 text-xs font-semibold bg-rose-600 hover:bg-rose-500 text-white rounded-xl shadow-xs"
-              >
-                Confirm Shift Close
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
+      {drawerModals}
     </div>
   );
 };
