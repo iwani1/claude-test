@@ -55,8 +55,8 @@ page), in light and dark.
 |---|---|---|
 | 1 | Tokens (light/dark), per-terminal switch, top-bar shell, shared nav list | PR #39 |
 | 2 | POS screen in the demo 8 layout (recent orders, category cards, dish cards, order panel); the shared pop-ups re-coloured for light through the theme bridge | PR #40 |
-| 2b | Till pop-ups drawn in the new design: dish options (option groups, add-ons, note chips), payment (keypad, cash/MoMo/split), discount, comp, shift gate. Docket, receipt, approvals and confirm stay classic through the bridge | This PR |
-| 3 | Orders page (demo 9) | Planned |
+| 2b | Till pop-ups drawn in the new design: dish options (option groups, add-ons, note chips), payment (keypad, cash/MoMo/split), discount, comp, shift gate. Docket, receipt, approvals and confirm stay classic through the bridge | PR #41 |
+| 3 | Orders page (demo 9): count cards, tabs with counts, cards or a board by kitchen state, date presets, search, pages. Same actions under the same permissions; kitchen status stays on the Kitchen screen; no cancel action is added (the app has none). Its pop-ups stay classic through the bridge | This PR |
 | 4 | Kitchen, Tables, Cash Drawer | Planned |
 | 5 | Menu, stock, purchasing, reports, staff, settings | Planned |
 | 6 | Phones; make the new design the default; remove the classic shell | Planned |
