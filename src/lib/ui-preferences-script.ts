@@ -8,5 +8,5 @@ export const UI_THEME_KEY = "pos.uiTheme";
 
 export const UI_PREPAINT_SCRIPT =
   `try{var d=localStorage.getItem('${UI_DESIGN_KEY}'),t=localStorage.getItem('${UI_THEME_KEY}'),e=document.documentElement;` +
-  `e.dataset.ui=d==='new'?'new':'classic';e.dataset.uiTheme=t==='dark'?'dark':'light'}` +
-  `catch(x){/* audit-ok: a per-device preference; failing keeps the classic design */}`;
+  `e.dataset.ui=d==='classic'?'classic':'new';e.dataset.uiTheme=t==='dark'?'dark':'light'}` +
+  `catch(x){/* audit-ok: a per-device preference; failing keeps the default (new) design */}`;

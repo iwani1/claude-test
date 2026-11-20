@@ -31,7 +31,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" className="dark h-full" data-display-size="large" data-ui="classic" data-ui-theme="light" suppressHydrationWarning>
+    <html lang="en" className="dark h-full" data-display-size="large" data-ui="new" data-ui-theme="light" suppressHydrationWarning>
       <head>
         {/* Applies the terminal's saved display size before first paint so
             every screen loads at the chosen size with no flash. Default on a
