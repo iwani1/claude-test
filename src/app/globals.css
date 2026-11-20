@@ -28,6 +28,10 @@
   --color-ui-success-soft: var(--ui-success-soft);
   --color-ui-info: var(--ui-info);
   --color-ui-info-soft: var(--ui-info-soft);
+  /* Chart marks (validated with the dataviz palette checks for each theme). */
+  --color-ui-chart-bar: var(--ui-chart-bar);
+  --color-ui-chart-cash: var(--ui-chart-cash);
+  --color-ui-chart-momo: var(--ui-chart-momo);
 }
 
 :root,
@@ -52,6 +56,9 @@
   --ui-info: #0369a1;
   --ui-info-soft: #f0f9ff;
   --ui-shadow: 0 1px 2px rgb(15 23 42 / 0.06);
+  --ui-chart-bar: #c2410c;
+  --ui-chart-cash: #15803d;
+  --ui-chart-momo: #0369a1;
 }
 
 [data-ui-theme="dark"] {
@@ -75,6 +82,9 @@
   --ui-info: #7dd3fc;
   --ui-info-soft: rgb(125 211 252 / 0.12);
   --ui-shadow: 0 1px 2px rgb(0 0 0 / 0.4);
+  --ui-chart-bar: #d97706;
+  --ui-chart-cash: #16a34a;
+  --ui-chart-momo: #0284c7;
 }
 
 /* Theme bridge (redesign, Nov 2026). Classic components shown inside a new

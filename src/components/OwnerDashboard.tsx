@@ -19,6 +19,9 @@ import {
 } from "lucide-react";
 import { NavTab } from "./Sidebar";
 import { ROLE_PERMISSIONS, UserRole } from "@/lib/permissions";
+import { useUiPreferences } from "@/lib/ui-preferences";
+import { MD_UP, useMediaQuery } from "@/lib/use-media-query";
+import { DashboardBoard } from "@/components/dashboard/DashboardBoard";
 
 interface OwnerDashboardProps {
   onNavigate: (tab: NavTab) => void;
@@ -27,7 +30,31 @@ interface OwnerDashboardProps {
   perms?: (typeof ROLE_PERMISSIONS)[UserRole];
 }
 
-export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ onNavigate, openShift, perms }) => {
+/** The new design's dashboard (redesign stage 5b) wherever its top bar shows;
+ *  the classic one otherwise. Only one of them loads its data. */
+export const OwnerDashboard: React.FC<OwnerDashboardProps> = (props) => {
+  const { design } = useUiPreferences();
+  const mdScreen = useMediaQuery(MD_UP);
+  if (design === "new" && mdScreen) {
+    const p = props.perms;
+    return (
+      <DashboardBoard
+        onNavigate={props.onNavigate}
+        openShift={props.openShift}
+        canOpen={{
+          till: p?.canAccessPos ?? true,
+          kds: p?.canAccessKds ?? true,
+          stock: p?.canModifyInventory ?? true,
+          drawer: p?.canViewDrawerHistory ?? true,
+          reports: p?.canViewReports ?? true,
+        }}
+      />
+    );
+  }
+  return <ClassicOwnerDashboard {...props} />;
+};
+
+const ClassicOwnerDashboard: React.FC<OwnerDashboardProps> = ({ onNavigate, openShift, perms }) => {
   const [reports, setReports] = useState<any>(null);
   const [tables, setTables] = useState<any[]>([]);
   const [activeTickets, setActiveTickets] = useState<any[]>([]);

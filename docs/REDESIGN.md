@@ -51,6 +51,8 @@ page), in light and dark.
 - New-design dialogs use the kit in `src/components/ui/NewDialog.tsx`. Amount
   fields use `step="0.01"`: with a `min`, the browser measures `step` from it,
   so `step="1.00" min="0.01"` would refuse GH₵5.
+- Charts use the `ui-chart-*` tokens (validated with the dataviz palette
+  checks in each theme) and write every figure out as text.
 - Touch targets stay at least 44px; the bar's labels drop by container width in
   `rem` (they scale with the terminal's text size), not by screen breakpoints.
 
@@ -66,7 +68,7 @@ page), in light and dark.
 | 4b | Tables: area tabs, status counts that filter, tiles by state with the open bill (docket, total, time open), one fitting action per state; fixes the classic "Reserve" button that set a table being cleaned to available | PR #44 |
 | 4c | Cash Drawer: the cash that should be in the drawer first, with the sum spelled out (float + cash sales − cash out), MoMo shown apart, colleagues on shift (managers close them), history as responsive rows. Its open, payout and close dialogs stay classic through the bridge | PR #46 |
 | 4d | The daily screens' dialogs in the new design: open shift, payout, count & close (sum, live over/short, colleague note); order details and the manager-PIN refund (tender caps, retry lock unchanged); move bill (free tables as tiles) and add table. Shared kit `src/components/ui/NewDialog.tsx`. Receipt, docket and the owner's order editor and delete stay classic through the bridge | PR #48 |
-| 5a | Back office (dashboard, reports, menu, recipes, stock, purchasing, staff, audit, hardware, settings, deploy) in the new shell: the work area takes the terminal's theme through the colour bridge, which now also maps the shades those screens use. Checked screen by screen, with their dialogs, in light and dark | This PR |
-| 5b | Owner dashboard and reports redrawn natively | Next |
+| 5a | Back office (dashboard, reports, menu, recipes, stock, purchasing, staff, audit, hardware, settings, deploy) in the new shell: the work area takes the terminal's theme through the colour bridge, which now also maps the shades those screens use. Checked screen by screen, with their dialogs, in light and dark | PR #49 |
+| 5b | Owner dashboard (money first, cash/MoMo split, floor and kitchen now, low stock, top sellers, categories, period switch; refused panels say so) and Reports (money received, sales and margin, top sellers, categories, free breakfasts, custom dates, exports). Shared chart marks in `dashboard/charts.tsx`, colours validated per theme (`ui-chart-*`) | This PR |
 | 5c | Other back-office screens redrawn where it pays off | Planned |
 | 6 | Phones; make the new design the default; remove the classic shell | Planned |
