@@ -1,4 +1,6 @@
 @import "tailwindcss";
+/* The new design's typeface, self-hosted (no download at build or run time). */
+@import "@fontsource-variable/manrope";
 
 /* ------------------------------------------------------------------ */
 /* New design tokens (redesign, Nov 2026). Used only by the new shell   */
@@ -32,6 +34,12 @@
   --color-ui-chart-bar: var(--ui-chart-bar);
   --color-ui-chart-cash: var(--ui-chart-cash);
   --color-ui-chart-momo: var(--ui-chart-momo);
+  /* The other bars beside the leading one (stage 7): only the top item
+     carries the accent, so it is the one that stands out. */
+  --color-ui-chart-bar-muted: var(--ui-chart-bar-muted);
+  /* Two levels of depth: resting cards and raised layers (pop-ups, sheets). */
+  --shadow-ui-1: var(--ui-shadow-1);
+  --shadow-ui-2: var(--ui-shadow-2);
 }
 
 :root,
@@ -59,6 +67,9 @@
   --ui-chart-bar: #c2410c;
   --ui-chart-cash: #15803d;
   --ui-chart-momo: #0369a1;
+  --ui-chart-bar-muted: #64748b;
+  --ui-shadow-1: 0 1px 2px rgb(15 23 42 / 0.05), 0 2px 8px -2px rgb(15 23 42 / 0.06);
+  --ui-shadow-2: 0 2px 6px rgb(15 23 42 / 0.06), 0 24px 48px -12px rgb(15 23 42 / 0.28);
 }
 
 [data-ui-theme="dark"] {
@@ -85,6 +96,51 @@
   --ui-chart-bar: #d97706;
   --ui-chart-cash: #16a34a;
   --ui-chart-momo: #0284c7;
+  --ui-chart-bar-muted: #64748b;
+  --ui-shadow-1: 0 1px 2px rgb(0 0 0 / 0.4);
+  --ui-shadow-2: 0 0 0 1px rgb(255 255 255 / 0.04), 0 24px 56px -12px rgb(0 0 0 / 0.7);
+}
+
+/* Premium pass (redesign stage 7): the new design's typeface, with
+   tabular figures everywhere so amounts line up in columns. Money is no
+   longer set in a code font: font-mono in the new design is the same face
+   with fixed-width digits. */
+html[data-ui="new"] {
+  --font-sans: "Manrope Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-sans);
+  font-variant-numeric: tabular-nums;
+}
+html[data-ui="new"] .font-mono {
+  letter-spacing: -0.01em;
+}
+
+/* Motion (stage 7). Short, and off when the device asks for reduced motion. */
+@keyframes ui-in-kf {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes ui-fade-kf {
+  from { opacity: 0; }
+}
+@keyframes ui-pop-kf {
+  0% { transform: scale(0.6); opacity: 0; }
+  60% { transform: scale(1.15); opacity: 1; }
+  100% { transform: scale(1); }
+}
+@keyframes ui-sheet-kf {
+  from { transform: translateY(100%); }
+}
+@keyframes ui-slide-kf {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: none; }
+}
+.ui-in { animation: ui-in-kf 180ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.ui-fade { animation: ui-fade-kf 160ms ease-out both; }
+.ui-pop { animation: ui-pop-kf 260ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.ui-sheet { animation: ui-sheet-kf 220ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.ui-slide { animation: ui-slide-kf 220ms ease-out both; }
+@media (prefers-reduced-motion: reduce) {
+  .ui-in, .ui-fade, .ui-pop, .ui-sheet, .ui-slide { animation: none !important; }
 }
 
 /* Theme bridge (redesign, Nov 2026). Classic components shown inside a new
@@ -163,6 +219,7 @@
   --color-neutral-300: #d4d4d4;
 }
 [data-ui-theme="light"] .ui-bridge .text-black,
+[data-ui-theme="light"] .ui-bridge .max-md\:text-black,
 [data-ui-theme="light"] .ui-bridge :is(.bg-emerald-600, .bg-rose-600, .bg-sky-600, .bg-amber-500).text-white {
   color: #ffffff;
 }

@@ -25,8 +25,9 @@ page), in light and dark.
   classic shell is removed in its own pull request.
 - Phones and portrait tablets get the new design too (stage 6a): the classic
   phone bar, tabs and drawer take the theme through the bridge, and the new
-  boards show at every width. The new POS layout needs a 64rem-wide screen;
-  narrower screens keep the till's slide-up order sheet, themed.
+  boards show at every width. Since stage 7 the new till shows at every width
+  too: below 64rem its order panel is a slide-up sheet opened from a bar with
+  the running total.
 
 ## Rules for new-design code
 
@@ -58,6 +59,18 @@ page), in light and dark.
   so `step="1.00" min="0.01"` would refuse GH₵5.
 - Charts use the `ui-chart-*` tokens (validated with the dataviz palette
   checks in each theme) and write every figure out as text.
+- Type is Manrope (self-hosted, `@fontsource-variable/manrope`, no download at
+  build or run time), set on `html[data-ui="new"]` with tabular figures.
+  `font-mono` in the new design is the same face with fixed-width digits;
+  money is never set in a code font. Large amounts use `ui/Money.tsx` (smaller
+  currency sign).
+- Depth is two levels: `shadow-ui-1` (resting cards) and `shadow-ui-2` (pop-ups,
+  sheets). Motion is the `ui-in`, `ui-fade`, `ui-pop`, `ui-sheet` and `ui-slide`
+  classes in `globals.css`, 160–260ms, switched off under reduced motion.
+- Loading shows skeletons (`ui/Skeleton.tsx`) with a screen-reader line, not a
+  bare "Loading…".
+- Bar charts give the accent to the largest bar only (`ui-chart-bar`); the rest
+  are `ui-chart-bar-muted`.
 - Touch targets stay at least 44px; the bar's labels drop by container width in
   `rem` (they scale with the terminal's text size), not by screen breakpoints.
 
@@ -77,5 +90,6 @@ page), in light and dark.
 | 5b | Owner dashboard (money first, cash/MoMo split, floor and kitchen now, low stock, top sellers, categories, period switch; refused panels say so) and Reports (money received, sales and margin, top sellers, categories, free breakfasts, custom dates, exports). Shared chart marks in `dashboard/charts.tsx`, colours validated per theme (`ui-chart-*`) | PR #50 |
 | 5c | Other back-office screens redrawn where it pays off | Planned |
 | 6a | Phones and portrait tablets: the whole shell (phone bar, bottom tabs, drawer, notices) sits in the colour bridge, and the new boards (orders, kitchen, tables, drawer, dashboard, reports) show at every width. The till keeps its slide-up order sheet below 64rem, themed. Checked on a 390×844 phone and a 768×1024 tablet in light and dark | PR #51 |
+| 7 | Premium pass from the UI/UX audit (Nov 2026): Manrope with tabular figures and no code font for money; till with a chip row of categories so dishes fill the first screen, initials tiles for dishes without a photo, add and total animations; the new till on phones with a slide-up order sheet (only the amount and actions pinned); dialogs with a blurred scrim, depth and an open animation; kitchen lanes that share the width by load, an age ring per ticket, 44px reprint; recent orders show the kitchen step, not an age bar; skeleton loading on dashboard, reports and orders; margin says "Not yet" when no recipe costs exist; accent on the largest chart bar only; the hotel's logo in the top bar; contrast and target fixes (strip counts, phone "View", menu table Edit/Delete/availability, phone Drawer badge as a dot). axe-core (WCAG 2.1 AA): 0 issues and no target under 44px on 23 screens (10 screens × light/dark at 1440×900, 3 on a phone) | PR (this) |
 | 6b | Make the new design the default (after a trial shift on a real till) | Planned |
 | 6c | Remove the classic shell and the bridge | Planned |

@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import React, { useEffect, useRef, useState } from "react";
 import {
   ChevronDown,
@@ -139,10 +140,13 @@ export function TopNav({
   return (
     <header className="@container max-md:hidden shrink-0 h-16 bg-ui-surface border-b border-ui-border flex items-center gap-3 px-4 text-ui-text select-none">
       <div className="flex items-center gap-2 shrink-0">
-        <span aria-hidden="true" className="w-9 h-9 rounded-lg bg-ui-primary text-ui-on-primary text-sm font-bold flex items-center justify-center">
-          LV
+        {/* The hotel's own mark (public/logo.svg, also the app icon) rather
+            than initials in a box (stage 7). */}
+        <Image unoptimized src="/logo.svg" alt="" width={40} height={40} className="w-10 h-10 rounded-xl shadow-ui-1" priority />
+        <span className="hidden @[96rem]:flex flex-col leading-tight">
+          <span className="text-base font-extrabold tracking-tight">Lush View</span>
+          <span className="text-[0.6875rem] font-semibold text-ui-muted">Restaurant &amp; bar</span>
         </span>
-        <span className="hidden @[96rem]:inline text-base font-bold">Lush View</span>
       </div>
 
       {/* Labels drop by container width in rem, not by screen breakpoints:

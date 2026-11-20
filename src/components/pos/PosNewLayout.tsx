@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import {
   ChefHat,
@@ -12,11 +12,14 @@ import {
   Printer,
   Receipt,
   Search,
+  ShoppingBag,
   Trash2,
   User,
   UtensilsCrossed,
   X,
+  ChevronUp,
 } from "lucide-react";
+import { Money } from "@/components/ui/Money";
 import { RecentOrdersStrip, docketNo } from "@/components/pos/RecentOrdersStrip";
 
 export type OrderType = "dine_in" | "room_service" | "takeaway" | "delivery";
@@ -84,6 +87,9 @@ export interface PosNewLayoutProps {
   showRecentOrders: boolean;
   recentRefreshKey: number;
   onOpenOrder: (orderId: number) => void;
+  /** Below 64rem (phones, portrait tablets): the order panel becomes a
+   *  slide-up sheet opened from a bar with the running total (stage 7). */
+  compact?: boolean;
 }
 
 const TYPES: [OrderType, string][] = [
@@ -94,9 +100,28 @@ const TYPES: [OrderType, string][] = [
 ];
 
 const cedi = (n: number) => `GH₵${n.toFixed(2)}`;
+const dishes = (n: number) => `${n} ${n === 1 ? "dish" : "dishes"}`;
+/** Two letters for a dish with no photo, e.g. "Fried rice" → "FR". */
+const initials = (name: string) =>
+  String(name)
+    .split(/[\s&]+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0]!.toUpperCase())
+    .join("");
 
 export function PosNewLayout(p: PosNewLayoutProps) {
   const cartCount = p.cart.reduce((n, it) => n + it.quantity, 0);
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const sheet = !!p.compact;
+  useEffect(() => {
+    if (!sheet || !sheetOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setSheetOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [sheet, sheetOpen]);
   const catCards = useMemo(
     () => [
       {
@@ -122,8 +147,8 @@ export function PosNewLayout(p: PosNewLayoutProps) {
   return (
     <div className="flex-1 flex min-h-0 overflow-hidden bg-ui-bg text-ui-text">
       {/* MENU COLUMN */}
-      <main className="flex-1 min-w-0 overflow-y-auto p-5 custom-scrollbar">
-        {p.showRecentOrders && (
+      <main className={`flex-1 min-w-0 overflow-y-auto custom-scrollbar ${sheet ? "p-3 pb-28" : "p-5"}`}>
+        {p.showRecentOrders && !sheet && (
           <RecentOrdersStrip
             tables={p.tables}
             refreshKey={p.recentRefreshKey}
@@ -132,10 +157,10 @@ export function PosNewLayout(p: PosNewLayoutProps) {
           />
         )}
 
-        <div className="flex items-center gap-3 mb-3">
-          <h2 className="text-lg font-bold">Menu categories</h2>
+        <div className="flex items-center gap-3 mb-3 flex-wrap">
+          <h2 className="text-lg font-bold">Menu</h2>
           <div className="flex-1" />
-          <label className="relative w-72 max-w-full">
+          <label className="relative w-72 max-w-full grow sm:grow-0">
             <span className="sr-only">Search dishes and drinks</span>
             <Search className="w-4 h-4 text-ui-muted absolute left-3 top-1/2 -translate-y-1/2" />
             <input
@@ -158,7 +183,9 @@ export function PosNewLayout(p: PosNewLayoutProps) {
           </label>
         </div>
 
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(8.5rem,1fr))] gap-2.5 mb-5">
+        {/* Categories as one row of chips (stage 7): the dishes, not the
+            category cards, fill the first screen. */}
+        <div role="group" aria-label="Menu categories" className="flex gap-2 overflow-x-auto pb-2 mb-3 -mx-1 px-1 custom-scrollbar">
           {catCards.map((c) => {
             const on = p.selectedCategory === c.id;
             return (
@@ -167,27 +194,33 @@ export function PosNewLayout(p: PosNewLayoutProps) {
                 type="button"
                 onClick={() => p.onSelectCategory(c.id)}
                 aria-pressed={on}
-                className={`h-28 rounded-xl border flex flex-col items-center justify-center gap-1 px-2 transition ${
-                  on ? "border-ui-primary bg-ui-primary-soft" : "border-ui-border bg-ui-surface hover:border-ui-border-strong"
+                aria-label={`${c.name}, ${dishes(c.count)}`}
+                className={`h-12 pl-1.5 pr-3.5 rounded-full border flex items-center gap-2 shrink-0 transition ${
+                  on ? "border-ui-primary bg-ui-primary text-ui-on-primary shadow-ui-1" : "border-ui-border bg-ui-surface text-ui-text hover:border-ui-border-strong"
                 }`}
               >
-                <span className="w-12 h-12 rounded-full overflow-hidden bg-ui-subtle flex items-center justify-center shrink-0">
+                <span className="w-9 h-9 rounded-full overflow-hidden bg-ui-subtle flex items-center justify-center shrink-0">
                   {c.image ? (
-                    <Image unoptimized width={96} height={96} src={c.image} alt="" className="w-full h-full object-cover" />
+                    <Image unoptimized width={72} height={72} src={c.image} alt="" className="w-full h-full object-cover" />
                   ) : (
-                    <UtensilsCrossed className="w-5 h-5 text-ui-muted" />
+                    <UtensilsCrossed className="w-4 h-4 text-ui-muted" />
                   )}
                 </span>
-                <span className={`text-[0.8125rem] font-bold leading-tight text-center line-clamp-1 ${on ? "text-ui-primary-text" : "text-ui-text"}`}>
-                  {c.name}
+                <span className="text-[0.8125rem] font-bold whitespace-nowrap">{c.name}</span>
+                <span
+                  aria-hidden="true"
+                  className={`min-w-6 h-6 px-1.5 rounded-full text-[0.75rem] font-bold flex items-center justify-center ${
+                    on ? "bg-black/15" : "bg-ui-subtle text-ui-text-2"
+                  }`}
+                >
+                  {c.count}
                 </span>
-                <span className="text-xs text-ui-muted">{c.count} dishes</span>
               </button>
             );
           })}
         </div>
 
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(10.5rem,1fr))] gap-3">
+        <div className={`grid gap-3 ${sheet ? "grid-cols-2 sm:grid-cols-[repeat(auto-fill,minmax(10.5rem,1fr))]" : "grid-cols-[repeat(auto-fill,minmax(10.5rem,1fr))]"}`}>
           {p.filteredItems.map((item) => {
             const qty = p.cartQtyByItem.get(item.id) ?? 0;
             const off = !item.isAvailable;
@@ -198,11 +231,11 @@ export function PosNewLayout(p: PosNewLayoutProps) {
                 onClick={() => p.onItem(item)}
                 disabled={off}
                 aria-label={`${item.name}, ${cedi(Number(item.price))}${off ? ", unavailable" : qty ? `, ${qty} on the order` : ""}`}
-                className={`text-left rounded-xl p-2 pb-3 border bg-ui-surface transition disabled:cursor-not-allowed ${
-                  qty ? "border-ui-primary" : "border-ui-border hover:border-ui-border-strong"
+                className={`group text-left rounded-2xl p-2 pb-3 border bg-ui-surface shadow-ui-1 transition duration-150 active:scale-[0.97] disabled:cursor-not-allowed ${
+                  qty ? "border-ui-primary ring-2 ring-ui-primary/20" : "border-ui-border hover:border-ui-border-strong hover:-translate-y-0.5"
                 } ${off ? "opacity-60" : ""}`}
               >
-                <span className="relative block h-28 rounded-lg overflow-hidden bg-ui-subtle">
+                <span className="relative block h-28 rounded-xl overflow-hidden bg-ui-subtle">
                   {item.imageUrl ? (
                     <Image
                       unoptimized
@@ -211,15 +244,22 @@ export function PosNewLayout(p: PosNewLayoutProps) {
                       src={item.imageUrl}
                       alt=""
                       loading="lazy"
-                      className={`w-full h-full object-cover ${off ? "grayscale" : ""}`}
+                      className={`w-full h-full object-cover transition duration-300 group-hover:scale-[1.04] ${off ? "grayscale" : ""}`}
                     />
                   ) : (
-                    <span className="w-full h-full flex items-center justify-center text-ui-muted">
-                      <Coffee className="w-7 h-7" />
+                    // No photo yet: the dish's initials on the brand tint, so the
+                    // card reads as designed rather than as a missing image.
+                    <span className="w-full h-full flex items-center justify-center bg-gradient-to-br from-ui-primary-soft to-ui-subtle">
+                      <span className="text-3xl font-extrabold tracking-tight text-ui-primary-text" aria-hidden="true">
+                        {initials(item.name)}
+                      </span>
                     </span>
                   )}
                   {qty > 0 && (
-                    <span className="absolute top-2 right-2 min-w-7 h-7 px-1.5 rounded-full bg-ui-primary text-ui-on-primary text-xs font-bold flex items-center justify-center">
+                    <span
+                      key={qty}
+                      className="ui-pop absolute top-2 right-2 min-w-7 h-7 px-1.5 rounded-full bg-ui-primary text-ui-on-primary text-xs font-bold flex items-center justify-center shadow-ui-1"
+                    >
                       {qty}
                     </span>
                   )}
@@ -236,7 +276,7 @@ export function PosNewLayout(p: PosNewLayoutProps) {
                 </span>
                 <span className="block px-1 mt-1 text-sm font-bold leading-snug line-clamp-2 min-h-[2.5rem]">{item.name}</span>
                 <span className="flex items-center justify-between px-1 mt-1">
-                  <span className="text-base font-bold text-ui-primary-text font-mono">{cedi(Number(item.price))}</span>
+                  <Money value={item.price} className="text-base font-extrabold text-ui-primary-text" />
                 </span>
               </button>
             );
@@ -251,18 +291,65 @@ export function PosNewLayout(p: PosNewLayoutProps) {
         )}
       </main>
 
-      {/* ORDER PANEL */}
-      <aside aria-label="Order" className="w-[25rem] shrink-0 flex flex-col bg-ui-surface border-l border-ui-border">
+      {/* PHONE ORDER BAR (stage 7): the running total, always in reach;
+          tapping it slides the order panel up. Sits above the bottom tabs. */}
+      {sheet && !sheetOpen && (
+        <button
+          type="button"
+          onClick={() => setSheetOpen(true)}
+          aria-label={`Open the order: ${cartCount} item${cartCount === 1 ? "" : "s"}, ${cedi(p.totalAmount)}`}
+          className="fixed inset-x-3 bottom-[calc(4.5rem+env(safe-area-inset-bottom,0px))] md:bottom-4 z-20 h-16 pl-2 pr-3 rounded-2xl bg-ui-text text-ui-bg shadow-ui-2 flex items-center gap-3 ui-slide"
+        >
+          <span className="relative w-12 h-12 rounded-xl bg-ui-primary text-ui-on-primary flex items-center justify-center shrink-0">
+            <ShoppingBag className="w-5 h-5" strokeWidth={2.4} />
+            {cartCount > 0 && (
+              <span key={cartCount} className="ui-pop absolute -top-1.5 -right-1.5 min-w-6 h-6 px-1 rounded-full bg-ui-bg text-ui-text text-xs font-bold flex items-center justify-center border-2 border-ui-text">
+                {cartCount}
+              </span>
+            )}
+          </span>
+          <span className="flex-1 min-w-0 text-left">
+            <span className="block text-xs font-semibold opacity-80">{cartCount === 0 ? "Open order" : `${cartCount} item${cartCount === 1 ? "" : "s"}`}</span>
+            <span className="block text-lg font-extrabold leading-tight truncate">{cartCount === 0 ? "No items yet" : <Money value={p.totalAmount} />}</span>
+          </span>
+          <span className="h-11 px-3.5 rounded-xl bg-ui-bg/15 font-bold text-sm inline-flex items-center gap-1.5">
+            View <ChevronUp className="w-4 h-4" />
+          </span>
+        </button>
+      )}
+      {sheet && sheetOpen && <div className="ui-fade fixed inset-0 z-30 bg-slate-950/45 backdrop-blur-[3px]" onClick={() => setSheetOpen(false)} aria-hidden="true" />}
+
+      {/* ORDER PANEL: the right-hand column, or on narrow screens a sheet. */}
+      <aside
+        aria-label="Order"
+        className={
+          sheet
+            ? `${sheetOpen ? "flex" : "hidden"} ui-sheet fixed inset-x-0 bottom-0 z-40 max-h-[92dvh] flex-col bg-ui-surface rounded-t-3xl shadow-ui-2 overflow-y-auto overscroll-contain`
+            : "w-[25rem] shrink-0 flex flex-col bg-ui-surface border-l border-ui-border"
+        }
+      >
+        {sheet && <span aria-hidden="true" className="mx-auto mt-2 h-1.5 w-12 rounded-full bg-ui-border-strong shrink-0" />}
         <div className="p-3 border-b border-ui-border space-y-2 shrink-0">
-          <div className="flex items-baseline justify-between gap-2">
+          <div className="flex items-center justify-between gap-2">
             <h2 className="text-lg font-bold" title={p.loadedOrder?.orderNumber}>
               {p.loadedOrder ? `Order ${docketNo(p.loadedOrder.orderNumber)}` : "New order"}
             </h2>
-            <span className="text-xs text-ui-muted">
-              {new Date().toLocaleDateString("en-GH", { day: "2-digit", month: "short", year: "numeric" })}
-            </span>
+            {sheet ? (
+              <button
+                type="button"
+                onClick={() => setSheetOpen(false)}
+                aria-label="Close the order and back to the menu"
+                className="w-11 h-11 rounded-full text-ui-muted hover:bg-ui-subtle flex items-center justify-center"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            ) : (
+              <span className="text-xs text-ui-muted">
+                {new Date().toLocaleDateString("en-GH", { day: "2-digit", month: "short", year: "numeric" })}
+              </span>
+            )}
           </div>
-          {/* responsive-ok: the new layout needs a 64rem+ screen; four short type labels */}
+          {/* responsive-ok: four short type labels; fits a 360px phone sheet */}
           <div role="tablist" aria-label="Order type" className="grid grid-cols-4 gap-1.5">
             {TYPES.map(([t, l]) => (
               <button
@@ -337,7 +424,9 @@ export function PosNewLayout(p: PosNewLayoutProps) {
             . Add items, then take payment.
           </div>
         )}
-        <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-2 space-y-2 custom-scrollbar">
+        {/* In the phone sheet the whole sheet scrolls and the totals stay pinned
+            at its foot, so the items always get the room they need. */}
+        <div className={sheet ? "shrink-0 px-4 pb-3 space-y-2" : "flex-1 min-h-0 overflow-y-auto px-4 pb-2 space-y-2 custom-scrollbar"}>
           {p.cart.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-center text-ui-muted py-8">
               <Receipt className="w-10 h-10 mb-2 opacity-50" />
@@ -346,7 +435,7 @@ export function PosNewLayout(p: PosNewLayoutProps) {
             </div>
           ) : (
             p.cart.map((it, idx) => (
-              <div key={it.cartItemId || idx} className="rounded-lg border border-ui-border px-3 py-2">
+              <div key={it.cartItemId || idx} className="ui-in rounded-xl border border-ui-border px-3 py-2">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <div className="text-sm font-bold leading-tight">{it.itemName}</div>
@@ -393,7 +482,9 @@ export function PosNewLayout(p: PosNewLayoutProps) {
           )}
         </div>
 
-        <div className="shrink-0 border-t border-ui-border bg-ui-subtle p-3 space-y-2.5">
+        {/* Adjustments and the breakdown; in the phone sheet these scroll
+            with the items and only the amount and the actions stay pinned. */}
+        <div className="shrink-0 border-t border-ui-border bg-ui-subtle px-3 pt-3 space-y-2.5">
           <div className="flex gap-1.5">
             <button
               type="button"
@@ -449,6 +540,15 @@ export function PosNewLayout(p: PosNewLayoutProps) {
             {p.tipAmount > 0 && !p.isComplimentary && (
               <div className="flex justify-between text-ui-success"><span>Tip</span><span className="font-mono">+{cedi(p.tipAmount)}</span></div>
             )}
+          </div>
+        </div>
+
+        <div
+          className={`shrink-0 bg-ui-subtle px-3 pt-2 space-y-2.5 ${
+            sheet ? "sticky bottom-0 z-10 border-t border-ui-border shadow-ui-2 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))]" : "pb-3"
+          }`}
+        >
+          <div className="text-[0.8125rem]">
             {p.isComplimentary ? (
               <div className="pt-2 border-t border-dashed border-ui-border-strong">
                 <div className="flex justify-between text-base font-bold text-ui-info"><span>Complimentary</span><span className="font-mono">GH₵0.00</span></div>
@@ -457,7 +557,7 @@ export function PosNewLayout(p: PosNewLayoutProps) {
             ) : (
               <div className="flex justify-between items-baseline pt-2 border-t border-dashed border-ui-border-strong text-base font-bold">
                 <span>Amount to be paid</span>
-                <span className="font-mono text-lg text-ui-primary-text">{cedi(p.totalAmount)}</span>
+                <Money key={p.totalAmount} value={p.totalAmount} className="ui-fade text-2xl font-extrabold text-ui-primary-text" />
               </div>
             )}
           </div>
@@ -476,7 +576,7 @@ export function PosNewLayout(p: PosNewLayoutProps) {
               type="button"
               onClick={p.onSettle}
               disabled={p.cart.length === 0 || p.isSubmitting}
-              className="w-full h-13 rounded-xl bg-ui-primary hover:bg-ui-primary-hover text-ui-on-primary text-[0.9375rem] font-bold disabled:opacity-40 disabled:cursor-not-allowed transition active:scale-[0.99]"
+              className="w-full h-13 rounded-xl bg-ui-primary hover:bg-ui-primary-hover text-ui-on-primary text-[0.9375rem] font-bold shadow-ui-1 disabled:shadow-none disabled:bg-ui-border disabled:text-ui-muted disabled:cursor-not-allowed transition active:scale-[0.99]"
             >
               Take payment · {cedi(p.totalAmount)}
             </button>

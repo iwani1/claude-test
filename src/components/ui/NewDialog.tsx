@@ -29,14 +29,14 @@ export function Dialog({
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 p-4 overflow-y-auto">
+    <div className="ui-fade fixed inset-0 z-50 flex items-start justify-center bg-slate-950/45 backdrop-blur-[3px] p-4 overflow-y-auto">
       <div
         ref={ref}
         tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-label={label}
-        className={`w-full ${width} my-auto rounded-2xl bg-ui-surface text-ui-text border border-ui-border shadow-2xl outline-none max-h-[94dvh] overflow-y-auto`}
+        className={`w-full ${width} my-auto rounded-2xl bg-ui-surface text-ui-text ui-in border border-ui-border shadow-ui-2 outline-none max-h-[94dvh] overflow-y-auto`}
       >
         {children}
       </div>

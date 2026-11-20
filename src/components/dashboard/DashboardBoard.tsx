@@ -1,5 +1,7 @@
 "use client";
 
+import { Money } from "@/components/ui/Money";
+import { SkeletonCards } from "@/components/ui/Skeleton";
 import React, { useEffect, useState } from "react";
 import { AlertTriangle, ArrowRight, Banknote, Boxes, ChefHat, Grid, Receipt, RefreshCw, Smartphone, TrendingUp, Utensils, Wallet } from "lucide-react";
 import type { NavTab } from "@/components/nav-config";
@@ -98,12 +100,16 @@ export function DashboardBoard({
         // not yet; the average is billed sales over those.
         { label: "Orders", value: String(s.totalOrdersCount), sub: `${s.paidOrderCount} charged · ${s.compOrderCount} free`, icon: Receipt },
         { label: "Average bill", value: cedi(s.avgOrderValue), sub: "billed, per charged order", icon: TrendingUp },
-        {
-          label: "Gross margin (estimate)",
-          value: cedi(s.grossProfit),
-          sub: `billed sales less recipe cost · food cost ${s.foodCostPercentage}%`,
-          icon: Banknote,
-        },
+        // With no recipe costs recorded the margin would equal sales, which
+        // reads as a real figure; say so instead (stage 7).
+        Number(s.totalCostOfGoods) > 0 || Number(s.totalSales) === 0
+          ? {
+              label: "Gross margin (estimate)",
+              value: cedi(s.grossProfit),
+              sub: `billed sales less recipe cost · food cost ${s.foodCostPercentage}%`,
+              icon: Banknote,
+            }
+          : { label: "Gross margin (estimate)", value: "Not yet", sub: "no recipe costs recorded for these sales", icon: Banknote },
       ]
     : [];
 
@@ -157,17 +163,25 @@ export function DashboardBoard({
             Sales figures: {errors.reports}. Nothing is shown rather than a wrong zero.
           </p>
         ) : !s ? (
-          <p className="text-sm text-ui-muted">Loading figures…</p>
+          <>
+            <p className="sr-only">Loading figures…</p>
+            <SkeletonCards count={4} />
+          </>
         ) : (
           <div className="grid grid-cols-[repeat(auto-fit,minmax(14rem,1fr))] gap-3">
             {kpis.map((k) => {
               const Icon = k.icon;
               return (
-                <div key={k.label} className="rounded-xl border border-ui-border bg-ui-surface p-4">
-                  <div className="flex items-center justify-between text-[0.8125rem] font-semibold text-ui-muted">
-                    {k.label} <Icon className="w-4 h-4" />
+                <div key={k.label} className="ui-in rounded-xl border border-ui-border bg-ui-surface shadow-ui-1 p-4">
+                  <div className="flex items-center justify-between gap-2 text-[0.8125rem] font-semibold text-ui-muted">
+                    {k.label}
+                    <span className="w-8 h-8 rounded-full bg-ui-primary-soft text-ui-primary-text flex items-center justify-center shrink-0">
+                      <Icon className="w-4 h-4" />
+                    </span>
                   </div>
-                  <div className="text-2xl font-bold font-mono mt-1">{k.value}</div>
+                  <div className="text-[1.75rem] font-extrabold tracking-tight mt-1 leading-tight">
+                    {k.value.startsWith("GH₵") ? <Money value={k.value.slice(3).replace(/,/g, "")} /> : k.value}
+                  </div>
                   <div className="text-xs text-ui-muted mt-1">{k.sub}</div>
                 </div>
               );
@@ -262,7 +276,7 @@ export function DashboardBoard({
             {(reports?.categoryBreakdown || []).length === 0 ? (
               <p className="text-sm text-ui-muted">Nothing sold {label}.</p>
             ) : (
-              <Bars rows={(reports.categoryBreakdown as any[]).slice(0, 8).map((c) => ({ name: c.name, value: Number(c.revenue), sub: `${c.count} items` }))} unit={(v) => cedi(v)} />
+              <Bars rows={(reports.categoryBreakdown as any[]).slice(0, 8).map((c) => ({ name: c.name, value: Number(c.revenue), sub: `${c.count} item${Number(c.count) === 1 ? "" : "s"}` }))} unit={(v) => cedi(v)} />
             )}
           </Panel>
 
