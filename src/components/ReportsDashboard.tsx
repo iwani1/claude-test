@@ -21,17 +21,15 @@ import {
 import { apiErrorMessage, apiFetch } from "@/lib/api-client";
 import { notify } from "@/lib/notify";
 import { useUiPreferences } from "@/lib/ui-preferences";
-import { MD_UP, useMediaQuery } from "@/lib/use-media-query";
 import { ReportsBoard } from "@/components/reports/ReportsBoard";
 
 type PresetTimeframe = "today" | "7days" | "30days" | "all";
 type Timeframe = PresetTimeframe | "custom";
 
 export const ReportsDashboard: React.FC<{ canExportTransactions?: boolean }> = ({ canExportTransactions = false }) => {
-  /** The new design's reports (redesign stage 5b) wherever its top bar shows. */
+  /** The new design's reports (redesign stage 5b), on every screen size. */
   const { design } = useUiPreferences();
-  const mdScreen = useMediaQuery(MD_UP);
-  const newBoard = design === "new" && mdScreen;
+  const newBoard = design === "new";
   const [timeframe, setTimeframe] = useState<Timeframe>("all");
   // Custom range: the inputs are a draft until "Apply" is tapped, so the
   // report (and the CSV exports) never chase half-typed dates.

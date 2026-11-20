@@ -89,7 +89,7 @@ export function KitchenBoard(p: {
       </div>
 
       <div className="shrink-0 px-5 pb-3">
-        <div role="tablist" aria-label="Station" className="inline-flex gap-1 p-1 rounded-lg border border-ui-border bg-ui-surface">
+        <div role="tablist" aria-label="Station" className="inline-flex max-w-full overflow-x-auto gap-1 p-1 rounded-lg border border-ui-border bg-ui-surface">
           {STATIONS.map(([s, label, Icon]) => (
             <button
               key={s}
@@ -97,7 +97,7 @@ export function KitchenBoard(p: {
               role="tab"
               aria-selected={p.station === s}
               onClick={() => p.onStation(s)}
-              className={`h-10 px-3.5 rounded-md text-[0.8125rem] font-semibold inline-flex items-center gap-1.5 transition ${
+              className={`h-10 px-3.5 rounded-md text-[0.8125rem] font-semibold whitespace-nowrap shrink-0 inline-flex items-center gap-1.5 transition ${
                 p.station === s ? "bg-ui-primary text-ui-on-primary" : "text-ui-text-2 hover:bg-ui-subtle"
               }`}
             >

@@ -107,7 +107,7 @@ function RangePicker({ from, to, onRange }: { from: string; to: string; onRange:
   const custom = !presets.some(([, f, t]) => f === from && t === to);
   return (
     <div className="flex items-center gap-2 flex-wrap">
-      <div role="group" aria-label="Date range" className="flex gap-1 p-1 rounded-lg border border-ui-border bg-ui-surface">
+      <div role="group" aria-label="Date range" className="flex flex-wrap gap-1 p-1 rounded-lg border border-ui-border bg-ui-surface">
         {presets.map(([label, f, t]) => {
           const on = f === from && t === to;
           return (
@@ -116,7 +116,7 @@ function RangePicker({ from, to, onRange }: { from: string; to: string; onRange:
               type="button"
               aria-pressed={on}
               onClick={() => onRange(f, t)}
-              className={`h-10 px-3 rounded-md text-[0.8125rem] font-semibold transition ${on ? "bg-ui-primary text-ui-on-primary" : "text-ui-text-2 hover:bg-ui-subtle"}`}
+              className={`h-10 px-3 rounded-md text-[0.8125rem] font-semibold whitespace-nowrap transition ${on ? "bg-ui-primary text-ui-on-primary" : "text-ui-text-2 hover:bg-ui-subtle"}`}
             >
               {label}
             </button>
@@ -402,7 +402,7 @@ export function OrdersBoard(p: {
           </div>
         )}
 
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(11rem,1fr))] gap-2.5 mt-4">
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(8rem,1fr))] gap-2.5 mt-4">
           {stats.map((s) => {
             const Icon = s.icon;
             return (
@@ -419,7 +419,7 @@ export function OrdersBoard(p: {
                   <span className="block text-[0.8125rem] font-semibold text-ui-muted truncate">{s.label}</span>
                   <span className="block text-xl font-bold font-mono">{s.count === -1 ? cedi(openValue) : s.count}</span>
                 </span>
-                <span className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${s.cls}`}>
+                <span className={`hidden min-[480px]:flex w-10 h-10 rounded-full items-center justify-center shrink-0 ${s.cls}`}>
                   <Icon className="w-5 h-5" />
                 </span>
               </button>

@@ -20,7 +20,6 @@ import {
 import { NavTab } from "./Sidebar";
 import { ROLE_PERMISSIONS, UserRole } from "@/lib/permissions";
 import { useUiPreferences } from "@/lib/ui-preferences";
-import { MD_UP, useMediaQuery } from "@/lib/use-media-query";
 import { DashboardBoard } from "@/components/dashboard/DashboardBoard";
 
 interface OwnerDashboardProps {
@@ -30,12 +29,11 @@ interface OwnerDashboardProps {
   perms?: (typeof ROLE_PERMISSIONS)[UserRole];
 }
 
-/** The new design's dashboard (redesign stage 5b) wherever its top bar shows;
+/** The new design's dashboard (redesign stage 5b) on every screen size;
  *  the classic one otherwise. Only one of them loads its data. */
 export const OwnerDashboard: React.FC<OwnerDashboardProps> = (props) => {
   const { design } = useUiPreferences();
-  const mdScreen = useMediaQuery(MD_UP);
-  if (design === "new" && mdScreen) {
+  if (design === "new") {
     const p = props.perms;
     return (
       <DashboardBoard

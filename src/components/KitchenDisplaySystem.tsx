@@ -20,14 +20,12 @@ import { ScrollFadeList } from "@/components/interface-studies";
 import { apiErrorMessage, apiFetch } from "@/lib/api-client";
 import { notify } from "@/lib/notify";
 import { useUiPreferences } from "@/lib/ui-preferences";
-import { MD_UP, useMediaQuery } from "@/lib/use-media-query";
 import { KitchenBoard } from "@/components/kitchen/KitchenBoard";
 
 export const KitchenDisplaySystem: React.FC = () => {
-  /** The new design's board (redesign stage 4a) wherever its top bar shows. */
+  /** The new design's board (redesign stage 4a), on every screen size. */
   const { design } = useUiPreferences();
-  const mdScreen = useMediaQuery(MD_UP);
-  const newBoard = design === "new" && mdScreen;
+  const newBoard = design === "new";
   const [tickets, setTickets] = useState<any[]>([]);
   const [stationFilter, setStationFilter] = useState<string>("all");
   const [isLoading, setIsLoading] = useState(false);
