@@ -19,7 +19,9 @@ page), in light and dark.
 - **Light or dark**, chosen per terminal in the account menu.
 - When every screen is done, the default flips to the new design and the
   classic shell is removed in its own pull request.
-- Phones keep the current layout until a later stage.
+- Phones keep the current layout until a later stage. The new POS screen needs
+  a 64rem-wide screen (laptop or landscape till); narrower screens keep the
+  classic till and its slide-up order sheet.
 
 ## Rules for new-design code
 
@@ -33,6 +35,13 @@ page), in light and dark.
 - Screens reuse the existing logic: a redesigned screen changes markup and
   styling, not how orders, payments, approvals or stock work. Money paths keep
   their idempotency keys, row locks and manager-PIN checks.
+- Classic components shown inside a new screen sit in `.ui-bridge`
+  (`globals.css`): in the light theme it re-points the classic colour variables
+  to the new tokens and darker text shades. It is a migration aid, removed with
+  the classic shell.
+- The till's new layout (`src/components/pos/PosNewLayout.tsx`) is markup
+  only; every value and handler comes from `PosTerminal`, and both layouts
+  share one set of pop-ups (`sharedModals`).
 - Touch targets stay at least 44px; the bar's labels drop by container width in
   `rem` (they scale with the terminal's text size), not by screen breakpoints.
 
@@ -40,8 +49,9 @@ page), in light and dark.
 
 | Stage | Scope | Status |
 |---|---|---|
-| 1 | Tokens (light/dark), per-terminal switch, top-bar shell, shared nav list | This PR |
-| 2 | POS screen in the demo 8 layout (recent orders, category cards, dish cards, order panel) | Next |
+| 1 | Tokens (light/dark), per-terminal switch, top-bar shell, shared nav list | PR #39 |
+| 2 | POS screen in the demo 8 layout (recent orders, category cards, dish cards, order panel); the shared pop-ups re-coloured for light through the theme bridge | Built |
+| 2b | Pop-ups redrawn natively in the new design (dish options with portions and add-ons, payment, discount, docket token) | Next |
 | 3 | Orders page (demo 9) | Planned |
 | 4 | Kitchen, Tables, Cash Drawer | Planned |
 | 5 | Menu, stock, purchasing, reports, staff, settings | Planned |
