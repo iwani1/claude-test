@@ -584,7 +584,10 @@ export default function App() {
           ) : (
             activeTab !== "pos" && terminalControls
           )}
-          <main className="flex-1 flex flex-col min-h-0 overflow-hidden bg-neutral-950">
+          {/* With the new design on, screens not yet redrawn (the back office)
+              take the terminal's theme through the colour bridge (globals.css);
+              redrawn screens use the theme tokens directly. */}
+          <main className={`flex-1 flex flex-col min-h-0 overflow-hidden bg-neutral-950 ${newShell ? "ui-bridge" : ""}`}>
             {renderTab()}
           </main>
         </div>

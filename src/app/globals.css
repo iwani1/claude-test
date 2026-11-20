@@ -118,6 +118,28 @@
   --color-purple-500: #7e22ce;
   --color-purple-400: #7e22ce;
   --color-purple-300: #6b21a8;
+  /* Shades used by the back-office screens (redesign stage 5a). */
+  --color-amber-900: var(--ui-primary-soft);
+  --color-amber-700: var(--ui-primary-hover);
+  --color-amber-600: var(--ui-primary-hover);
+  --color-amber-200: var(--ui-primary-text);
+  --color-amber-100: var(--ui-primary-text);
+  --color-amber-50: var(--ui-primary-text);
+  --color-orange-700: var(--ui-primary-hover);
+  --color-orange-600: var(--ui-primary);
+  --color-orange-500: var(--ui-primary);
+  --color-orange-400: var(--ui-primary-text);
+  --color-orange-300: var(--ui-primary-text);
+  --color-red-400: var(--ui-danger);
+  --color-rose-950: #fee2e2;
+  --color-rose-900: #fecaca;
+  --color-rose-200: var(--ui-danger);
+  --color-emerald-950: #dcfce7;
+  --color-emerald-900: #dcfce7;
+  --color-emerald-800: #bbf7d0;
+  --color-emerald-200: var(--ui-success);
+  --color-emerald-50: var(--ui-success);
+  --color-pink-400: #be185d;
 }
 [data-ui-theme="light"] .ui-bridge .text-black,
 [data-ui-theme="light"] .ui-bridge :is(.bg-emerald-600, .bg-rose-600, .bg-sky-600, .bg-amber-500).text-white {
