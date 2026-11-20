@@ -1,5 +1,82 @@
 @import "tailwindcss";
 
+/* ------------------------------------------------------------------ */
+/* New design tokens (redesign, Nov 2026). Used only by the new shell   */
+/* and screens (`bg-ui-surface`, `text-ui-muted`, ...); the classic     */
+/* screens keep their own neutral/amber classes. The theme comes from   */
+/* <html data-ui-theme>, set per terminal (src/lib/ui-preferences.ts).  */
+/* Text pairs meet 4.5:1: e.g. ui-muted on ui-surface, ui-on-primary on */
+/* ui-primary, ui-primary-text on ui-primary-soft, in both themes.      */
+/* ------------------------------------------------------------------ */
+@theme inline {
+  --color-ui-bg: var(--ui-bg);
+  --color-ui-surface: var(--ui-surface);
+  --color-ui-subtle: var(--ui-subtle);
+  --color-ui-border: var(--ui-border);
+  --color-ui-border-strong: var(--ui-border-strong);
+  --color-ui-text: var(--ui-text);
+  --color-ui-text-2: var(--ui-text-2);
+  --color-ui-muted: var(--ui-muted);
+  --color-ui-primary: var(--ui-primary);
+  --color-ui-primary-hover: var(--ui-primary-hover);
+  --color-ui-on-primary: var(--ui-on-primary);
+  --color-ui-primary-soft: var(--ui-primary-soft);
+  --color-ui-primary-text: var(--ui-primary-text);
+  --color-ui-danger: var(--ui-danger);
+  --color-ui-danger-soft: var(--ui-danger-soft);
+  --color-ui-success: var(--ui-success);
+  --color-ui-success-soft: var(--ui-success-soft);
+  --color-ui-info: var(--ui-info);
+  --color-ui-info-soft: var(--ui-info-soft);
+}
+
+:root,
+[data-ui-theme="light"] {
+  --ui-bg: #f4f6f9;
+  --ui-surface: #ffffff;
+  --ui-subtle: #f8fafc;
+  --ui-border: #e2e8f0;
+  --ui-border-strong: #cbd5e1;
+  --ui-text: #0f172a;
+  --ui-text-2: #334155;
+  --ui-muted: #475569;
+  --ui-primary: #c2410c;
+  --ui-primary-hover: #9a3412;
+  --ui-on-primary: #ffffff;
+  --ui-primary-soft: #fff7ed;
+  --ui-primary-text: #9a3412;
+  --ui-danger: #b91c1c;
+  --ui-danger-soft: #fef2f2;
+  --ui-success: #15803d;
+  --ui-success-soft: #f0fdf4;
+  --ui-info: #0369a1;
+  --ui-info-soft: #f0f9ff;
+  --ui-shadow: 0 1px 2px rgb(15 23 42 / 0.06);
+}
+
+[data-ui-theme="dark"] {
+  --ui-bg: #0b0d10;
+  --ui-surface: #15181d;
+  --ui-subtle: #1c2027;
+  --ui-border: #2a2f37;
+  --ui-border-strong: #3a404a;
+  --ui-text: #f1f5f9;
+  --ui-text-2: #cbd5e1;
+  --ui-muted: #94a3b8;
+  --ui-primary: #f59e0b;
+  --ui-primary-hover: #fbbf24;
+  --ui-on-primary: #111113;
+  --ui-primary-soft: rgb(245 158 11 / 0.14);
+  --ui-primary-text: #fbbf24;
+  --ui-danger: #f87171;
+  --ui-danger-soft: rgb(248 113 113 / 0.12);
+  --ui-success: #4ade80;
+  --ui-success-soft: rgb(74 222 128 / 0.12);
+  --ui-info: #7dd3fc;
+  --ui-info-soft: rgb(125 211 252 / 0.12);
+  --ui-shadow: 0 1px 2px rgb(0 0 0 / 0.4);
+}
+
 @layer base {
   html {
     /* POS terminals are tapped, not clicked with a mouse. Removing the
