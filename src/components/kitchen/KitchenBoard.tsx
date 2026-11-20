@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { AlertCircle, CheckCircle2, ChefHat, Clock, Flame, Printer, RefreshCw, Wine } from "lucide-react";
+import { AlertCircle, CheckCircle2, ChefHat, Flame, Printer, RefreshCw, Wine } from "lucide-react";
 
 /**
  * The kitchen board in the new design (redesign stage 4a, Nov 2026): one
@@ -39,6 +39,26 @@ const COLUMNS: { status: string; label: string; dot: string; next?: { to: "prepa
   { status: "preparing", label: "Preparing", dot: "bg-ui-primary", next: { to: "ready", label: "Mark ready" } },
   { status: "ready", label: "Ready", dot: "bg-ui-success", next: { to: "completed", label: "Collected · clear" } },
 ];
+
+/** Ticket age as a ring that fills towards the overdue mark (stage 7): the
+ *  loudest thing on the card, readable from across the pass. */
+function AgeRing({ minutes, tone }: { minutes: number; tone: string }) {
+  const r = 17;
+  const c = 2 * Math.PI * r;
+  const filled = Math.min(1, minutes / LATE_MIN);
+  return (
+    <span className={`relative w-12 h-12 shrink-0 rounded-full inline-flex items-center justify-center ${tone}`} aria-hidden="true">
+      <svg viewBox="0 0 40 40" className="absolute inset-0 w-full h-full -rotate-90">
+        <circle cx="20" cy="20" r={r} fill="none" stroke="currentColor" strokeOpacity="0.18" strokeWidth="3.5" />
+        <circle cx="20" cy="20" r={r} fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeDasharray={`${filled * c} ${c}`} />
+      </svg>
+      <span className="text-[0.9375rem] font-extrabold leading-none">
+        {minutes}
+        <span className="text-[0.625rem] font-bold">m</span>
+      </span>
+    </span>
+  );
+}
 
 export function KitchenBoard(p: {
   tickets: any[];
@@ -124,7 +144,9 @@ export function KitchenBoard(p: {
             <p className="text-sm mt-1">Dockets appear here when an order is sent to the kitchen.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-[repeat(auto-fit,minmax(18rem,1fr))] gap-4 items-start">
+          // Lanes share the width by how many tickets they hold, and tickets
+          // wrap inside a lane, so a busy pass shows four or five across.
+          <div className="flex flex-col md:flex-row gap-4 items-stretch md:items-start">
             {/* Orders reach the kitchen already "preparing" (create-order), so
                 the New column only shows while a pending ticket exists. */}
             {COLUMNS.filter((col) => col.status !== "pending" || count("pending") > 0).map((col) => {
@@ -132,7 +154,12 @@ export function KitchenBoard(p: {
                 .filter((t) => t.status === col.status)
                 .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
               return (
-                <section key={col.status} aria-label={`${col.label} tickets`} className="rounded-xl bg-ui-subtle border border-ui-border p-3 flex flex-col gap-3">
+                <section
+                  key={col.status}
+                  aria-label={`${col.label} tickets`}
+                  style={{ flexGrow: Math.max(1, Math.min(list.length, 3)) }}
+                  className="md:basis-0 md:min-w-[17rem] rounded-2xl bg-ui-subtle border border-ui-border p-3 flex flex-col gap-3"
+                >
                   <div className="flex items-center justify-between px-1">
                     <span className="flex items-center gap-2 text-sm font-bold">
                       <span className={`w-2.5 h-2.5 rounded-full ${col.dot}`} /> {col.label}
@@ -140,6 +167,7 @@ export function KitchenBoard(p: {
                     <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-ui-surface text-ui-text-2">{list.length}</span>
                   </div>
                   {list.length === 0 && <p className="text-xs text-ui-muted px-1 pb-1">None</p>}
+                  <div className="grid grid-cols-[repeat(auto-fill,minmax(16rem,1fr))] gap-3 items-start">
                   {list.map((t) => {
                     const m = minutes(t);
                     const isLate = t.status !== "ready" && m > LATE_MIN;
@@ -147,7 +175,7 @@ export function KitchenBoard(p: {
                       t.status === "ready"
                         ? "bg-ui-success-soft text-ui-success"
                         : isLate
-                          ? "bg-ui-danger text-ui-surface"
+                          ? "bg-ui-danger-soft text-ui-danger"
                           : m > WARN_MIN
                             ? "bg-ui-primary-soft text-ui-primary-text"
                             : "bg-ui-subtle text-ui-text-2";
@@ -155,7 +183,7 @@ export function KitchenBoard(p: {
                       <article
                         key={t.id}
                         aria-label={`Ticket ${t.ticketNumber}, ${m} minutes${isLate ? ", overdue" : ""}`}
-                        className={`rounded-xl bg-ui-surface border-2 flex flex-col overflow-hidden ${
+                        className={`ui-in rounded-xl bg-ui-surface border-2 shadow-ui-1 flex flex-col overflow-hidden ${
                           isLate ? "border-ui-danger" : t.status === "ready" ? "border-ui-success" : "border-ui-border"
                         }`}
                       >
@@ -171,15 +199,13 @@ export function KitchenBoard(p: {
                               {TYPE_LABEL[t.orderType] ?? t.orderType} · {t.customerName || "Walk-in Guest"}
                             </div>
                           </div>
-                          <span className={`h-9 px-2.5 rounded-lg text-sm font-bold font-mono inline-flex items-center gap-1 shrink-0 ${tone}`}>
-                            <Clock className="w-4 h-4" /> {m}m
-                          </span>
+                          <AgeRing minutes={m} tone={tone} />
                           <button
                             type="button"
                             onClick={() => p.onReprint(t)}
                             aria-label={`Reprint docket ${t.ticketNumber}`}
                             title="Reprint this docket"
-                            className="w-9 h-9 rounded-lg border border-ui-border text-ui-text-2 hover:bg-ui-subtle flex items-center justify-center shrink-0"
+                            className="w-11 h-11 rounded-lg border border-ui-border text-ui-text-2 hover:bg-ui-subtle flex items-center justify-center shrink-0"
                           >
                             <Printer className="w-4 h-4" />
                           </button>
@@ -231,6 +257,7 @@ export function KitchenBoard(p: {
                       </article>
                     );
                   })}
+                  </div>
                 </section>
               );
             })}

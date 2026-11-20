@@ -21,6 +21,7 @@
     "db:bootstrap": "tsx src/db/seed.ts"
   },
   "dependencies": {
+    "@fontsource-variable/manrope": "5.3.0",
     "dotenv": "17.3.1",
     "drizzle-orm": "0.45.2",
     "lucide-react": "^1.53.0",

@@ -93,19 +93,22 @@ export const MobileTabBar: React.FC<MobileTabBarProps> = ({
             )}
             <span className="relative">
               <Icon className="w-6 h-6" strokeWidth={isActive ? 2.6 : 2} />
-              {tab.badge !== undefined && (
-                <span
-                  className={`absolute -top-1.5 -right-2.5 min-w-5 h-5 px-1 rounded-full text-[0.625rem] font-bold flex items-center justify-center ${
-                    tab.tone === "warn"
-                      ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
-                      : tab.tone === "ok"
-                      ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
-                      : "bg-rose-500 text-white"
-                  }`}
-                >
-                  {tab.badge}
-                </span>
-              )}
+              {tab.badge !== undefined &&
+                (tab.tone ? (
+                  // A status word ("Open"/"Shut") would cover the icon on a
+                  // narrow tab, so it is a dot here and the word is read out.
+                  <span
+                    className={`absolute -top-0.5 -right-1 w-2.5 h-2.5 rounded-full ring-2 ring-neutral-900 ${
+                      tab.tone === "warn" ? "bg-amber-400" : "bg-emerald-400"
+                    }`}
+                  >
+                    <span className="sr-only">{`, shift ${tab.badge.toLowerCase()}`}</span>
+                  </span>
+                ) : (
+                  <span className="absolute -top-1.5 -right-2.5 min-w-5 h-5 px-1 rounded-full text-[0.625rem] font-bold flex items-center justify-center bg-rose-500 text-white">
+                    {tab.badge}
+                  </span>
+                ))}
             </span>
             <span className={`text-[0.6875rem] leading-none ${isActive ? "font-bold" : "font-semibold"}`}>
               {tab.label}

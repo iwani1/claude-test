@@ -3,6 +3,7 @@
 import React from "react";
 import { Coffee, FileSpreadsheet, Receipt, RefreshCw, TrendingUp, Wallet } from "lucide-react";
 import { Bars, TenderSplit, cedi } from "@/components/dashboard/charts";
+import { SkeletonCards } from "@/components/ui/Skeleton";
 
 /**
  * Reports in the new design (redesign stage 5b, Nov 2026): money received
@@ -26,9 +27,9 @@ const docketNo = (orderNumber: string) => `K-${String(orderNumber).slice(-4)}`;
 
 function Stat({ label, value, sub, tone }: { label: string; value: string; sub?: string; tone?: "danger" | "success" }) {
   return (
-    <div className="rounded-xl border border-ui-border bg-ui-surface p-4">
+    <div className="ui-in rounded-xl border border-ui-border bg-ui-surface shadow-ui-1 p-4">
       <div className="text-[0.8125rem] font-semibold text-ui-muted">{label}</div>
-      <div className={`text-2xl font-bold font-mono mt-1 ${tone === "danger" ? "text-ui-danger" : tone === "success" ? "text-ui-success" : ""}`}>{value}</div>
+      <div className={`text-2xl font-extrabold tracking-tight mt-1 ${tone === "danger" ? "text-ui-danger" : tone === "success" ? "text-ui-success" : ""}`}>{value}</div>
       {sub && <div className="text-xs text-ui-muted mt-1">{sub}</div>}
     </div>
   );
@@ -117,7 +118,14 @@ export function ReportsBoard(p: {
         )}
 
         {!s ? (
-          <p className="text-sm text-ui-muted">{p.loading ? "Loading figures…" : "No figures yet."}</p>
+          p.loading ? (
+            <>
+              <p className="sr-only">Loading figures…</p>
+              <SkeletonCards count={6} min="13rem" />
+            </>
+          ) : (
+            <p className="text-sm text-ui-muted">No figures yet.</p>
+          )
         ) : (
           <>
             {win && (
@@ -151,8 +159,17 @@ export function ReportsBoard(p: {
               <div className="grid grid-cols-[repeat(auto-fit,minmax(13rem,1fr))] gap-3">
                 <Stat label="Billed sales" value={cedi(s.totalSales)} sub={`${s.totalOrdersCount} orders · ${s.paidOrderCount} charged`} />
                 <Stat label="Average bill" value={cedi(s.avgOrderValue)} sub="billed, per charged order" />
-                <Stat label="Recipe cost of goods" value={cedi(s.totalCostOfGoods)} sub={`food cost ${s.foodCostPercentage}% of billed sales (aim 28–35%)`} />
-                <Stat label="Gross margin (estimate)" value={cedi(s.grossProfit)} sub="billed sales less recipe cost" />
+                {Number(s.totalCostOfGoods) > 0 || Number(s.totalSales) === 0 ? (
+                  <>
+                    <Stat label="Recipe cost of goods" value={cedi(s.totalCostOfGoods)} sub={`food cost ${s.foodCostPercentage}% of billed sales (aim 28–35%)`} />
+                    <Stat label="Gross margin (estimate)" value={cedi(s.grossProfit)} sub="billed sales less recipe cost" />
+                  </>
+                ) : (
+                  <>
+                    <Stat label="Recipe cost of goods" value="Not recorded" sub="these sales have no recipe costs, so no food-cost figure" />
+                    <Stat label="Gross margin (estimate)" value="Not yet" sub="needs recipe costs: add them under Recipes" />
+                  </>
+                )}
                 <Stat label="Room service charge" value={cedi(s.totalRoomCharge)} sub="charged on room-service orders" />
                 <Stat label="Waste & spoilage" value={cedi(s.totalWastageCost)} sub="stock written off in this period" tone={Number(s.totalWastageCost) > 0 ? "danger" : undefined} />
               </div>
@@ -176,7 +193,7 @@ export function ReportsBoard(p: {
                 {(p.data.categoryBreakdown || []).length === 0 ? (
                   <p className="text-sm text-ui-muted">Nothing sold in this period.</p>
                 ) : (
-                  <Bars rows={(p.data.categoryBreakdown as any[]).map((c) => ({ name: c.name, value: Number(c.revenue), sub: `${c.count} items` }))} unit={(v) => cedi(v)} />
+                  <Bars rows={(p.data.categoryBreakdown as any[]).map((c) => ({ name: c.name, value: Number(c.revenue), sub: `${c.count} item${Number(c.count) === 1 ? "" : "s"}` }))} unit={(v) => cedi(v)} />
                 )}
               </section>
             </div>

@@ -487,7 +487,7 @@ export const MenuManager: React.FC<MenuManagerProps> = ({
                     />
                     <div>
                       <div className="font-semibold text-white">{item.name}</div>
-                      <div className="text-[0.625rem] text-neutral-400 truncate max-w-xs">
+                      <div className="text-xs text-neutral-400 truncate max-w-xs">
                         {item.description}
                       </div>
                     </div>
@@ -502,18 +502,18 @@ export const MenuManager: React.FC<MenuManagerProps> = ({
                   </td>
                   <td className="px-4 py-2.5 text-right">
                     {item.hasRecipe ? (
-                      <span className="text-emerald-400 font-semibold text-[0.6875rem]">Linked</span>
+                      <span className="text-emerald-400 font-semibold text-xs">Linked</span>
                     ) : (
-                      <span className="text-neutral-500 text-[0.6875rem]">Direct</span>
+                      <span className="text-neutral-400 text-xs">Direct</span>
                     )}
                   </td>
                   <td className="px-4 py-2.5 text-center">
                     <button
                       onClick={() => handleToggleAvailable(item)}
-                      className={`px-2 py-0.5 rounded-md text-[0.625rem] font-bold ${
+                      className={`min-h-11 px-2.5 rounded-md border text-xs font-bold ${
                         item.isAvailable
-                          ? "bg-emerald-500/20 text-emerald-300"
-                          : "bg-rose-500/20 text-rose-300"
+                          ? "border-emerald-500/50 text-emerald-300"
+                          : "border-rose-500/50 text-rose-300"
                       }`}
                     >
                       {item.isAvailable ? "In Stock" : "86'd Out"}
@@ -531,7 +531,7 @@ export const MenuManager: React.FC<MenuManagerProps> = ({
                         setImageUrl(item.imageUrl || "");
                         setShowAddModal(true);
                       }}
-                      className="text-amber-400 hover:text-amber-300 font-semibold text-xs"
+                      className="min-w-11 min-h-11 px-2 rounded-md text-amber-400 hover:text-amber-300 hover:bg-neutral-800 font-semibold text-xs"
                     >
                       Edit
                     </button>
@@ -541,7 +541,7 @@ export const MenuManager: React.FC<MenuManagerProps> = ({
                         setDeleteError("");
                         setDeleteTarget(item);
                       }}
-                      className="ml-3 text-rose-400 hover:text-rose-300 font-semibold text-xs inline-flex items-center gap-1"
+                      className="ml-1 min-h-11 px-2 rounded-md text-rose-400 hover:text-rose-300 hover:bg-neutral-800 font-semibold text-xs inline-flex items-center gap-1"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                       <span>Delete</span>

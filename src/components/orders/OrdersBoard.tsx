@@ -1,5 +1,6 @@
 "use client";
 
+import { SkeletonCards } from "@/components/ui/Skeleton";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   BadgeCheck,
@@ -488,7 +489,10 @@ export function OrdersBoard(p: {
             </button>
           </div>
         ) : p.loading && p.orders.length === 0 ? (
-          <p className="text-sm text-ui-muted py-10 text-center">Loading orders…</p>
+          <>
+            <p className="sr-only">Loading orders…</p>
+            <SkeletonCards count={6} height="h-36" min="16rem" />
+          </>
         ) : shown.length === 0 ? (
           <p className="text-sm text-ui-muted py-10 text-center">
             {p.orders.length === 0 ? "No orders for these dates." : "No orders match this tab or search."}

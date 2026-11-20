@@ -13,7 +13,9 @@ import { Banknote, Smartphone } from "lucide-react";
 export const cedi = (v: unknown) =>
   `GH₵${Number(v || 0).toLocaleString("en-GH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-/** One-series horizontal bars: value written out, hover shows the exact figure. */
+/** One-series horizontal bars: value written out, hover shows the exact figure.
+ *  Only the largest bar carries the accent colour; the rest are quiet slate,
+ *  so the eye goes to the top seller first (stage 7). */
 export function Bars({ rows, unit }: { rows: { name: string; value: number; sub?: string }[]; unit: (v: number) => string }) {
   const max = Math.max(...rows.map((r) => r.value), 0);
   return (
@@ -28,7 +30,7 @@ export function Bars({ rows, unit }: { rows: { name: string; value: number; sub?
             </span>
           </div>
           <div className="mt-1 h-2 rounded-full bg-ui-subtle overflow-hidden" aria-hidden="true">
-            <div className="h-full rounded-full bg-ui-chart-bar group-hover:opacity-80" style={{ width: `${max > 0 ? Math.max(2, (r.value / max) * 100) : 0}%` }} />
+            <div className={`h-full rounded-full group-hover:opacity-80 ${r.value === max && max > 0 ? "bg-ui-chart-bar" : "bg-ui-chart-bar-muted"}`} style={{ width: `${max > 0 ? Math.max(2, (r.value / max) * 100) : 0}%` }} />
           </div>
         </li>
       ))}

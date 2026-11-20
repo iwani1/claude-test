@@ -59,12 +59,17 @@ function stateOf(o: OrderRow): { label: string; className: string } {
   return { label: "In kitchen", className: "bg-ui-subtle text-ui-text-2" };
 }
 
+/** Where the food is: 1 in the kitchen, 2 ready, 3 served (stage 7: the
+ *  card's track shows this instead of a bar that meant nothing at 0 min). */
+const STEPS = ["In kitchen", "Ready", "Served"] as const;
+const stepOf = (o: OrderRow) => (o.status === "served" ? 3 : o.status === "ready" ? 2 : 1);
+
 /** Minutes since the order was rung, coloured as it ages (no target times
  *  exist in the data, so this shows age, not a countdown). */
 function age(createdAt: string, now: number) {
   const mins = Math.max(0, Math.floor((now - new Date(createdAt).getTime()) / 60_000));
   const tone = mins >= 40 ? "danger" : mins >= 20 ? "warn" : "ok";
-  return { mins, tone, pct: Math.min(100, Math.round((mins / 45) * 100)) };
+  return { mins, tone };
 }
 
 export function RecentOrdersStrip({
@@ -147,7 +152,7 @@ export function RecentOrdersStrip({
                   : "bg-ui-surface border-ui-border text-ui-text-2 hover:bg-ui-subtle"
               }`}
             >
-              {label} {orders ? <span className="opacity-80">({countFor(key)})</span> : null}
+              {label} {orders ? <span>({countFor(key)})</span> : null}
             </button>
           ))}
         </div>
@@ -200,7 +205,7 @@ export function RecentOrdersStrip({
                 onClick={() => onOpenOrder(o.id)}
                 aria-label={`Open ${place(o)}, docket ${docketNo(o.orderNumber)}, ${s.label}, ${a.mins} minutes`}
                 title={o.orderNumber}
-                className={`text-left rounded-xl p-3 bg-ui-surface border transition hover:border-ui-border-strong ${
+                className={`ui-in text-left rounded-xl p-3 bg-ui-surface border shadow-ui-1 transition hover:-translate-y-0.5 hover:border-ui-border-strong ${
                   active ? "border-ui-primary ring-2 ring-ui-primary/25" : "border-ui-border"
                 }`}
               >
@@ -218,16 +223,20 @@ export function RecentOrdersStrip({
                   </div>
                 </div>
                 <div className="flex items-center gap-2 mt-2.5">
-                  <div className="flex-1 h-1.5 rounded-full bg-ui-subtle overflow-hidden" aria-hidden="true">
-                    <div
-                      className={`h-full rounded-full ${a.tone === "danger" ? "bg-ui-danger" : a.tone === "warn" ? "bg-ui-primary" : "bg-ui-success"}`}
-                      style={{ width: `${Math.max(6, a.pct)}%` }}
-                    />
+                  <div className="flex-1 flex gap-1" role="img" aria-label={`Step ${stepOf(o)} of 3: ${STEPS[stepOf(o) - 1]}`}>
+                    {STEPS.map((step, i) => (
+                      <span
+                        key={step}
+                        className={`h-1.5 flex-1 rounded-full ${
+                          i < stepOf(o) ? (stepOf(o) === 2 ? "bg-ui-success" : stepOf(o) === 3 ? "bg-ui-info" : "bg-ui-primary") : "bg-ui-subtle"
+                        }`}
+                      />
+                    ))}
                   </div>
                   <span className={`text-[0.6875rem] font-semibold inline-flex items-center gap-1 ${a.tone === "danger" ? "text-ui-danger" : "text-ui-muted"}`}>
-                    <Clock className="w-3 h-3" /> {a.mins} min
+                    <Clock className="w-3 h-3" /> {a.mins < 1 ? "now" : `${a.mins} min`}
                   </span>
-                  <span className="text-[0.75rem] font-bold font-mono text-ui-text">GH₵{Number(o.totalAmount).toFixed(2)}</span>
+                  <span className="text-[0.8125rem] font-bold font-mono text-ui-text">GH₵{Number(o.totalAmount).toFixed(2)}</span>
                 </div>
               </button>
             );

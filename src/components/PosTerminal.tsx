@@ -151,7 +151,9 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
   // The new layout needs a laptop-width screen; narrower ones keep the classic
   // till and its slide-up order sheet until a later stage.
   const wideScreen = useMediaQuery(LAPTOP_UP);
-  const newLayout = design === "new" && wideScreen;
+  // Stage 7: the new till shows at every width; below 64rem its order panel
+  // is a slide-up sheet (PosNewLayout `compact`).
+  const newLayout = design === "new";
   /** Bumped whenever this till creates, sends or settles an order, so the new
    *  layout's recent-orders strip refreshes at once instead of on its timer. */
   const [recentOrdersKey, setRecentOrdersKey] = useState(0);
@@ -1927,6 +1929,7 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
           isSubmitting={isSubmitting}
           showRecentOrders={!!currentUser?.permissions?.canViewOrderHistory}
           recentRefreshKey={recentOrdersKey}
+          compact={!wideScreen}
           onOpenOrder={(id) => {
             if (loadedOrder?.id === id) return;
             void attachLoadedOrder(id, readTicketDraftOrderId(currentUser?.id ?? "anon") === id);
