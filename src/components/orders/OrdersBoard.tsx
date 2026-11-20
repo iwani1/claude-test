@@ -60,7 +60,7 @@ const TABS: { id: string; label: string; test: (o: any) => boolean }[] = [
   { id: "kitchen", label: "In kitchen", test: inKitchen },
   { id: "ready", label: "Ready", test: (o) => o.status === "ready" },
   { id: "completed", label: "Completed", test: (o) => o.status === "completed" },
-  { id: "closed", label: "Refunded / cancelled", test: (o) => o.status === "refunded" || o.status === "cancelled" || o.paymentStatus === "refunded" },
+  { id: "closed", label: "Refunds / cancelled", test: (o) => o.status === "refunded" || o.status === "cancelled" || o.paymentStatus === "refunded" || o.paymentStatus === "partially_refunded" },
 ];
 
 const STATUS: Record<string, { label: string; cls: string }> = {
@@ -77,6 +77,7 @@ const PAY: Record<string, { label: string; cls: string }> = {
   unpaid: { label: "Unpaid", cls: "bg-ui-danger-soft text-ui-danger" },
   partially_paid: { label: "Part paid", cls: "bg-ui-primary-soft text-ui-primary-text" },
   paid: { label: "Paid", cls: "bg-ui-success-soft text-ui-success" },
+  partially_refunded: { label: "Part refunded", cls: "bg-ui-primary-soft text-ui-primary-text" },
   refunded: { label: "Refunded", cls: "bg-ui-subtle text-ui-text-2" },
 };
 const TYPE: Record<string, { label: string; icon: typeof UtensilsCrossed; cls: string }> = {
@@ -263,7 +264,7 @@ export function OrdersBoard(p: {
       cls: "bg-ui-info-soft text-ui-info",
     },
     { label: "Completed", tab: "completed", count: p.orders.filter((o) => o.status === "completed").length, icon: BadgeCheck, cls: "bg-ui-subtle text-ui-text-2" },
-    { label: "Refunded / cancelled", tab: "closed", count: p.orders.filter(TABS[5].test).length, icon: XCircle, cls: "bg-ui-danger-soft text-ui-danger" },
+    { label: "Refunds / cancelled", tab: "closed", count: p.orders.filter(TABS[5].test).length, icon: XCircle, cls: "bg-ui-danger-soft text-ui-danger" },
   ];
   const openValue = p.orders
     .filter(isOpenBill)

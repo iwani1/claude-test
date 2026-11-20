@@ -23,6 +23,7 @@ import type { CurrentUser } from "@/lib/api-types";
 import { useUiPreferences } from "@/lib/ui-preferences";
 import { MD_UP, useMediaQuery } from "@/lib/use-media-query";
 import { DrawerBoard } from "@/components/drawer/DrawerBoard";
+import { CloseShiftDialog, OpenShiftDialog, PayoutDialog } from "@/components/drawer/DrawerDialogs";
 
 /**
  * Shift operations and the reconciliation ledger.
@@ -490,8 +491,43 @@ export const ShiftCashDrawer: React.FC<{ currentUser: CurrentUser; readOnly?: bo
             startClose(o, Number(o.openingCash || 0) + Number(o.totalCashSales || 0) - Number(o.cashPayouts || 0))
           }
         />
-        {/* Classic dialogs, re-coloured for the light theme (globals.css). */}
-        <div className="ui-bridge contents">{drawerModals}</div>
+        {showOpenModal && (
+          <OpenShiftDialog
+            startsWithCash={startsWithCash}
+            onStartsWithCash={setStartsWithCash}
+            float={openingCashInput}
+            onFloat={setOpeningCashInput}
+            notes={openNotes}
+            onNotes={setOpenNotes}
+            onSubmit={handleOpenShift}
+            onCancel={() => setShowOpenModal(false)}
+          />
+        )}
+        {showPayoutModal && (
+          <PayoutDialog
+            amount={payoutAmount}
+            onAmount={setPayoutAmount}
+            reason={payoutReason}
+            onReason={setPayoutReason}
+            onSubmit={handleRecordPayout}
+            onCancel={() => setShowPayoutModal(false)}
+          />
+        )}
+        {showCloseModal && (
+          <CloseShiftDialog
+            forColleague={closeTarget && closeTarget.userId !== currentUser?.id ? closeTarget.userName : null}
+            opening={cOpening}
+            cashSales={cCashSales}
+            outflows={cPayouts}
+            expected={cExpected}
+            counted={countedCashInput}
+            onCounted={setCountedCashInput}
+            notes={closeNotes}
+            onNotes={setCloseNotes}
+            onSubmit={handleCloseShift}
+            onCancel={() => setShowCloseModal(false)}
+          />
+        )}
       </div>
     );
   }

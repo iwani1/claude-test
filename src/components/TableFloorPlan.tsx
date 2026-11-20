@@ -20,6 +20,7 @@ import { FannedTicketStack } from "@/components/interface-studies";
 import { useUiPreferences } from "@/lib/ui-preferences";
 import { MD_UP, useMediaQuery } from "@/lib/use-media-query";
 import { TablesBoard } from "@/components/tables/TablesBoard";
+import { AddTableDialog, MoveBillDialog } from "@/components/tables/TableDialogs";
 
 interface TableFloorPlanProps {
   areas: any[];
@@ -269,8 +270,32 @@ export const TableFloorPlan: React.FC<TableFloorPlanProps> = ({
           onMove={(t) => setMovingTable(t)}
           onAdd={() => setShowAddTableModal(true)}
         />
-        {/* Classic dialogs, re-coloured for the light theme (globals.css). */}
-        <div className="ui-bridge contents">{tableModals}</div>
+        {movingTable && (
+          <MoveBillDialog
+            from={movingTable}
+            tables={tables}
+            target={targetTableId}
+            onTarget={setTargetTableId}
+            onConfirm={() => void handleMoveOrder()}
+            onCancel={() => {
+              setMovingTable(null);
+              setTargetTableId("");
+            }}
+          />
+        )}
+        {showAddTableModal && (
+          <AddTableDialog
+            areas={areas}
+            areaId={newTableAreaId}
+            onArea={setNewTableAreaId}
+            label={newTableNumber}
+            onLabel={setNewTableNumber}
+            capacity={newTableCapacity}
+            onCapacity={setNewTableCapacity}
+            onSubmit={handleAddTable}
+            onCancel={() => setShowAddTableModal(false)}
+          />
+        )}
       </div>
     );
   }

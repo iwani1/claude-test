@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useEffect, useRef } from "react";
+import React from "react";
 import Image from "next/image";
-import { CheckCircle2, Coffee, Delete, Percent, Smartphone, Unlock, Wallet, X } from "lucide-react";
+import { CheckCircle2, Coffee, Delete, Percent, Smartphone, Unlock, Wallet } from "lucide-react";
+import { CloseButton, Dialog, btnPrimary, btnSecondary, fieldCls, tile } from "@/components/ui/NewDialog";
 import { DynamicButton } from "@/components/interface-studies";
 
 /**
@@ -16,67 +17,6 @@ import { DynamicButton } from "@/components/interface-studies";
  */
 
 const cedi = (n: number) => `GH₵${n.toFixed(2)}`;
-
-/** Overlay + panel with Escape to close and focus moved into the dialog. */
-function Dialog({
-  label,
-  onClose,
-  width = "max-w-lg",
-  children,
-}: {
-  label: string;
-  onClose: () => void;
-  width?: string;
-  children: React.ReactNode;
-}) {
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    ref.current?.focus();
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
-  return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 p-4 overflow-y-auto">
-      <div
-        ref={ref}
-        tabIndex={-1}
-        role="dialog"
-        aria-modal="true"
-        aria-label={label}
-        className={`w-full ${width} my-auto rounded-2xl bg-ui-surface text-ui-text border border-ui-border shadow-2xl outline-none max-h-[94dvh] overflow-y-auto`}
-      >
-        {children}
-      </div>
-    </div>
-  );
-}
-
-function CloseButton({ onClick, label = "Close" }: { onClick: () => void; label?: string }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-label={label}
-      className="w-11 h-11 rounded-full text-ui-muted hover:text-ui-text hover:bg-ui-subtle flex items-center justify-center shrink-0"
-    >
-      <X className="w-5 h-5" />
-    </button>
-  );
-}
-
-const tile = (on: boolean) =>
-  `rounded-xl border-2 transition text-left ${
-    on ? "border-ui-primary bg-ui-primary-soft text-ui-primary-text" : "border-ui-border bg-ui-surface text-ui-text hover:border-ui-border-strong"
-  }`;
-const fieldCls =
-  "w-full h-12 rounded-lg border border-ui-border-strong bg-ui-surface px-3 text-ui-text placeholder:text-ui-muted focus:outline-none focus:border-ui-primary";
-const btnSecondary =
-  "h-12 px-4 rounded-lg border border-ui-border-strong bg-ui-surface text-ui-text text-sm font-semibold hover:bg-ui-subtle transition";
-const btnPrimary =
-  "h-12 px-5 rounded-lg bg-ui-primary hover:bg-ui-primary-hover text-ui-on-primary text-sm font-bold transition disabled:opacity-40 disabled:cursor-not-allowed";
 
 /* ------------------------------------------------------------------------ */
 /* Dish options                                                              */
@@ -558,7 +498,7 @@ export function DiscountDialog(p: {
           <input
             type="number"
             inputMode="decimal"
-            step="1.0"
+            step="0.01"
             value={p.amount || ""}
             onChange={(e) => {
               p.onAmount(Number(e.target.value));
@@ -680,7 +620,7 @@ export function ShiftGateDialog(p: {
             <input
               type="number"
               inputMode="decimal"
-              step="10.00"
+              step="0.01"
               min="0"
               autoFocus
               value={p.float}

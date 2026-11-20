@@ -28,6 +28,7 @@ import { notify } from "@/lib/notify";
 import type { CurrentUser } from "@/lib/api-types";
 import { useUiPreferences } from "@/lib/ui-preferences";
 import { OrdersBoard } from "@/components/orders/OrdersBoard";
+import { OrderDetailsDialog, RefundDialog } from "@/components/orders/OrderDialogs";
 import { MD_UP, useMediaQuery } from "@/lib/use-media-query";
 
 export const OrdersHistory: React.FC<{
@@ -210,7 +211,7 @@ export const OrdersHistory: React.FC<{
 
   /* Details, refund, receipt, editor, delete and docket: shared by the
      classic table and the new board, so both run the same actions. */
-  const historyModals = (
+  const classicDetailsModal = (
     <>
       {/* Order details — available to every history reader. Read-only: it
           shows what was sold, what was paid and what was refunded. */}
@@ -370,6 +371,11 @@ export const OrdersHistory: React.FC<{
         </div>
       )}
 
+    </>
+  );
+
+  const classicRefundModal = (
+    <>
       {/* MODAL 1: Refund Processing with Manager Authorization */}
       {refundOrderTarget && (
         <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/70 backdrop-blur-xs p-4 overflow-y-auto">
@@ -472,6 +478,12 @@ export const OrdersHistory: React.FC<{
         </div>
       )}
 
+    </>
+  );
+
+  /* Receipt, editor, delete and docket: the same in both layouts. */
+  const commonHistoryModals = (
+    <>
       {/* MODAL 2: Reprint Receipt */}
       {showReceiptModal && receiptOrder && (
         <ReceiptModal
@@ -539,6 +551,14 @@ export const OrdersHistory: React.FC<{
     </>
   );
 
+  const historyModals = (
+    <>
+      {classicDetailsModal}
+      {classicRefundModal}
+      {commonHistoryModals}
+    </>
+  );
+
   if (newBoard) {
     return (
       <div className="flex-1 flex flex-col h-full overflow-hidden">
@@ -588,8 +608,30 @@ export const OrdersHistory: React.FC<{
               : undefined,
           }}
         />
-        {/* Classic pop-ups, re-coloured for the light theme (globals.css). */}
-        <div className="ui-bridge contents">{historyModals}</div>
+        {detailsOrder && <OrderDetailsDialog order={detailsOrder} tables={tables} onClose={() => setDetailsOrder(null)} />}
+        {refundOrderTarget && (
+          <RefundDialog
+            order={refundOrderTarget}
+            limits={refundLimits}
+            cash={refundCash}
+            onCash={setRefundCash}
+            momo={refundMomo}
+            onMomo={setRefundMomo}
+            reason={refundReason}
+            onReason={setRefundReason}
+            pin={refundManagerPin}
+            onPin={setRefundManagerPin}
+            returnStock={returnStock}
+            onReturnStock={setReturnStock}
+            locked={refundLocked}
+            busy={refundBusy}
+            onSubmit={handleProcessRefund}
+            onCancel={() => setRefundOrderTarget(null)}
+          />
+        )}
+        {/* Receipt, editor, delete and docket: classic, re-coloured for the
+            light theme (globals.css). */}
+        <div className="ui-bridge contents">{commonHistoryModals}</div>
       </div>
     );
   }
