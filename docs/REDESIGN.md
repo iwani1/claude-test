@@ -44,6 +44,8 @@ page), in light and dark.
   every value and handler comes from `PosTerminal`. The payment confirm uses
   the classic rule unchanged (`paymentBlocked`). Docket, receipt, approvals and
   confirm are shared with the classic till (`commonModals`).
+- Screen-width checks go through `useMediaQuery` (`src/lib/use-media-query.ts`):
+  `MD_UP` where the top bar shows, `LAPTOP_UP` for the POS layout.
 - `audit:responsive` and the table check in `audit:workflows` scan component
   subfolders (`src/components/pos/`).
 - Touch targets stay at least 44px; the bar's labels drop by container width in
@@ -56,7 +58,9 @@ page), in light and dark.
 | 1 | Tokens (light/dark), per-terminal switch, top-bar shell, shared nav list | PR #39 |
 | 2 | POS screen in the demo 8 layout (recent orders, category cards, dish cards, order panel); the shared pop-ups re-coloured for light through the theme bridge | PR #40 |
 | 2b | Till pop-ups drawn in the new design: dish options (option groups, add-ons, note chips), payment (keypad, cash/MoMo/split), discount, comp, shift gate. Docket, receipt, approvals and confirm stay classic through the bridge | PR #41 |
-| 3 | Orders page (demo 9): count cards, tabs with counts, cards or a board by kitchen state, date presets, search, pages. Same actions under the same permissions; kitchen status stays on the Kitchen screen; no cancel action is added (the app has none). Its pop-ups stay classic through the bridge | This PR |
-| 4 | Kitchen, Tables, Cash Drawer | Planned |
+| 3 | Orders page (demo 9): count cards, tabs with counts, cards or a board by kitchen state, date presets, search, pages. Same actions under the same permissions; kitchen status stays on the Kitchen screen; no cancel action is added (the app has none). Its pop-ups stay classic through the bridge | PR #42 |
+| 4a | Kitchen board: columns by step (New shown only when pending tickets exist, Preparing, Ready), ticket age (amber 8 min, overdue 15), items, options, notes, one next-step button, reprint. The classic screen's sound toggle, which did nothing, is not carried over | This PR |
+| 4b | Tables | Next |
+| 4c | Cash Drawer | Planned |
 | 5 | Menu, stock, purchasing, reports, staff, settings | Planned |
 | 6 | Phones; make the new design the default; remove the classic shell | Planned |

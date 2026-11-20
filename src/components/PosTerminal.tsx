@@ -55,20 +55,7 @@ import {
   ShiftGateDialog,
 } from "@/components/pos/NewPosDialogs";
 
-/** The new POS layout needs a laptop-width screen (64rem); narrower screens
- *  keep the classic till and its slide-up order sheet until a later stage. */
-const WIDE_QUERY = "(min-width: 64rem)";
-function useWideScreen() {
-  return React.useSyncExternalStore(
-    (fn) => {
-      const mq = window.matchMedia(WIDE_QUERY);
-      mq.addEventListener("change", fn);
-      return () => mq.removeEventListener("change", fn);
-    },
-    () => window.matchMedia(WIDE_QUERY).matches,
-    () => false,
-  );
-}
+import { LAPTOP_UP, useMediaQuery } from "@/lib/use-media-query";
 
 interface PosTerminalProps {
   categories: any[];
@@ -161,7 +148,9 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
   const [cartOpen, setCartOpen] = useState(false);
   /** The new design (redesign stage 2) swaps only the layout; see PosNewLayout. */
   const { design } = useUiPreferences();
-  const wideScreen = useWideScreen();
+  // The new layout needs a laptop-width screen; narrower ones keep the classic
+  // till and its slide-up order sheet until a later stage.
+  const wideScreen = useMediaQuery(LAPTOP_UP);
   const newLayout = design === "new" && wideScreen;
   /** Bumped whenever this till creates, sends or settles an order, so the new
    *  layout's recent-orders strip refreshes at once instead of on its timer. */

@@ -19,8 +19,15 @@ import { KitchenTicketModal } from "./KitchenTicketModal";
 import { ScrollFadeList } from "@/components/interface-studies";
 import { apiErrorMessage, apiFetch } from "@/lib/api-client";
 import { notify } from "@/lib/notify";
+import { useUiPreferences } from "@/lib/ui-preferences";
+import { MD_UP, useMediaQuery } from "@/lib/use-media-query";
+import { KitchenBoard } from "@/components/kitchen/KitchenBoard";
 
 export const KitchenDisplaySystem: React.FC = () => {
+  /** The new design's board (redesign stage 4a) wherever its top bar shows. */
+  const { design } = useUiPreferences();
+  const mdScreen = useMediaQuery(MD_UP);
+  const newBoard = design === "new" && mdScreen;
   const [tickets, setTickets] = useState<any[]>([]);
   const [stationFilter, setStationFilter] = useState<string>("all");
   const [isLoading, setIsLoading] = useState(false);
@@ -76,6 +83,38 @@ export const KitchenDisplaySystem: React.FC = () => {
     const elapsedMs = currentTime - new Date(dateStr).getTime();
     return Math.floor(elapsedMs / 60000);
   };
+
+  const reprintModal = showReprintModal && reprintTicket && (
+    <KitchenTicketModal
+      isOpen={showReprintModal}
+      onClose={() => {
+        setShowReprintModal(false);
+        setReprintTicket(null);
+      }}
+      order={reprintTicket}
+    />
+  );
+
+  if (newBoard) {
+    return (
+      <div className="flex-1 flex flex-col h-full overflow-hidden">
+        <KitchenBoard
+          tickets={tickets}
+          now={currentTime}
+          station={stationFilter as "all" | "kitchen" | "grill" | "bar"}
+          onStation={setStationFilter}
+          onRefresh={() => void fetchTickets()}
+          onStatus={(id, status) => void updateTicketStatus(id, status)}
+          onReprint={(t) => {
+            setReprintTicket(t);
+            setShowReprintModal(true);
+          }}
+          loadError={loadError}
+        />
+        <div className="ui-bridge contents">{reprintModal}</div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex-1 flex flex-col h-full bg-neutral-950 overflow-hidden">
@@ -319,16 +358,7 @@ export const KitchenDisplaySystem: React.FC = () => {
         )}
       </div>
       {/* REPRINT KITCHEN DOCKET */}
-      {showReprintModal && reprintTicket && (
-        <KitchenTicketModal
-          isOpen={showReprintModal}
-          onClose={() => {
-            setShowReprintModal(false);
-            setReprintTicket(null);
-          }}
-          order={reprintTicket}
-        />
-      )}
+      {reprintModal}
     </div>
   );
 };
