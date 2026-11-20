@@ -39,9 +39,13 @@ page), in light and dark.
   (`globals.css`): in the light theme it re-points the classic colour variables
   to the new tokens and darker text shades. It is a migration aid, removed with
   the classic shell.
-- The till's new layout (`src/components/pos/PosNewLayout.tsx`) is markup
-  only; every value and handler comes from `PosTerminal`, and both layouts
-  share one set of pop-ups (`sharedModals`).
+- The till's new layout (`src/components/pos/PosNewLayout.tsx`) and its
+  pop-ups (`src/components/pos/NewPosDialogs.tsx`) are presentation only:
+  every value and handler comes from `PosTerminal`. The payment confirm uses
+  the classic rule unchanged (`paymentBlocked`). Docket, receipt, approvals and
+  confirm are shared with the classic till (`commonModals`).
+- `audit:responsive` and the table check in `audit:workflows` scan component
+  subfolders (`src/components/pos/`).
 - Touch targets stay at least 44px; the bar's labels drop by container width in
   `rem` (they scale with the terminal's text size), not by screen breakpoints.
 
@@ -50,8 +54,8 @@ page), in light and dark.
 | Stage | Scope | Status |
 |---|---|---|
 | 1 | Tokens (light/dark), per-terminal switch, top-bar shell, shared nav list | PR #39 |
-| 2 | POS screen in the demo 8 layout (recent orders, category cards, dish cards, order panel); the shared pop-ups re-coloured for light through the theme bridge | Built |
-| 2b | Pop-ups redrawn natively in the new design (dish options with portions and add-ons, payment, discount, docket token) | Next |
+| 2 | POS screen in the demo 8 layout (recent orders, category cards, dish cards, order panel); the shared pop-ups re-coloured for light through the theme bridge | PR #40 |
+| 2b | Till pop-ups drawn in the new design: dish options (option groups, add-ons, note chips), payment (keypad, cash/MoMo/split), discount, comp, shift gate. Docket, receipt, approvals and confirm stay classic through the bridge | This PR |
 | 3 | Orders page (demo 9) | Planned |
 | 4 | Kitchen, Tables, Cash Drawer | Planned |
 | 5 | Menu, stock, purchasing, reports, staff, settings | Planned |

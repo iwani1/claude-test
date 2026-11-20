@@ -46,6 +46,14 @@ import { apiErrorMessage, apiFetch } from "@/lib/api-client";
 import type { CurrentUser } from "@/lib/api-types";
 import { useUiPreferences } from "@/lib/ui-preferences";
 import { PosNewLayout, type OrderType } from "@/components/pos/PosNewLayout";
+import { docketNo } from "@/components/pos/RecentOrdersStrip";
+import {
+  CompDialog,
+  DiscountDialog,
+  DishOptionsDialog,
+  PaymentDialog,
+  ShiftGateDialog,
+} from "@/components/pos/NewPosDialogs";
 
 /** The new POS layout needs a laptop-width screen (64rem); narrower screens
  *  keep the classic till and its slide-up order sheet until a later stage. */
@@ -825,6 +833,19 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
     continuation();
   };
 
+  /** Splits the bill evenly between cash and MoMo (the "50 / 50" button). */
+  const splitEvenly = () => {
+    const half = (Math.round((totalAmount / 2) * 100) / 100).toFixed(2);
+    setSplitCashAmount(half);
+    setSplitMomoAmount((totalAmount - Number(half)).toFixed(2));
+    setSplitCashTendered(half);
+  };
+  /** Picks the tender; choosing the split with nothing entered starts at 50/50. */
+  const choosePaymentMethod = (m: "cash" | "momo" | "split") => {
+    setPaymentMethod(m);
+    if (m === "split" && (!splitCashAmount || Number(splitCashAmount) === 0)) splitEvenly();
+  };
+
   const proceedToSettle = () => {
     setCashTendered(totalAmount.toFixed(2));
     const half = (Math.round((totalAmount / 2) * 100) / 100).toFixed(2);
@@ -1160,10 +1181,11 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
     if (type !== "room_service") setRoomNumber("");
   };
 
-  /* Every pop-up the till uses (shift gate, dish options, discount, comp,
-     payment, docket, receipt, approvals, confirm), shared by the classic and
-     the new layout so both run exactly the same money and approval paths. */
-  const sharedModals = (
+  /* The till's pop-ups. The classic layout draws all of them classically; the
+     new layout draws the shift gate, dish options, discount, comp and payment
+     in the new design (pos/NewPosDialogs.tsx) over the same state and the
+     same handlers, and shares the rest (commonModals) with the classic till. */
+  const classicDialogs = (
     <>
       {/* Shift gate: a cashier's first sale of the day opens their own shift. */}
       {showShiftGate && (
@@ -1797,6 +1819,12 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
         </div>
       )}
 
+    </>
+  );
+
+  /* Docket, receipt, approvals and confirm: the same in both layouts. */
+  const commonModals = (
+    <>
       {/* KITCHEN DOCKET: printed paper ticket sent to the line */}
       {showKitchenTicket && kitchenTicketOrder && (
         <KitchenTicketModal
@@ -1838,6 +1866,25 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
           action?.();
         }}
       />
+    </>
+  );
+
+  /** Who the payment is for, shown at the top of the new payment pop-up. */
+  const payOrderLabel = [
+    orderType === "dine_in"
+      ? `Table ${tables.find((t) => t.id === selectedTableId)?.tableNumber ?? "not chosen"}`
+      : orderType === "room_service"
+        ? `Room ${roomNumber || "—"}`
+        : `${orderType === "delivery" ? "Delivery" : "Takeaway"} · ${customerName || "Walk-in Guest"}`,
+    loadedOrder ? docketNo(loadedOrder.orderNumber) : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
+  const sharedModals = (
+    <>
+      {classicDialogs}
+      {commonModals}
     </>
   );
 
@@ -1896,8 +1943,94 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
             void attachLoadedOrder(id, readTicketDraftOrderId(currentUser?.id ?? "anon") === id);
           }}
         />
-        {/* Classic pop-ups, re-coloured for the light theme (globals.css). */}
-        <div className="ui-bridge contents">{sharedModals}</div>
+        {showShiftGate && (
+          <ShiftGateDialog
+            staffName={currentUser?.name || "Staff"}
+            startsWithCash={gateStartsWithCash}
+            onStartsWithCash={setGateStartsWithCash}
+            float={gateFloat}
+            onFloat={setGateFloat}
+            busy={gateBusy}
+            onSubmit={handleGateOpenShift}
+            onCancel={() => setShowShiftGate(false)}
+          />
+        )}
+        {selectedItemForMod && (
+          <DishOptionsDialog
+            item={selectedItemForMod}
+            selections={itemModSelections}
+            onSelections={setItemModSelections}
+            notes={itemSpecialNotes}
+            onNotes={setItemSpecialNotes}
+            onCancel={() => setSelectedItemForMod(null)}
+            onAdd={handleApplyModifierModal}
+          />
+        )}
+        {showDiscountModal && (
+          <DiscountDialog
+            percent={discountPercent}
+            onPercent={setDiscountPercent}
+            amount={discountAmount}
+            onAmount={setDiscountAmount}
+            reason={discountReason}
+            onReason={setDiscountReason}
+            onClear={() => {
+              setDiscountPercent(0);
+              setDiscountAmount(0);
+              setShowDiscountModal(false);
+            }}
+            onApply={() => setShowDiscountModal(false)}
+          />
+        )}
+        {showCompModal && (
+          <CompDialog
+            reason={compReason}
+            onReason={setCompReason}
+            foodValue={subtotal}
+            onCancel={() => setShowCompModal(false)}
+            onConfirm={() => {
+              setIsComplimentary(true);
+              setShowCompModal(false);
+              // A free order has no tender, so clear any payment inputs.
+              setTipAmount(0);
+            }}
+          />
+        )}
+        {showPayModal && (
+          <PaymentDialog
+            totalAmount={totalAmount}
+            orderLabel={payOrderLabel}
+            summary={[
+              { label: "Sub total", value: `GH₵${subtotal.toFixed(2)}` },
+              ...(calculatedDiscount > 0 ? [{ label: "Discount", value: `−GH₵${calculatedDiscount.toFixed(2)}`, tone: "primary" as const }] : []),
+              ...(orderType === "room_service" ? [{ label: "Room service charge", value: `GH₵${roomCharge.toFixed(2)}`, tone: "info" as const }] : []),
+              { label: `VAT (${billingConfig.taxRatePercent}%)`, value: `GH₵${taxAmount.toFixed(2)}` },
+              ...(tipAmount > 0 ? [{ label: "Tip", value: `+GH₵${tipAmount.toFixed(2)}`, tone: "success" as const }] : []),
+              ...(loadedOrder && Number(loadedOrder.paidAmount) > 0
+                ? [{ label: "Already paid", value: `GH₵${Number(loadedOrder.paidAmount).toFixed(2)}` }]
+                : []),
+            ]}
+            method={paymentMethod}
+            onMethod={choosePaymentMethod}
+            cashTendered={cashTendered}
+            onCashTendered={setCashTendered}
+            momoRef={momoRef}
+            onMomoRef={setMomoRef}
+            splitCash={splitCashAmount}
+            onSplitCash={setSplitCashAmount}
+            splitMomo={splitMomoAmount}
+            onSplitMomo={setSplitMomoAmount}
+            splitCashTendered={splitCashTendered}
+            onSplitCashTendered={setSplitCashTendered}
+            onSplitEvenly={splitEvenly}
+            isSubmitting={isSubmitting}
+            onConfirm={handleProcessPayment}
+            onClose={() => setShowPayModal(false)}
+          />
+        )}
+        {/* Docket, receipt, approvals, confirm: classic, re-coloured for the
+            light theme (globals.css). */}
+        <div className="ui-bridge contents">{commonModals}</div>
       </div>
     );
   }
