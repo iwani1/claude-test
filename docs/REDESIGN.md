@@ -11,8 +11,12 @@ page), in light and dark.
 ## How it reaches staff
 
 - **Off by default.** Each stage is merged and deployed without changing what
-  staff see. A terminal opts in with **New design** on the classic controls
-  strip; the new top bar's account menu has **Back to the classic design**.
+  staff see. A device opts in, and out again, from:
+  - tills and laptops: **New design** on the classic controls strip, and
+    **Back to the classic design** in the new top bar's account menu;
+  - phones: the account menu (the initial, top right) has **Use the new design
+    on this device**, and on the new design **Light / Dark** and **Back to the
+    classic design**.
 - **Per terminal**, like the display size: stored in `localStorage`
   (`pos.uiDesign`, `pos.uiTheme`) and applied to `<html data-ui data-ui-theme>`
   before first paint (`src/lib/ui-preferences-script.ts`, `layout.tsx`).
@@ -72,6 +76,6 @@ page), in light and dark.
 | 5a | Back office (dashboard, reports, menu, recipes, stock, purchasing, staff, audit, hardware, settings, deploy) in the new shell: the work area takes the terminal's theme through the colour bridge, which now also maps the shades those screens use. Checked screen by screen, with their dialogs, in light and dark | PR #49 |
 | 5b | Owner dashboard (money first, cash/MoMo split, floor and kitchen now, low stock, top sellers, categories, period switch; refused panels say so) and Reports (money received, sales and margin, top sellers, categories, free breakfasts, custom dates, exports). Shared chart marks in `dashboard/charts.tsx`, colours validated per theme (`ui-chart-*`) | PR #50 |
 | 5c | Other back-office screens redrawn where it pays off | Planned |
-| 6a | Phones and portrait tablets: the whole shell (phone bar, bottom tabs, drawer, notices) sits in the colour bridge, and the new boards (orders, kitchen, tables, drawer, dashboard, reports) show at every width. The till keeps its slide-up order sheet below 64rem, themed. Checked on a 390×844 phone and a 768×1024 tablet in light and dark | This PR |
+| 6a | Phones and portrait tablets: the whole shell (phone bar, bottom tabs, drawer, notices) sits in the colour bridge, and the new boards (orders, kitchen, tables, drawer, dashboard, reports) show at every width. The till keeps its slide-up order sheet below 64rem, themed. Checked on a 390×844 phone and a 768×1024 tablet in light and dark | PR #51 |
 | 6b | Make the new design the default (after a trial shift on a real till) | Planned |
 | 6c | Remove the classic shell and the bridge | Planned |

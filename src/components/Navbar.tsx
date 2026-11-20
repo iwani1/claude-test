@@ -15,7 +15,12 @@ import {
   Clock,
   KeyRound,
   LogOut,
+  Moon,
+  Sparkles,
+  Sun,
+  Undo2,
 } from "lucide-react";
+import { setUiDesign, setUiTheme, useUiPreferences } from "@/lib/ui-preferences";
 import { ROLE_PERMISSIONS, UserRole, hasTerminalAccess } from "@/lib/permissions";
 import { getOfflineQueue, syncOfflineQueueToServer } from "@/lib/offline-storage";
 import { DisplaySizeControl } from "@/components/DisplaySizeControl";
@@ -46,6 +51,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   const [isSyncing, setIsSyncing] = useState(false);
   const [showRoleDropdown, setShowRoleDropdown] = useState(false);
   const [showPinModal, setShowPinModal] = useState(false);
+  /** This device's look; phones switch it from the account menu below. */
+  const { design, theme } = useUiPreferences();
 
   const handleManualSync = async () => {
     setIsSyncing(true);
@@ -271,6 +278,55 @@ export const Navbar: React.FC<NavbarProps> = ({
                       <KeyRound className="w-4 h-4 text-amber-400" />
                       <span>Switch Employee (Enter PIN)</span>
                     </button>
+                  </div>
+
+                  {/* Design switch for this device (phones have no controls strip
+                      or top-bar account menu, so it lives here). */}
+                  <div className="py-1 border-t border-neutral-700/80">
+                    {design === "new" ? (
+                      <>
+                        <div className="px-4 pt-1.5 pb-1 text-[0.6875rem] font-bold tracking-wider text-neutral-400">THEME</div>
+                        <div role="group" aria-label="Theme" className="grid grid-cols-2 gap-1.5 px-3 pb-1.5">
+                          {([
+                            ["light", "Light", Sun],
+                            ["dark", "Dark", Moon],
+                          ] as const).map(([value, label, Icon]) => (
+                            <button
+                              key={value}
+                              type="button"
+                              aria-pressed={theme === value}
+                              onClick={() => setUiTheme(value)}
+                              className={`h-11 rounded-xl border text-[0.8125rem] font-semibold flex items-center justify-center gap-2 transition ${
+                                theme === value ? "border-amber-500 bg-amber-500/15 text-amber-300" : "border-neutral-700 text-neutral-300"
+                              }`}
+                            >
+                              <Icon className="w-4 h-4" /> {label}
+                            </button>
+                          ))}
+                        </div>
+                        <button
+                          onClick={() => {
+                            setShowRoleDropdown(false);
+                            setUiDesign("classic");
+                          }}
+                          className="w-full text-left px-4 py-2.5 min-h-11 text-[0.8125rem] font-medium text-neutral-200 hover:bg-neutral-700/60 flex items-center gap-2.5 transition"
+                        >
+                          <Undo2 className="w-4 h-4 text-amber-400" />
+                          <span>Back to the classic design</span>
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          setShowRoleDropdown(false);
+                          setUiDesign("new");
+                        }}
+                        className="w-full text-left px-4 py-2.5 min-h-11 text-[0.8125rem] font-medium text-neutral-200 hover:bg-neutral-700/60 flex items-center gap-2.5 transition"
+                      >
+                        <Sparkles className="w-4 h-4 text-amber-400" />
+                        <span>Use the new design on this device</span>
+                      </button>
+                    )}
                   </div>
 
                   <div className="pt-1 border-t border-neutral-700/80">
