@@ -59,8 +59,8 @@ page), in light and dark.
 | 2 | POS screen in the demo 8 layout (recent orders, category cards, dish cards, order panel); the shared pop-ups re-coloured for light through the theme bridge | PR #40 |
 | 2b | Till pop-ups drawn in the new design: dish options (option groups, add-ons, note chips), payment (keypad, cash/MoMo/split), discount, comp, shift gate. Docket, receipt, approvals and confirm stay classic through the bridge | PR #41 |
 | 3 | Orders page (demo 9): count cards, tabs with counts, cards or a board by kitchen state, date presets, search, pages. Same actions under the same permissions; kitchen status stays on the Kitchen screen; no cancel action is added (the app has none). Its pop-ups stay classic through the bridge | PR #42 |
-| 4a | Kitchen board: columns by step (New shown only when pending tickets exist, Preparing, Ready), ticket age (amber 8 min, overdue 15), items, options, notes, one next-step button, reprint. The classic screen's sound toggle, which did nothing, is not carried over | This PR |
-| 4b | Tables | Next |
-| 4c | Cash Drawer | Planned |
+| 4a | Kitchen board: columns by step (New shown only when pending tickets exist, Preparing, Ready), ticket age (amber 8 min, overdue 15), items, options, notes, one next-step button, reprint. The classic screen's sound toggle, which did nothing, is not carried over | PR #43 |
+| 4b | Tables: area tabs, status counts that filter, tiles by state with the open bill (docket, total, time open), one fitting action per state; fixes the classic "Reserve" button that set a table being cleaned to available | This PR |
+| 4c | Cash Drawer | Next |
 | 5 | Menu, stock, purchasing, reports, staff, settings | Planned |
 | 6 | Phones; make the new design the default; remove the classic shell | Planned |
