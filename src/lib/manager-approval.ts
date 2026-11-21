@@ -1,57 +1,16 @@
-import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
-import { db, requestContext } from "@/db";
-import { users, kitchenTickets, orders } from "@/db/schema";
-import { APPROVER_PIN_MESSAGE, APPROVER_PIN_MIN_LENGTH, effectivePermissions, pinDigest, verifyPasswordAsync, type UserRole } from "./auth";
-import { assertNotThrottled, BRANCH_PIN_BACKSTOP, recordFailedAttempt } from "./api";
-
-/** Error codes the till recognises: it asks for a manager's PIN and retries. */
-export const APPROVAL_REQUIRED = "manager_approval_required";
-export const APPROVAL_INVALID = "manager_approval_invalid";
-
-export type ManagerApproval =
-  | { ok: true; manager: { id: number; name: string } }
-  | { ok: false; response: NextResponse };
+import { db } from "@/db";
+import { kitchenTickets, orders } from "@/db/schema";
 
 /**
- * A manager (or the owner) authorises a sensitive till action by typing their
- * PIN on the device. Row security limits the lookup to the caller's branch.
- * Wrong PINs are throttled per branch, outside the request transaction, so a
- * refused attempt still counts.
- *
- * The answer is a ready response with a machine-readable `code`, so the till
- * can tell "ask for a PIN" apart from any other refusal.
+ * Helpers for recording removals and cancels on orders (N3/N4 in
+ * docs/FINDINGS.md). Until Nov 2026 these actions needed a manager's PIN once
+ * the kitchen had the order; the owner turned that approval off, so they now
+ * only describe what changed for the audit log. Refunds keep their own PIN
+ * check in the refund route.
  */
-export async function verifyManagerApproval(managerPin: unknown, reason: string): Promise<ManagerApproval> {
-  const actor = requestContext.getStore()!.user!;
-  // Wrong PINs count against the person asking (N13) and a branch-wide backstop.
-  const key = `manager-approval:user:${actor.id}`;
-  const branchKey = `manager-approval:branch:${actor.branchId}`;
-  if (managerPin === undefined || managerPin === null || managerPin === "") {
-    return { ok: false, response: NextResponse.json({ error: `${reason} needs a manager's PIN.`, code: APPROVAL_REQUIRED }, { status: 403 }) };
-  }
-  await assertNotThrottled(key);
-  await assertNotThrottled(branchKey, BRANCH_PIN_BACKSTOP);
-  const refuse = async () => {
-    await recordFailedAttempt(key);
-    await recordFailedAttempt(branchKey);
-    return { ok: false as const, response: NextResponse.json({ error: "That PIN cannot approve this. Ask a manager to enter theirs.", code: APPROVAL_INVALID }, { status: 403 }) };
-  };
-  if (typeof managerPin !== "string" || !/^\d{4,8}$/.test(managerPin)) return refuse();
-  // No approver may have a PIN under 6 digits (N19), so a shorter one is refused
-  // before any lookup: it can reveal nothing about anyone's PIN.
-  if (managerPin.length < APPROVER_PIN_MIN_LENGTH) {
-    await recordFailedAttempt(key);
-    await recordFailedAttempt(branchKey);
-    return { ok: false, response: NextResponse.json({ error: APPROVER_PIN_MESSAGE, code: APPROVAL_INVALID }, { status: 403 }) };
-  }
-  const [manager] = await db.select().from(users).where(eq(users.pinLookup, pinDigest(managerPin)));
-  // Whose PIN may approve is the owner's per-person choice (canApproveVoids, N6).
-  if (!manager?.isActive || !effectivePermissions(manager.role as UserRole, manager.permissionOverrides).canApproveVoids || !manager.pin || !(await verifyPasswordAsync(managerPin, manager.pin))) return refuse();
-  return { ok: true, manager: { id: manager.id, name: manager.name } };
-}
 
-/** An order has reached the kitchen once it left draft or has a docket. */
+/** True once the kitchen has the order: it left draft or has a docket. */
 export async function orderSentToKitchen(order: typeof orders.$inferSelect): Promise<boolean> {
   if (order.status !== "draft") return true;
   const [ticket] = await db.select({ id: kitchenTickets.id }).from(kitchenTickets).where(eq(kitchenTickets.orderId, order.id)).limit(1);

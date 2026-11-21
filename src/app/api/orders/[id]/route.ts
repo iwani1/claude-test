@@ -7,7 +7,7 @@ import { toCents, fromCents } from "@/lib/pricing-core";
 import { reverseStockForOrder } from "@/lib/inventory-deduction";
 import { getSessionUser } from "@/lib/guard";
 import { hideCost, maySeeCost } from "@/lib/cost-visibility";
-import { describeLines, orderSentToKitchen, verifyManagerApproval } from "@/lib/manager-approval";
+import { describeLines, orderSentToKitchen } from "@/lib/manager-approval";
 
 /** Fulfilment stages, in the only order they may happen. */
 const FULFILMENT_ORDER = ["draft", "confirmed", "preparing", "ready", "served", "completed"];
@@ -89,18 +89,12 @@ async function handlePATCH(req: Request, { params }: { params: Promise<{ id: str
     if (status !== undefined && status !== "cancelled" && FULFILMENT_ORDER.indexOf(status) < FULFILMENT_ORDER.indexOf(existingOrder.status)) {
       return NextResponse.json({ error: `This order is already ${existingOrder.status}; its status cannot go back to ${status}.` }, { status: 409 });
     }
-    // Cancelling food the kitchen already has is the classic way to make a cash
-    // sale disappear, so it needs a manager's PIN (N4 in docs/FINDINGS.md).
-    // An order that never left the till may still be cancelled by the cashier,
-    // and whoever holds order-editing permission (the owner by default) is the
-    // approving authority, as for item removals.
+    // Cancelling an order the kitchen already has needed a manager's PIN until
+    // Nov 2026 (N4 in docs/FINDINGS.md); the owner turned that approval off.
+    // Every cancel is still logged with who did it, what was on the bill and
+    // whether the kitchen had it.
     const actor = await getSessionUser();
-    let approver: { id: number; name: string } | null = null;
-    if (status === "cancelled" && !actor?.permissions?.canEditOrders && await orderSentToKitchen(existingOrder)) {
-      const approval = await verifyManagerApproval(body.managerPin, "Cancelling an order the kitchen already has");
-      if (!approval.ok) return approval.response;
-      approver = approval.manager;
-    }
+    const cancelAfterKitchen = status === "cancelled" ? await orderSentToKitchen(existingOrder) : false;
     const updates = { updatedAt: new Date(), ...(status !== undefined ? { status } : {}), ...(typeof notes === "string" ? { notes: notes.slice(0, 2000) } : {}) };
 
     const [updatedOrder] = await db
@@ -127,8 +121,8 @@ async function handlePATCH(req: Request, { params }: { params: Promise<{ id: str
         .where(eq(diningTables.id, existingOrder.tableId));
     }
 
-    // Every status change names who made it; a cancel also records the
-    // approver, what was on the bill and whether stock went back.
+    // Every status change names who made it; a cancel also records what was
+    // on the bill, whether the kitchen had it and whether stock went back.
     if (status === "cancelled") {
       const lines = await db.select().from(orderItems).where(eq(orderItems.orderId, orderId));
       const stockBack = !!(returnStockOnCancel && existingOrder.stockDeducted);
@@ -139,7 +133,7 @@ async function handlePATCH(req: Request, { params }: { params: Promise<{ id: str
         entityType: "order",
         entityId: String(orderId),
         details: `${actor?.name ?? "Unknown"} cancelled ${existingOrder.orderNumber} (GH₵${existingOrder.totalAmount}: ${describeLines(lines.map((l) => ({ name: l.itemName, quantity: l.quantity })))}). ` +
-          `${approver ? `Approved by manager ${approver.name}.` : actor?.permissions?.canEditOrders ? "Made with order-editing permission; no PIN needed." : "Not yet sent to the kitchen; no PIN needed."} Stock returned: ${stockBack ? "yes" : "no"}.`,
+          `${cancelAfterKitchen ? "The kitchen already had it; no manager approval is required." : "Not yet sent to the kitchen."} Stock returned: ${stockBack ? "yes" : "no"}.`,
       });
     } else {
       await db.insert(auditLogs).values({

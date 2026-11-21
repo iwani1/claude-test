@@ -27,7 +27,6 @@ import {
 import { ReceiptModal } from "./ReceiptModal";
 import { KitchenTicketModal } from "./KitchenTicketModal";
 import { ConfirmDialog } from "./ConfirmDialog";
-import { APPROVAL_CODES, useManagerApproval } from "./ManagerApprovalModal";
 import { saveTicketDraft, readTicketDraft, readTicketDraftOrderId, clearTicketDraft } from "@/lib/active-ticket";
 import {
   queueOfflineOrder,
@@ -248,7 +247,6 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
   }, [paymentMethod, cashTendered, splitCashAmount, splitMomoAmount, momoRef]);
   const [splitCashTendered, setSplitCashTendered] = useState<string>("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { requestManagerPin, approvalModal } = useManagerApproval();
 
   // Live billing rules (dine-in room charge + VAT) loaded from the server so
   // the total shown on the till matches what the API will actually charge.
@@ -528,31 +526,18 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
     tipAmount: Number(tipAmount || 0),
   });
 
-  /** Pushes the panel's lines onto the saved order. When the change takes items
-   *  away from a bill the kitchen already has, the server asks for a manager's
-   *  PIN: ask for it here and retry. Cancelling the prompt leaves the bill as it
-   *  was on the server. Returns the server's answer; throws with its message. */
+  /** Pushes the panel's lines onto the saved order. Returns the server's
+   *  answer; throws with its message. (Removing items from a kitchen order
+   *  no longer needs a manager's PIN, Nov 2026; the server logs it.) */
   const syncLoadedOrder = async (orderId: number) => {
-    let managerPin: string | undefined;
-    for (;;) {
-      const res = await fetch(`/api/orders/${orderId}/edit`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...buildEditSyncPayload(), ...(managerPin ? { managerPin } : {}) }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (res.ok) return data;
-      if (res.status === 403 && APPROVAL_CODES.includes(data?.code)) {
-        const pin = await requestManagerPin(
-          "Items are being removed from an order the kitchen already has. A manager must approve.",
-          data.code === "manager_approval_invalid" ? data.error : undefined,
-        );
-        if (!pin) throw new Error("Not approved: the order was not changed.");
-        managerPin = pin;
-        continue;
-      }
-      throw new Error(data?.error || `Update failed (${res.status})`);
-    }
+    const res = await fetch(`/api/orders/${orderId}/edit`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(buildEditSyncPayload()),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok) return data;
+    throw new Error(data?.error || `Update failed (${res.status})`);
   };
 
   /** Lines the kitchen has not seen yet: brand-new lines, plus only the
@@ -1843,7 +1828,6 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
       )}
 
       {/* MODAL 5: Safety net for destructive taps */}
-      {approvalModal}
       <ConfirmDialog
         open={!!pendingConfirm}
         title={pendingConfirm?.title || ""}
