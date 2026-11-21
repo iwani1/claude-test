@@ -26,6 +26,10 @@ export function DrawerBoard(p: {
   figures: { opening: number; cashSales: number; momoSales: number; outflows: number; refunds: number; expected: number };
   otherOpenShifts: any[];
   history: any[];
+  /** Period filter and its reconciliation summary (ShiftPeriod.tsx). */
+  historyControls?: React.ReactNode;
+  historySummary?: React.ReactNode;
+  historyFiltered?: boolean;
   drawerMessage: string | null;
   loadError: string | null;
   onRefresh: () => void;
@@ -160,10 +164,14 @@ export function DrawerBoard(p: {
           </section>
         )}
 
+        <div className="space-y-3">
+          <h2 className="text-base font-bold">Shift history &amp; reconciliation</h2>
+          {p.historyControls}
+          {p.historySummary}
+        </div>
         <section aria-label="Shift history" className="rounded-xl border border-ui-border bg-ui-surface overflow-hidden">
-          <h2 className="px-4 py-3 text-base font-bold border-b border-ui-border">Shift history</h2>
           {p.history.length === 0 ? (
-            <p className="p-6 text-center text-sm text-ui-muted">No shifts recorded yet.</p>
+            <p className="p-6 text-center text-sm text-ui-muted">{p.historyFiltered ? "No shifts were opened in this period." : "No shifts recorded yet."}</p>
           ) : (
             <ul className="divide-y divide-ui-border">
               {/* Column labels for wide screens; each row labels its own

@@ -18,6 +18,7 @@ import {
   Banknote,
 } from "lucide-react";
 import { apiErrorMessage, apiFetch } from "@/lib/api-client";
+import { ReconciliationSummary, ShiftPeriodControls, type ShiftPeriod } from "@/components/drawer/ShiftPeriod";
 import { notify } from "@/lib/notify";
 import type { CurrentUser } from "@/lib/api-types";
 import { useUiPreferences } from "@/lib/ui-preferences";
@@ -40,6 +41,17 @@ export const ShiftCashDrawer: React.FC<{ currentUser: CurrentUser; readOnly?: bo
   const canManageShifts = currentUser?.permissions?.canManageOthersShifts === true;
   const [activeShift, setActiveShift] = useState<any | null>(null);
   const [shiftHistory, setShiftHistory] = useState<any[]>([]);
+  // History period (Nov 2026): latest shifts by default, or a period with a
+  // reconciliation summary. Custom dates are a draft until Apply.
+  const [period, setPeriod] = useState<ShiftPeriod>("recent");
+  const [draftStart, setDraftStart] = useState("");
+  const [draftEnd, setDraftEnd] = useState("");
+  const [appliedRange, setAppliedRange] = useState<{ start: string; end: string } | null>(null);
+  const [periodData, setPeriodData] = useState<{ summary: any; window: any; truncated: boolean }>({ summary: null, window: null, truncated: false });
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const queryFor = (p: ShiftPeriod, range: { start: string; end: string } | null) =>
+    p === "custom" ? (range ? `?period=custom&start=${range.start}&end=${range.end}` : "") : p === "recent" ? "" : `?period=${p}`;
+  const shiftsQuery = queryFor(period, appliedRange);
 
   // Modals
   const [showOpenModal, setShowOpenModal] = useState(false);
@@ -64,15 +76,60 @@ export const ShiftCashDrawer: React.FC<{ currentUser: CurrentUser; readOnly?: bo
 
   const [loadError, setLoadError] = useState<string | null>(null);
 
-  const fetchShifts = useCallback(() => fetch("/api/shifts")
-    .then(res => { if (!res.ok) throw new Error("Request failed"); return res.json(); })
-    .then(data => {
-    setLoadError(null);
-      setActiveShift(data.activeShift);
-      setOpenShifts(data.openShifts || []);
-      setShiftHistory(data.history || []);
+  // Loading starts in the period handlers below (not here: this also runs
+  // from an effect); it ends when the answer arrives.
+  const fetchShifts = useCallback(() => {
+    return fetch(`/api/shifts${shiftsQuery}`)
+      .then(async (res) => {
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(res.status === 400 && data?.error ? data.error : "Request failed");
+        return data;
+      })
+      .then((data) => {
+        setLoadError(null);
+        setActiveShift(data.activeShift);
+        setOpenShifts(data.openShifts || []);
+        setShiftHistory(data.history || []);
+        setPeriodData({ summary: data.summary ?? null, window: data.window ?? null, truncated: !!data.truncated });
+      })
+      .catch((e) =>
+        // audit-ok: shown on the screen; the drawer keeps its last figures.
+        setLoadError(e?.message && e.message !== "Request failed" ? e.message : "Drawer and shifts could not be loaded. What is shown may be out of date."),
+      )
+      .finally(() => setHistoryLoading(false));
+  }, [shiftsQuery]);
 
-    }).catch(() => setLoadError("Drawer and shifts could not be loaded. What is shown may be out of date.")), []);
+  const choosePeriod = (next: ShiftPeriod) => {
+    if (queryFor(next, appliedRange) !== shiftsQuery) setHistoryLoading(true);
+    setPeriod(next);
+    if (next === "custom") {
+      const today = new Date().toISOString().slice(0, 10);
+      setDraftStart((d) => d || today);
+      setDraftEnd((d) => d || today);
+    }
+  };
+  const applyRange = () => {
+    if (!draftStart || !draftEnd || draftStart > draftEnd) return;
+    if (queryFor("custom", { start: draftStart, end: draftEnd }) !== shiftsQuery) setHistoryLoading(true);
+    setAppliedRange({ start: draftStart, end: draftEnd });
+  };
+  const periodControls = (classic: boolean) => (
+    <ShiftPeriodControls
+      classic={classic}
+      period={period}
+      onPeriod={choosePeriod}
+      start={draftStart}
+      end={draftEnd}
+      onStart={setDraftStart}
+      onEnd={setDraftEnd}
+      onApply={applyRange}
+      applied={!!appliedRange && appliedRange.start === draftStart && appliedRange.end === draftEnd}
+      loading={historyLoading}
+    />
+  );
+  const showSummary = period !== "recent" && !(period === "custom" && !appliedRange);
+  const periodSummary = (classic: boolean) =>
+    showSummary ? <ReconciliationSummary classic={classic} summary={periodData.summary} window={periodData.window} truncated={periodData.truncated} /> : null;
 
   useEffect(() => {
     fetchShifts();
@@ -478,6 +535,9 @@ export const ShiftCashDrawer: React.FC<{ currentUser: CurrentUser; readOnly?: bo
           }}
           otherOpenShifts={otherOpenShifts}
           history={shiftHistory}
+          historyControls={periodControls(false)}
+          historySummary={periodSummary(false)}
+          historyFiltered={showSummary}
           drawerMessage={drawerMessage}
           loadError={loadError}
           onRefresh={() => void fetchShifts()}
@@ -720,12 +780,14 @@ export const ShiftCashDrawer: React.FC<{ currentUser: CurrentUser; readOnly?: bo
 
         {/* Shift History Table */}
         <div className="bg-neutral-900 border border-neutral-800 rounded-2xl overflow-hidden shadow-xl">
-          <div className="p-4 bg-neutral-850 border-b border-neutral-800">
+          <div className="p-4 bg-neutral-850 border-b border-neutral-800 space-y-3">
             <h4 className="font-bold text-white text-xs">Shift History & Reconciliation Ledger</h4>
+            {periodControls(true)}
+            {periodSummary(true)}
           </div>
           <div className="md:hidden divide-y divide-neutral-800/70">
             {shiftHistory.length === 0 ? (
-              <div className="p-8 text-center text-neutral-500 text-sm">No shifts recorded yet.</div>
+              <div className="p-8 text-center text-neutral-500 text-sm">{showSummary ? "No shifts were opened in this period." : "No shifts recorded yet."}</div>
             ) : (
               shiftHistory.map((s) => {
                 const diff = Number(s.cashDifference || 0);
