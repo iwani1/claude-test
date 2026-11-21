@@ -5,7 +5,6 @@
  *
  * Run: npx tsx tests/legacy-import.ts
  */
-import EmbeddedPostgres from "embedded-postgres";
 import { Pool, type PoolClient } from "pg";
 import { spawn } from "node:child_process";
 import { DatabaseSync } from "node:sqlite";
@@ -14,10 +13,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomBytes } from "node:crypto";
 import { hashPassword, pinDigest, verifyPassword } from "../src/lib/auth";
+import { failIfUnfinished, freePort, startTestPostgres, type TestPostgres } from "./embedded-pg";
 
+// The suite has 40 checks; fewer passing means part of it never ran (P13).
+const MIN_PASSED_CHECKS = 40;
 const failures: string[] = [];
+let passed = 0;
 function check(label: string, ok: boolean, detail?: unknown) {
-  if (ok) console.log(`  ✓ ${label}`);
+  if (ok) { passed++; console.log(`  ✓ ${label}`); }
   else { failures.push(label); console.error(`  ✗ ${label}${detail === undefined ? "" : ` — ${JSON.stringify(detail)}`}`); }
 }
 async function run(command: string, args: string[], env = process.env) {
@@ -93,7 +96,9 @@ async function main() {
   const dir = await mkdtemp(join(tmpdir(), "pos-legacy-import-"));
   const fixture = join(dir, "fixture.db");
   const password = randomBytes(24).toString("hex");
-  const port = 15433;
+  // A free port picked at run time, so a preview server or another suite on
+  // 15433 cannot collide with this one (P13). LEGACY_IMPORT_PG_PORT pins one.
+  const port = Number(process.env.LEGACY_IMPORT_PG_PORT) || await freePort();
   const secret = randomBytes(48).toString("hex");
   process.env.AUTH_SECRET = secret;
   buildFixture(fixture);
@@ -101,11 +106,12 @@ async function main() {
   // able to enter this private temporary folder to reach its data folder.
   const asRoot = process.getuid?.() === 0;
   if (asRoot) await chmod(dir, 0o711);
-  const pg = new EmbeddedPostgres({ databaseDir: join(dir, "pgdata"), user: "postgres", password, port, persistent: false, createPostgresUser: asRoot,
-    postgresFlags: ["-h", "127.0.0.1"], onLog: () => {}, onError: msg => { if (String(msg).includes("FATAL")) console.error(msg); } });
+  let db: TestPostgres | undefined;
   let admin: Pool | undefined;
   try {
-    await pg.initialise(); await pg.start(); await pg.createDatabase("legacy_import_test");
+    console.log(`Starting PostgreSQL on 127.0.0.1:${port}…`);
+    db = await startTestPostgres({ databaseDir: join(dir, "pgdata"), password, port });
+    await db.pg.createDatabase("legacy_import_test");
     const adminUrl = `postgresql://postgres:${password}@127.0.0.1:${port}/legacy_import_test`;
     admin = new Pool({ connectionString: adminUrl });
     await run("node_modules/.bin/tsx", ["scripts/migrate.ts"], { ...process.env, MIGRATION_DATABASE_URL: adminUrl });
@@ -196,13 +202,18 @@ async function main() {
     await writeFile(join(dir, "ok"), "ok");
   } finally {
     await admin?.end();
-    await pg.stop().catch(() => {});
+    await db?.stop();
     await rm(dir, { recursive: true, force: true });
   }
   if (failures.length) {
     console.error(`\n${failures.length} check(s) failed`);
     process.exit(1);
   }
-  console.log("\nAll legacy-import checks passed.");
+  if (passed < MIN_PASSED_CHECKS) {
+    console.error(`\nOnly ${passed} of at least ${MIN_PASSED_CHECKS} checks ran; treating as failure.`);
+    process.exit(1);
+  }
+  console.log(`\nAll legacy-import checks passed (${passed}).`);
 }
-main().then(() => process.exit(0), error => { console.error(error); process.exit(1); });
+const run_ = failIfUnfinished("legacy-import");
+main().then(() => { run_.done(); process.exit(0); }, error => { run_.done(); console.error(error ?? "legacy-import failed with no error detail"); process.exit(1); });
