@@ -811,11 +811,31 @@ async function main() {
   const ownerShift2 = await request("/api/shifts", "POST", { action: "open_shift", openingCash: "20.00" }, owner);
   check(ownerShift2.status === 200 && ownerShift2.body.shift.id !== mateShift.id, "a second staff member opens a shift while a colleague's is open");
   check(((await request("/api/shifts", "GET", undefined, owner)).body.openShifts || []).length >= 2, "till roles can list every open shift");
+  // Shift history by period (Nov 2026): a period lists only shifts opened in it,
+  // but open shifts are always listed so colleagues' drawers can be closed.
+  const oldRange = await request("/api/shifts?period=custom&start=2000-01-01&end=2000-01-02", "GET", undefined, owner);
+  check(oldRange.status === 200 && oldRange.body.history.length === 0 && oldRange.body.summary?.shiftCount === 0
+    && [mateShift.id, ownerShift2.body.shift.id].every((id: number) => oldRange.body.openShifts.some((o: any) => o.id === id)), "drawer history: a past period lists no shifts but still lists every open shift");
+  check((await request("/api/shifts?period=custom&start=2026-02-31&end=2026-03-01", "GET", undefined, owner)).status === 400, "drawer history: an impossible date is refused");
+  check((await request("/api/shifts?period=custom&start=2026-03-02&end=2026-03-01", "GET", undefined, owner)).status === 400, "drawer history: a start after the end is refused");
+  check((await request("/api/shifts?period=bogus", "GET", undefined, owner)).status === 400, "drawer history: an unknown period is refused");
+  check((await request("/api/shifts?period=custom&start=2000-01-01&end=2000-01-02", "GET", undefined, inventory)).status === 403, "drawer history: the period filter keeps the history permission");
   check((await request("/api/shifts", "POST", { action: "open_shift", openingCash: "5.00" }, mate)).status === 400, "one open shift per staff member");
   check((await request("/api/shifts", "POST", { action: "close_shift", shiftId: ownerShift2.body.shift.id, actualClosingCash: "20.00" }, mate)).status === 403, "cashier cannot close a colleague's shift");
   const managerFresh = await login(2);
   check((await request("/api/shifts", "POST", { action: "close_shift", shiftId: mateShift.id, actualClosingCash: "30.00" }, managerFresh)).status === 200, "manager can close a cashier's shift");
-  await request("/api/shifts", "POST", { action: "close_shift", shiftId: ownerShift2.body.shift.id, actualClosingCash: "20.00" }, owner);
+  await request("/api/shifts", "POST", { action: "close_shift", shiftId: ownerShift2.body.shift.id, actualClosingCash: "19.50" }, owner);
+  const today = new Date().toISOString().slice(0, 10);
+  const todayRange = await request(`/api/shifts?period=custom&start=${today}&end=${today}`, "GET", undefined, owner);
+  const todays: any[] = todayRange.body.history || [];
+  const sumOf = (list: any[], key: string) => (list.reduce((n, r) => n + Math.round(Number(r[key] || 0) * 100), 0) / 100).toFixed(2);
+  const closedToday = todays.filter((r) => r.status === "closed");
+  check(todayRange.status === 200 && [mateShift.id, ownerShift2.body.shift.id].every((id: number) => todays.some((r) => r.id === id)), "drawer history: today's range lists the shifts opened today");
+  check(todayRange.body.summary.shiftCount === todays.length && todayRange.body.summary.closedCount === closedToday.length
+    && todayRange.body.summary.netDifference === sumOf(closedToday, "cashDifference") && todayRange.body.summary.countedCash === sumOf(closedToday, "actualClosingCash")
+    && todayRange.body.summary.cashSales === sumOf(todays, "totalCashSales"), "drawer reconciliation: totals add up the listed shifts");
+  check(Number(todayRange.body.summary.totalShort) >= 0.5 && todayRange.body.summary.shortCount >= 1, "drawer reconciliation: a short count is reported as short");
+  check((await request("/api/shifts?period=today", "GET", undefined, owner)).body.history.some((r: any) => r.id === mateShift.id), "drawer history: the Today preset lists today's shifts");
   console.log(`\n${checks} security checks passed against disposable PostgreSQL.`);
 }
 main().catch(error => { console.error(error); process.exitCode = 1; }).finally(() => admin.end());

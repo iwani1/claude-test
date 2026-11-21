@@ -5,12 +5,69 @@ import { NextResponse } from "next/server";
 import { db, requestContext } from "@/db";
 import { shifts, users, auditLogs, drawerMovements } from "@/db/schema";
 import { requireSession } from "@/lib/guard";
-import { eq, desc, inArray, and } from "drizzle-orm";
+import { eq, desc, inArray, and, gte, lt } from "drizzle-orm";
+import { reportWindow } from "@/lib/collection-report";
 
-async function handleGET() {
+/** Totals for the shifts opened in a chosen period, in pesewas then back to
+ *  cedi strings. Over/short counts closed shifts only: an open shift has not
+ *  been counted yet. */
+function reconciliationSummary(rows: (typeof shifts.$inferSelect)[], movements: (typeof drawerMovements.$inferSelect)[]) {
+  // Stored numerics (2 dp, may be zero or negative for over/short) to pesewas.
+  const pesewas = (v: unknown) => Math.round(Number(v ?? 0) * 100) || 0;
+  const closed = rows.filter((r) => r.status === "closed");
+  const sum = (list: typeof rows, pick: (r: typeof shifts.$inferSelect) => unknown) => list.reduce((n, r) => n + pesewas(pick(r)), 0);
+  const diffs = closed.map((r) => pesewas(r.cashDifference));
+  const ids = new Set(rows.map((r) => r.id));
+  const cashRefunds = movements.filter((m) => ids.has(m.shiftId) && m.kind === "refund").reduce((n, m) => n + pesewas(m.amount), 0);
+  const cedis = (c: number) => (c / 100).toFixed(2);
+  return {
+    shiftCount: rows.length,
+    closedCount: closed.length,
+    openCount: rows.length - closed.length,
+    openingFloat: cedis(sum(rows, (r) => r.openingCash)),
+    cashSales: cedis(sum(rows, (r) => r.totalCashSales)),
+    momoSales: cedis(sum(rows, (r) => r.totalCardSales)),
+    cashPayouts: cedis(sum(rows, (r) => r.cashPayouts)),
+    cashRefunds: cedis(cashRefunds),
+    expectedCash: cedis(sum(closed, (r) => r.expectedClosingCash)),
+    countedCash: cedis(sum(closed, (r) => r.actualClosingCash)),
+    netDifference: cedis(diffs.reduce((n, d) => n + d, 0)),
+    totalOver: cedis(diffs.filter((d) => d > 0).reduce((n, d) => n + d, 0)),
+    totalShort: cedis(-diffs.filter((d) => d < 0).reduce((n, d) => n + d, 0)),
+    shortCount: diffs.filter((d) => d < 0).length,
+    overCount: diffs.filter((d) => d > 0).length,
+  };
+}
+
+/** Shift history list sizes: the default view is the latest shifts; a chosen
+ *  period lists every shift opened in it, up to a bound that keeps the
+ *  response small (a busy branch opens a handful of shifts a day). */
+const RECENT_LIMIT = 20;
+const PERIOD_LIMIT = 500;
+
+async function handleGET(req: Request) {
   try {
-    const allShifts = await db.select().from(shifts).orderBy(desc(shifts.openedAt)).limit(20);
-    // Only the shifts on this page: their drawer movements and the people named on them.
+    // Period for the history and reconciliation (Nov 2026): "recent" (default,
+    // the latest shifts), today, 7days, 30days or custom start/end dates. Days
+    // are calendar days in Africa/Accra (UTC), as in Reports.
+    const { searchParams } = new URL(req.url);
+    const period = searchParams.get("period") || "recent";
+    const window = period === "recent"
+      ? null
+      : reportWindow(period, new Date(), { start: searchParams.get("start") ?? undefined, end: searchParams.get("end") ?? undefined });
+    if (window && !window.start) throw new ApiError(400, "Invalid period");
+    const historyRows = window
+      ? await db.select().from(shifts)
+        .where(and(gte(shifts.openedAt, window.start!), lt(shifts.openedAt, window.end)))
+        .orderBy(desc(shifts.openedAt)).limit(PERIOD_LIMIT + 1)
+      : await db.select().from(shifts).orderBy(desc(shifts.openedAt)).limit(RECENT_LIMIT);
+    const truncated = !!window && historyRows.length > PERIOD_LIMIT;
+    if (truncated) historyRows.length = PERIOD_LIMIT;
+    // Open shifts are listed whatever the period, so a colleague's drawer that
+    // was opened before the chosen dates can still be supervised and closed.
+    const openRows = await db.select().from(shifts).where(eq(shifts.status, "open")).orderBy(desc(shifts.openedAt));
+    const allShifts = [...historyRows, ...openRows.filter((o) => !historyRows.some((h) => h.id === o.id))];
+    // Only these shifts: their drawer movements and the people named on them.
     const shiftIds = allShifts.map((s) => s.id);
     const userIds = [...new Set(allShifts.flatMap((s) => [s.userId, s.reconciledBy])
       .filter((id): id is number => typeof id === "number"))];
@@ -24,7 +81,7 @@ async function handleGET() {
     // the till and the drawer screen keep working, and managers additionally
     // get every open shift to supervise and close.
     const actorId = requestContext.getStore()?.user?.id;
-    const openShiftsRaw = allShifts.filter((s) => s.status === "open");
+    const openShiftsRaw = openRows;
     const activeShift = openShiftsRaw.find((s) => s.userId === actorId) || null;
 
     const enrichedShifts = allShifts.map((s) => {
@@ -48,7 +105,11 @@ async function handleGET() {
       activeShift: myShift,
       myShift,
       openShifts: openShiftsRaw.map((o) => enrichedShifts.find((e) => e.id === o.id)),
-      history: enrichedShifts,
+      history: historyRows.map((h) => enrichedShifts.find((e) => e.id === h.id)),
+      period,
+      window: window ? { start: window.start!.toISOString(), endExclusive: window.end.toISOString(), timezone: "Africa/Accra" } : null,
+      truncated,
+      summary: window ? reconciliationSummary(historyRows, movements) : null,
       drawerMovements: movements,
     });
   } catch (err: any) {
