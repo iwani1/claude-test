@@ -3,7 +3,7 @@ import { secureRoute, ApiError } from "@/lib/api";
 import { NextResponse } from "next/server";
 import { db, requestContext } from "@/db";
 import { orders, orderItems, diningTables, kitchenTickets, menuItems, modifierOptions, refunds, auditLogs } from "@/db/schema";
-import { describeLines, orderSentToKitchen, removedLines, verifyManagerApproval } from "@/lib/manager-approval";
+import { describeLines, orderSentToKitchen, removedLines } from "@/lib/manager-approval";
 import { eq, inArray, desc } from "drizzle-orm";
 import { resyncStockForOrder } from "@/lib/inventory-deduction";
 import { loadBillingConfig, priceOrder, fromCents } from "@/lib/pricing";
@@ -31,9 +31,9 @@ import { toCents } from "@/lib/pricing-core";
  *
  * Adding items leaves no audit entry (owner's decision); the order itself shows
  * its new contents. Taking items away is different (N3 in docs/FINDINGS.md):
- * removing or reducing lines on a bill the kitchen already has needs a
- * manager's PIN from till staff, and every removal, approved or not, is written
- * to the activity log with who did it, who approved it and what went.
+ * every removal is written to the activity log with who did it, what went and
+ * whether the kitchen already had it. It needs no manager's PIN since Nov 2026
+ * (owner's decision).
  */
 async function handlePATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const actor = requestContext.getStore()!.user!;
@@ -172,9 +172,8 @@ async function handlePATCH(req: Request, { params }: { params: Promise<{ id: str
     });
   }
 
-  // --- Removals: approval and record (N3) ---------------------------------------
+  // --- Removals: record (N3) ---------------------------------------
   let removed: { name: string; quantity: number }[] = [];
-  let approver: { id: number; name: string } | null = null;
   let sentToKitchen = false;
   if (reprice && hasItems) {
     const beforeLines = await db.select().from(orderItems).where(eq(orderItems.orderId, orderId));
@@ -183,12 +182,10 @@ async function handlePATCH(req: Request, { params }: { params: Promise<{ id: str
       resolvedLines,
     );
     if (removed.length > 0) {
+      // Removing items from an order the kitchen already has needed a manager's
+      // PIN until Nov 2026 (N3); the owner turned that approval off. Every
+      // removal is still logged with who did it and what went.
       sentToKitchen = await orderSentToKitchen(order);
-      if (!perms?.canEditOrders && sentToKitchen) {
-        const approval = await verifyManagerApproval(body.managerPin, "Removing items from an order the kitchen already has");
-        if (!approval.ok) return approval.response;
-        approver = approval.manager;
-      }
     }
   }
 
@@ -294,11 +291,7 @@ async function handlePATCH(req: Request, { params }: { params: Promise<{ id: str
     .returning();
 
   if (removed.length > 0) {
-    const how = approver
-      ? `Approved by manager ${approver.name}.`
-      : perms?.canEditOrders
-        ? "Made with order-editing permission; no PIN needed."
-        : "Not yet sent to the kitchen; no PIN needed.";
+    const how = sentToKitchen ? "The kitchen already had it; no manager approval is required." : "Not yet sent to the kitchen.";
     await db.insert(auditLogs).values({
       userId: actor.id,
       userName: actor.name,

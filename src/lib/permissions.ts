@@ -40,9 +40,6 @@ export interface RolePermissionSet {
    *  from canIssueRefunds, so a person who may request refunds (finance) cannot
    *  approve their own. */
   canApproveRefunds: boolean;
-  /** This person's PIN can authorise removing items from, or cancelling, an
-   *  order the kitchen already has (the till's manager-approval prompt). */
-  canApproveVoids: boolean;
   /** Record payouts on, and close, a shift someone else opened (supervising
    *  colleagues' drawers). Everyone may manage their own shift. */
   canManageOthersShifts: boolean;
@@ -68,7 +65,6 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissionSet> = {
     canEditOrders: true,
     canApplyDiscounts: true,
     canApproveRefunds: true,
-    canApproveVoids: true,
     canManageOthersShifts: true,
   },
   manager: {
@@ -89,7 +85,6 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissionSet> = {
     canEditOrders: false,
     canApplyDiscounts: true,
     canApproveRefunds: true,
-    canApproveVoids: true,
     canManageOthersShifts: true,
   },
   cashier: {
@@ -111,7 +106,6 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissionSet> = {
     canEditOrders: false,
     canApplyDiscounts: false,
     canApproveRefunds: false,
-    canApproveVoids: false,
     canManageOthersShifts: false,
   },
   cook: {
@@ -133,7 +127,6 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissionSet> = {
     canEditOrders: false,
     canApplyDiscounts: false,
     canApproveRefunds: false,
-    canApproveVoids: false,
     canManageOthersShifts: false,
   },
   inventory_officer: {
@@ -156,7 +149,6 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissionSet> = {
     canEditOrders: false,
     canApplyDiscounts: false,
     canApproveRefunds: false,
-    canApproveVoids: false,
     canManageOthersShifts: false,
   },
   accountant: {
@@ -183,7 +175,6 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissionSet> = {
     canEditOrders: false,
     canApplyDiscounts: false,
     canApproveRefunds: false,
-    canApproveVoids: false,
     canManageOthersShifts: false,
   },
 };
@@ -210,7 +201,6 @@ export const PERMISSION_DEFINITIONS: readonly PermissionDefinition[] = [
   { key: "canIssueRefunds", group: "Orders & Money", label: "Request refunds", description: "Start a refund. A PIN from someone who may approve refunds still authorises it." },
   { key: "canApproveRefunds", group: "Orders & Money", label: "Approve refunds (PIN)", description: "This person's PIN can authorise a refund someone else requests." },
   { key: "canApplyDiscounts", group: "Orders & Money", label: "Discounts & complimentary", description: "Ring up an order with a discount, or as complimentary." },
-  { key: "canApproveVoids", group: "Orders & Money", label: "Approve removals & cancels (PIN)", description: "This person's PIN can authorise removing items from, or cancelling, an order the kitchen already has." },
   { key: "canEditOrders", group: "Orders & Money", label: "Edit saved orders", description: "Re-price a saved order's items, discount or tip after the fact." },
   { key: "canDeleteOrders", group: "Orders & Money", label: "Delete orders", description: "Permanently delete an order and its financial trail. Sensitive." },
   { key: "canViewTransactionTrail", group: "Orders & Money", label: "Audit & transaction trail", description: "Read audit logs, individual payments and the accounting export." },
@@ -268,18 +258,18 @@ export function hasTerminalAccess(role: UserRole, overrides?: unknown): boolean 
   return effectivePermissions(role, overrides).terminalAccess === true;
 }
 
-/** PINs that can approve money or removals must be 6–8 digits (N19 in
- *  docs/FINDINGS.md): with per-person throttling, a 4-digit space is too small
- *  for the accounts whose PIN authorises refunds, removals and cancels. Other
- *  staff keep 4–8 digit PINs for quick switching. */
+/** PINs that can approve refunds must be 6–8 digits (N19 in docs/FINDINGS.md):
+ *  with per-person throttling, a 4-digit space is too small for the accounts
+ *  whose PIN authorises refunds. Other staff keep 4–8 digit PINs for quick
+ *  switching. (Removals and cancels no longer need approval, Nov 2026.) */
 export const APPROVER_PIN_MIN_LENGTH = 6;
 
 /** True for an account whose PIN can approve something: the owner, and anyone
- *  allowed to approve refunds or removals/cancels. */
+ *  allowed to approve refunds. */
 export function needsApproverPin(role: UserRole, overrides?: unknown): boolean {
   const perms = effectivePermissions(role, overrides);
-  return role === "super_admin" || perms.canApproveRefunds || perms.canApproveVoids;
+  return role === "super_admin" || perms.canApproveRefunds;
 }
 
 export const APPROVER_PIN_MESSAGE =
-  "PINs that approve refunds, removals or cancels must be 6 to 8 digits. Ask the owner to set a 6-digit PIN for this account.";
+  "PINs that approve refunds must be 6 to 8 digits. Ask the owner to set a 6-digit PIN for this account.";

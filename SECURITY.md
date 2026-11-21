@@ -65,19 +65,21 @@ order creation causes rollback rather than a clamped/inaccurate ledger.
 ## Removals and voids
 
 Taking items off a bill the kitchen already has, or cancelling such an order,
-needs the PIN of someone allowed to approve it (`canApproveVoids`) at the till
-(`src/lib/manager-approval.ts`); wrong PINs are throttled per branch. Refunds
-need a PIN from someone with `canApproveRefunds` (separate from requesting a
-refund, so finance cannot approve its own), and discounts or complimentary
-orders need `canApplyDiscounts`. All three default to managers and the owner,
-and the owner can change them per person. PINs that can approve (the owner's, and
-anyone's with either approval permission) must be 6 to 8 digits; a shorter PIN is
-refused by every approval before any lookup, and an approver's short legacy PIN no
-longer opens their account. Other staff may keep 4-digit PINs. Adding items and changing an order that never reached the
-kitchen need none. Holders of order-editing permission (the owner by default)
-are the approving authority and need no PIN. Every removal (`order_items_removed`)
-and cancel (`order_cancelled`) is written to the activity log with the person who
-did it, the approving manager, what was removed and whether stock went back.
+**does not need a manager's approval** (the owner turned that PIN off in Nov
+2026; findings N3/N4 are recorded as Accepted in `docs/FINDINGS.md`). Any till
+user can do either. Every removal (`order_items_removed`) and cancel
+(`order_cancelled`) is still written to the activity log with the person who did
+it, what was removed, whether the kitchen already had it and whether stock went
+back, so the owner can review them afterwards.
+
+Refunds need a PIN from someone with `canApproveRefunds` (separate from
+requesting a refund, so finance cannot approve its own), and discounts or
+complimentary orders need `canApplyDiscounts`. Both default to managers and the
+owner, and the owner can change them per person. PINs that can approve refunds
+(the owner's, and anyone's with `canApproveRefunds`) must be 6 to 8 digits; a
+shorter PIN is refused by the refund check before any lookup, and an approver's
+short legacy PIN no longer opens their account. Other staff may keep 4-digit
+PINs.
 
 ## Tests
 
