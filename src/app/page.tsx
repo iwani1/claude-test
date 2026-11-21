@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Loader2, Store, ShieldAlert } from "lucide-react";
 import { Navbar } from "@/components/Navbar";
+import { PhoneTopBar } from "@/components/PhoneTopBar";
 import { Sidebar, NavTab } from "@/components/Sidebar";
 import { TopNav } from "@/components/TopNav";
 import { useUiPreferences } from "@/lib/ui-preferences";
@@ -486,14 +487,26 @@ export default function App() {
           in the rail (Sidebar), which frees the bar's 72px for the work area
           — most importantly the POS bill panel's items list. */}
       <div className="md:hidden">
-        <Navbar
-          onOpenMenu={() => setMenuOpen(true)}
-          currentUser={currentUser}
-          onUserChange={handleUserChange}
-          onLogout={handleLogout}
-          lowStockCount={lowStockCount}
-          openShift={openShift}
-        />
+        {/* Stage 6b: phones on the new design get their own bar in the theme
+            tokens; the classic bar stays for the classic design. */}
+        {newShell ? (
+          <PhoneTopBar
+            onOpenMenu={() => setMenuOpen(true)}
+            currentUser={currentUser}
+            onUserChange={handleUserChange}
+            onLogout={handleLogout}
+            shiftOpen={!!openShift}
+          />
+        ) : (
+          <Navbar
+            onOpenMenu={() => setMenuOpen(true)}
+            currentUser={currentUser}
+            onUserChange={handleUserChange}
+            onLogout={handleLogout}
+            lowStockCount={lowStockCount}
+            openShift={openShift}
+          />
+        )}
       </div>
 
       {/* Connection state, always visible while it matters. Offline is not an

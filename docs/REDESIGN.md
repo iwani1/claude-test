@@ -10,19 +10,20 @@ page), in light and dark.
 
 ## How it reaches staff
 
-- **Off by default.** Each stage is merged and deployed without changing what
-  staff see. A device opts in, and out again, from:
-  - tills and laptops: **New design** on the classic controls strip, and
-    **Back to the classic design** in the new top bar's account menu;
-  - phones: the account menu (the initial, top right) has **Use the new design
-    on this device**, and on the new design **Light / Dark** and **Back to the
-    classic design**.
+- **On by default since stage 6b.** A device with no saved choice shows the new
+  design (light). A device where someone chose **Back to the classic design**
+  keeps the classic design until it is switched back. Switching, either way:
+  - tills and laptops: **Back to the classic design** in the top bar's account
+    menu (the initials, top right), and **New design** on the classic controls
+    strip;
+  - phones: the same account menu in the new phone bar (stage 6b), and **Use
+    the new design on this device** in the classic bar's account menu.
 - **Per terminal**, like the display size: stored in `localStorage`
   (`pos.uiDesign`, `pos.uiTheme`) and applied to `<html data-ui data-ui-theme>`
   before first paint (`src/lib/ui-preferences-script.ts`, `layout.tsx`).
 - **Light or dark**, chosen per terminal in the account menu.
-- When every screen is done, the default flips to the new design and the
-  classic shell is removed in its own pull request.
+- The classic shell is removed in its own pull request (stage 6c), once the
+  new design has run through real shifts.
 - Phones and portrait tablets get the new design too (stage 6a): the classic
   phone bar, tabs and drawer take the theme through the bridge, and the new
   boards show at every width. Since stage 7 the new till shows at every width
@@ -90,6 +91,6 @@ page), in light and dark.
 | 5b | Owner dashboard (money first, cash/MoMo split, floor and kitchen now, low stock, top sellers, categories, period switch; refused panels say so) and Reports (money received, sales and margin, top sellers, categories, free breakfasts, custom dates, exports). Shared chart marks in `dashboard/charts.tsx`, colours validated per theme (`ui-chart-*`) | PR #50 |
 | 5c | Other back-office screens redrawn where it pays off | Planned |
 | 6a | Phones and portrait tablets: the whole shell (phone bar, bottom tabs, drawer, notices) sits in the colour bridge, and the new boards (orders, kitchen, tables, drawer, dashboard, reports) show at every width. The till keeps its slide-up order sheet below 64rem, themed. Checked on a 390×844 phone and a 768×1024 tablet in light and dark | PR #51 |
-| 7 | Premium pass from the UI/UX audit (Nov 2026): Manrope with tabular figures and no code font for money; till with a chip row of categories so dishes fill the first screen, initials tiles for dishes without a photo, add and total animations; the new till on phones with a slide-up order sheet (only the amount and actions pinned); dialogs with a blurred scrim, depth and an open animation; kitchen lanes that share the width by load, an age ring per ticket, 44px reprint; recent orders show the kitchen step, not an age bar; skeleton loading on dashboard, reports and orders; margin says "Not yet" when no recipe costs exist; accent on the largest chart bar only; the hotel's logo in the top bar; contrast and target fixes (strip counts, phone "View", menu table Edit/Delete/availability, phone Drawer badge as a dot). axe-core (WCAG 2.1 AA): 0 issues and no target under 44px on 23 screens (10 screens × light/dark at 1440×900, 3 on a phone) | PR (this) |
-| 6b | Make the new design the default (after a trial shift on a real till) | Planned |
+| 7 | Premium pass from the UI/UX audit (Nov 2026): Manrope with tabular figures and no code font for money; till with a chip row of categories so dishes fill the first screen, initials tiles for dishes without a photo, add and total animations; the new till on phones with a slide-up order sheet (only the amount and actions pinned); dialogs with a blurred scrim, depth and an open animation; kitchen lanes that share the width by load, an age ring per ticket, 44px reprint; recent orders show the kitchen step, not an age bar; skeleton loading on dashboard, reports and orders; margin says "Not yet" when no recipe costs exist; accent on the largest chart bar only; the hotel's logo in the top bar; contrast and target fixes (strip counts, phone "View", menu table Edit/Delete/availability, phone Drawer badge as a dot). axe-core (WCAG 2.1 AA): 0 issues and no target under 44px on 23 screens (10 screens × light/dark at 1440×900, 3 on a phone) | PR #53 |
+| 6b | The new design is the default (no saved choice → new, light); a saved "classic" choice is kept. Phones get a new top bar in the theme tokens (`PhoneTopBar.tsx`: menu, hotel mark, your shift state, offline/sync chip only when needed, quick Switch staff, account menu). The account menu is one shared component (`AccountMenu.tsx`) used by the md+ top bar and the phone bar. Built before a trial shift on a real till, at the owner's request; classic stays one tap away | PR (this) |
 | 6c | Remove the classic shell and the bridge | Planned |

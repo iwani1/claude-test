@@ -8,18 +8,18 @@ export { UI_DESIGN_KEY, UI_THEME_KEY };
  * Per-terminal look: the classic dark shell, or the new design (top bar,
  * Dreams-style layout, Nov 2026) in a light or dark theme.
  *
- * The new design ships switched OFF: each stage of the redesign goes live
- * without changing what staff see until someone turns it on for that
- * terminal. Like the display size, the choice lives in localStorage and is
- * applied to <html> before first paint by the script in layout.tsx, so a
- * screen never flashes the wrong theme.
+ * Since redesign stage 6b the new design is the default: a terminal shows it
+ * unless someone chose "Back to the classic design" on it, which is kept.
+ * Like the display size, the choice lives in localStorage and is applied to
+ * <html> before first paint by the script in layout.tsx, so a screen never
+ * flashes the wrong theme.
  *
  *   <html data-ui="classic|new" data-ui-theme="light|dark">
  */
 export type UiDesign = "classic" | "new";
 export type UiTheme = "light" | "dark";
 
-export const DEFAULT_UI_DESIGN: UiDesign = "classic";
+export const DEFAULT_UI_DESIGN: UiDesign = "new";
 export const DEFAULT_UI_THEME: UiTheme = "light";
 
 const listeners = new Set<() => void>();
@@ -28,7 +28,7 @@ function read(): { design: UiDesign; theme: UiTheme } {
   if (typeof document === "undefined") return { design: DEFAULT_UI_DESIGN, theme: DEFAULT_UI_THEME };
   const el = document.documentElement;
   return {
-    design: el.dataset.ui === "new" ? "new" : "classic",
+    design: el.dataset.ui === "classic" ? "classic" : "new",
     theme: el.dataset.uiTheme === "dark" ? "dark" : "light",
   };
 }
