@@ -119,7 +119,7 @@ export function AccountMenu({
             <span className="flex-1">Text &amp; touch size</span>
             <span className="text-xs text-ui-muted">{DISPLAY_SIZE_LABEL[size]}</span>
           </button>
-          <div role="none" aria-hidden="true" className="px-3 pt-2 pb-1 text-[0.6875rem] font-bold tracking-[0.08em] text-ui-muted">THEME</div>
+          <div role="none" className="px-3 pt-2 pb-1 text-[0.6875rem] font-bold tracking-[0.08em] text-ui-muted">THEME</div>
           <div role="group" aria-label="Theme" className="grid grid-cols-2 gap-1 px-1 pb-1">
             {([
               ["light", "Light", Sun],
