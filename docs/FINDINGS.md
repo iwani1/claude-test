@@ -4,7 +4,7 @@
 `docs/AUDIT_*.md` and `docs/PRODUCTION_READINESS_*.md` are point-in-time snapshots; they
 are never edited to say something was fixed. This file is.
 
-- **Last full verification:** 2026-11-23 against `main` @ `609bf5e`. Whole-application security review; four new findings fixed in the same PR (N24–N27), one new open process finding (P13), N14 updated. See [`AUDIT_2026-11-23.md`](AUDIT_2026-11-23.md).
+- **Last full verification:** 2026-11-23 against `main` @ `609bf5e`. Whole-application security review; four new findings fixed in the same PR (N24–N27), N14 updated. The silent-pass test runner found during the audit is P13, recorded and fixed in PR #57. See [`AUDIT_2026-11-23.md`](AUDIT_2026-11-23.md).
 - **How a status changes:** see [Rules](#rules). A row says *Fixed* only when the fix is
   merged to `main` and the row names the PR and how it was verified.
 
@@ -28,7 +28,7 @@ the VPS is **not** fixed: it is lost on the next deploy and invisible to audits.
 | Critical | 0 | 1 | 1 | 0 |
 | High | 0 | 1 | 2 | 2 |
 | Medium | 0 | 1 | 10 | 0 |
-| Low / Info | 2 | 2 | 21 | 0 |
+| Low / Info | 1 | 2 | 21 | 0 |
 
 ## Go-live blockers
 
@@ -83,7 +83,6 @@ N2 (owner action; owner has deferred making the repo private, see its row) and P
 | P10 | Low | systemd and secret-file hardening gaps | **Owner action** | PR #37 ships `deploy/systemd/pos.service`: Node run directly, bound to 127.0.0.1, `ProtectSystem=strict`, `ProtectHome`, `PrivateDevices`, kernel/cgroup protection, `RestrictSUIDSGID`, memory and file limits (not `MemoryDenyWriteExecute`, which breaks Node). Guide: secrets in `/etc/pos/app.env` (root:pos 0640; the old `/opt/pos/.env` still works, and the deploy script accepts either), PostgreSQL local-only checks, `certbot --redirect`, updates and reboots at 03:00/03:30. Takes effect when applied on the server | `systemd-analyze verify` passes for all 7 units (only the server's paths are absent here) | `deploy/systemd/pos.service`, `docs/VPS_DEPLOYMENT.md` Phases 1, 3, 5, 7, 8 |
 | P11 | Low | Manual grants step after migrations | **Fixed** | PR #37: migration `0011_runtime_default_privileges.sql` makes tables and sequences created by later migrations usable by `pos_runtime` at once (skipped when that role is created after migrating, as in tests); Phase 6 sets the same default privileges for the migration owner; the deploy script's warning is replaced | Probe against a real PostgreSQL: with `pos_runtime` created before migrating, a table created after 0011 is readable and writable by `pos_runtime` with no manual grant; `test:security` applies 0011 on a fresh database | `migrations/0011_runtime_default_privileges.sql`, `docs/VPS_DEPLOYMENT.md` Phase 6 |
 | P12 | Low | DB test suites cannot run as root | **Fixed** | PR #37: as root, both test runners ask embedded-postgres to run PostgreSQL as the system `postgres` user (`createPostgresUser`) and make the legacy-import temp folder enterable; unchanged for normal users | 2026-11-17: `test:security` (380 security + 85 pilot + 52 accounting checks) and `test:legacy-import` pass as root in the audit sandbox, where both failed before | `tests/run-security.ts`, `tests/legacy-import.ts` |
-| P13 | Low | `test:legacy-import` exits 0 with no checks run when port 15433 is in use, so a local "pass" can be false | Open | Found 2026-11-23. Fix: make any start-up failure exit non-zero and require the checks to have run (or pick a free port). CI starts clean, so CI is unaffected today | Reproduced: preview database on 15433 → exit 0, no output; port free → 40 checks pass | `tests/legacy-import.ts` |
 
 ## Earlier audits (carried forward)
 
