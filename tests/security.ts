@@ -7,6 +7,7 @@ import { createHmac, randomUUID } from "node:crypto";
 import { createToken, verifyToken, hashPassword, verifyPassword, hashPasswordAsync, verifyPasswordAsync, pinDigest } from "../src/lib/auth";
 import { pbkdf2Sync } from "node:crypto";
 import { databaseUnreachableMessage } from "../src/lib/schema-guard";
+import { csvCell } from "../src/lib/csv";
 const base = "http://127.0.0.1:3100";
 const admin = new Pool({ connectionString: process.env.TEST_ADMIN_URL });
 let checks = 0;
@@ -702,7 +703,7 @@ async function main() {
   const renewedClaims = renewedMe.cookie ? claimsOf(renewedMe.cookie) : null;
   check(renewedMe.status === 200 && renewedClaims && renewedClaims.iat >= nowS && renewedClaims.exp >= nowS + 8 * hour - 5 && renewedClaims.auth === nowS - 2 * hour,
     "P4: a two-hour-old session gets a fresh 8-hour cookie that keeps the original sign-in time");
-  check(/HttpOnly/.test(renewedMe.headers.get("set-cookie") || "") && /SameSite=Lax/.test(renewedMe.headers.get("set-cookie") || "") && /Secure/.test(renewedMe.headers.get("set-cookie") || ""), "P4: the renewed cookie keeps HttpOnly, SameSite and Secure");
+  check(/HttpOnly/.test(renewedMe.headers.get("set-cookie") || "") && /SameSite=Strict/.test(renewedMe.headers.get("set-cookie") || "") && /Secure/.test(renewedMe.headers.get("set-cookie") || ""), "P4: the renewed cookie keeps HttpOnly, SameSite and Secure");
   check((await request("/api/menu", "GET", undefined, renewedMe.cookie)).status === 200, "P4: the renewed cookie works");
   const legacy = forge({ id: 1, version: ownerVersion, iat: nowS - 2 * hour, exp: nowS + 6 * hour });
   const legacyMe = await request("/api/auth/me", "GET", undefined, legacy);
@@ -836,6 +837,30 @@ async function main() {
     && todayRange.body.summary.cashSales === sumOf(todays, "totalCashSales"), "drawer reconciliation: totals add up the listed shifts");
   check(Number(todayRange.body.summary.totalShort) >= 0.5 && todayRange.body.summary.shortCount >= 1, "drawer reconciliation: a short count is reported as short");
   check((await request("/api/shifts?period=today", "GET", undefined, owner)).body.history.some((r: any) => r.id === mateShift.id), "drawer history: the Today preset lists today's shifts");
+  // --- N24–N27: browser hardening (Nov 2026 audit) ----------------------------
+  const page1 = await fetch(`${base}/`), page2 = await fetch(`${base}/`);
+  const html = await page1.text();
+  const pageCsp = page1.headers.get("content-security-policy") || "";
+  const scriptSrc = pageCsp.split(";").map((d) => d.trim()).find((d) => d.startsWith("script-src")) || "";
+  const nonce = /'nonce-([^']+)'/.exec(scriptSrc)?.[1] || "";
+  check(page1.status === 200 && nonce.length >= 16 && !scriptSrc.includes("unsafe-inline") && scriptSrc.includes("'strict-dynamic'") && !scriptSrc.includes("unsafe-eval"),
+    "N24: the page's CSP allows scripts only by a per-request nonce (no 'unsafe-inline', no eval)");
+  check(nonce !== /'nonce-([^']+)'/.exec(page2.headers.get("content-security-policy") || "")?.[1], "N24: every page response gets a new nonce");
+  const scriptTags = html.match(/<script\b[^>]*>/g) || [];
+  check(scriptTags.length > 0 && scriptTags.every((tag) => tag.includes(`nonce="${nonce}"`)), "N24: every script on the page carries that nonce (framework and pre-paint scripts alike)");
+  check(/upgrade-insecure-requests/.test(pageCsp) && /frame-ancestors 'none'/.test(pageCsp), "N24: the page CSP still forbids framing and upgrades insecure requests");
+  const apiHeaders = (await fetch(`${base}/api/health`)).headers;
+  check(/script-src 'self'(;|$)/.test(apiHeaders.get("content-security-policy") || "") && !(apiHeaders.get("content-security-policy") || "").includes("unsafe-inline'; style") , "N24: API answers keep a static CSP without inline scripts");
+  for (const [name, headers] of [["page", page1.headers], ["API", apiHeaders]] as const) {
+    check(headers.get("cross-origin-opener-policy") === "same-origin" && headers.get("cross-origin-resource-policy") === "same-origin"
+      && headers.get("x-permitted-cross-domain-policies") === "none" && /usb=\(\)/.test(headers.get("permissions-policy") || "") && /fullscreen=\(self\)/.test(headers.get("permissions-policy") || "")
+      && headers.get("x-frame-options") === "DENY" && headers.get("x-content-type-options") === "nosniff", `N25: the ${name} answer carries the isolation and permissions headers`);
+  }
+  // (User 3 was deactivated above; the owner signs in again here.)
+  const strictLogin = await request("/api/auth/login", "POST", { email: "user1@test.invalid", password: "Test-password-only-123!" });
+  check(strictLogin.status === 200 && /SameSite=Strict/i.test(strictLogin.headers.get("set-cookie") || ""), "N26: the session cookie set at sign-in is SameSite=Strict");
+  check(csvCell("=HYPERLINK(\"http://x\")") === `"'=HYPERLINK(""http://x"")"` && csvCell("+1+cmd") === "'+1+cmd" && csvCell("@SUM(A1)") === "'@SUM(A1)" && csvCell("-12.50") === "-12.50" && csvCell("12.50") === "12.50",
+    "N27: CSV cells that a spreadsheet would run as formulas are kept as text; numbers stay numbers");
   console.log(`\n${checks} security checks passed against disposable PostgreSQL.`);
 }
 main().catch(error => { console.error(error); process.exitCode = 1; }).finally(() => admin.end());

@@ -16,20 +16,17 @@ try {
 // session cookies and money, so clickjacking / MIME-sniffing / referrer
 // leakage must not depend on whichever reverse proxy happens to be in front.
 //
-// CSP notes (deliberate, review before tightening):
-// - 'unsafe-inline' in script-src/style-src is required today: the root page
-//   is statically prerendered (Next injects inline bootstrap scripts) and
-//   layout.tsx applies the per-device display size with an inline script
-//   before first paint. There is no 'unsafe-eval' and no external origin is
-//   allowed anywhere, so injected markup still cannot load remote code.
-//   Moving to nonce-based CSP means giving up static prerendering (or a
-//   middleware nonce pass) — a separate, deliberate change.
+// CSP: pages get a per-request nonce policy from src/proxy.ts (N24), with no
+// 'unsafe-inline' for scripts. This static policy covers everything else the
+// server answers (the API, the service worker script, public files): nothing
+// there renders HTML, but the service worker's fetches follow its script's
+// policy, so it must still allow 'self'.
 // - frame-ancestors 'none' + X-Frame-Options DENY: the POS is never iframed.
 // - HSTS is production-only (browsers ignore it over http, and dev/preview
 //   origins must not be pinned).
 const contentSecurityPolicy = [
   "default-src 'self'",
-  "script-src 'self' 'unsafe-inline'",
+  "script-src 'self'",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob:",
   "font-src 'self' data:",
@@ -48,7 +45,20 @@ const securityHeaders = [
   { key: "X-Content-Type-Options", value: "nosniff" },
   { key: "X-Frame-Options", value: "DENY" },
   { key: "Referrer-Policy", value: "no-referrer" },
-  { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(), payment=()" },
+  // Only full screen is used (the till's full-screen button); every other
+  // powerful feature is off for this origin and anything it might embed (N25).
+  {
+    key: "Permissions-Policy",
+    value:
+      "fullscreen=(self), camera=(), microphone=(), geolocation=(), payment=(), usb=(), serial=(), hid=(), bluetooth=(), " +
+      "midi=(), magnetometer=(), gyroscope=(), accelerometer=(), display-capture=(), screen-wake-lock=(), " +
+      "publickey-credentials-get=(), browsing-topics=(), interest-cohort=()",
+  },
+  // Cross-origin isolation (N25): no other site's window can hold a handle to
+  // this one, and no other site can embed this server's responses.
+  { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
+  { key: "Cross-Origin-Resource-Policy", value: "same-origin" },
+  { key: "X-Permitted-Cross-Domain-Policies", value: "none" },
   ...(process.env.NODE_ENV === "production"
     ? [{ key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains" }]
     : []),
@@ -69,7 +79,16 @@ const nextConfig: NextConfig = {
   allowedDevOrigins: ["*.e2b.app", "127.0.0.1"],
   env: { APP_BUILD_COMMIT: commit },
   async headers() {
-    return [{ source: "/:path*", headers: securityHeaders }];
+    // Pages get their CSP from src/proxy.ts; everything else gets the static
+    // one here. Both get the other headers.
+    const others = securityHeaders.filter((h) => h.key !== "Content-Security-Policy");
+    return [
+      { source: "/:path*", headers: others },
+      { source: "/api/:path*", headers: [{ key: "Content-Security-Policy", value: contentSecurityPolicy }] },
+      { source: "/_next/:path*", headers: [{ key: "Content-Security-Policy", value: contentSecurityPolicy }] },
+      { source: "/:file(sw\\.js|manifest\\.json|robots\\.txt|logo\\.svg)", headers: [{ key: "Content-Security-Policy", value: contentSecurityPolicy }] },
+      { source: "/menu-images/:path*", headers: [{ key: "Content-Security-Policy", value: contentSecurityPolicy }] },
+    ];
   },
 };
 

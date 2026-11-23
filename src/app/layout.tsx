@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
+import { headers } from "next/headers";
 import "./globals.css";
 import { ServiceWorkerRegistrar } from "@/components/ServiceWorkerRegistrar";
 import { UI_PREPAINT_SCRIPT } from "@/lib/ui-preferences-script";
@@ -29,7 +30,10 @@ export const viewport: Viewport = {
   viewportFit: "cover",
 };
 
-export default function RootLayout({ children }: { children: ReactNode }) {
+export default async function RootLayout({ children }: { children: ReactNode }) {
+  // The per-request nonce from src/proxy.ts: the page's CSP lets only scripts
+  // carrying it run (N24), so the two pre-paint scripts below must carry it.
+  const nonce = (await headers()).get("x-nonce") ?? undefined;
   return (
     <html lang="en" className="dark h-full" data-display-size="large" data-ui="new" data-ui-theme="light" suppressHydrationWarning>
       <head>
@@ -38,13 +42,14 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             fresh terminal is "large" (18px root) — deliberately bigger than
             the browser default because these screens are driven by fingers. */}
         <script
+          nonce={nonce}
           dangerouslySetInnerHTML={{
             __html: `try{var s=localStorage.getItem('pos.displaySize');document.documentElement.dataset.displaySize=(s==='standard'||s==='extra'||s==='large')?s:'large'}catch(e){/* audit-ok: display size is a per-device preference; failing keeps the default */}`,
           }}
         />
         {/* Same idea for the look: classic design or the new one, and the
             new design's light or dark theme (src/lib/ui-preferences.ts). */}
-        <script dangerouslySetInnerHTML={{ __html: UI_PREPAINT_SCRIPT }} />
+        <script nonce={nonce} dangerouslySetInnerHTML={{ __html: UI_PREPAINT_SCRIPT }} />
       </head>
       <body className="h-full bg-neutral-950 text-neutral-100 antialiased overflow-hidden select-none">
         {children}
