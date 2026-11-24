@@ -28,7 +28,7 @@ the VPS is **not** fixed: it is lost on the next deploy and invisible to audits.
 | Critical | 0 | 1 | 1 | 0 |
 | High | 0 | 1 | 2 | 2 |
 | Medium | 0 | 1 | 10 | 0 |
-| Low / Info | 1 | 2 | 21 | 0 |
+| Low / Info | 1 | 2 | 22 | 0 |
 
 ## Go-live blockers
 
