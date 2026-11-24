@@ -1,10 +1,10 @@
-import EmbeddedPostgres from "embedded-postgres";
 import { Pool } from "pg";
 import { spawn } from "node:child_process";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomBytes } from "node:crypto";
+import { assertPortFree, failIfUnfinished, startTestPostgres, type TestPostgres } from "./embedded-pg";
 async function run(command: string, args: string[], env = process.env) {
   await new Promise<void>((resolve, reject) => {
     const child = spawn(command, args, { stdio: "inherit", env });
@@ -20,16 +20,16 @@ async function main() {
   const directory = await mkdtemp(join(tmpdir(), "pos-security-"));
   const password = randomBytes(24).toString("hex");
   const port = 15432;
-  // PostgreSQL refuses to run as root. As root (containers, some CI images) the
-  // library runs it as the system "postgres" user and hands it the data folder
-  // (P12 in docs/FINDINGS.md); as a normal user nothing changes.
-  const asRoot = process.getuid?.() === 0;
-  const pg = new EmbeddedPostgres({ databaseDir: directory, user: "postgres", password, port, persistent: false, createPostgresUser: asRoot,
-    postgresFlags: ["-h", "127.0.0.1"], onLog: () => {}, onError: msg => { if (String(msg).includes("FATAL")) console.error(msg); } });
+  // startTestPostgres runs PostgreSQL as the system "postgres" user when we are
+  // root (P12), and turns startup failures (port in use…) into a clear error
+  // instead of a silent exit 0 (P13).
+  let db: TestPostgres | undefined;
   let app: ReturnType<typeof spawn> | undefined;
   let admin: Pool | undefined;
   try {
-    await pg.initialise(); await pg.start(); await pg.createDatabase("pos_security_test");
+    await assertPortFree(3100, "the app");
+    db = await startTestPostgres({ databaseDir: directory, password, port });
+    await db.pg.createDatabase("pos_security_test");
     const adminUrl = `postgresql://postgres:${password}@127.0.0.1:${port}/pos_security_test`;
     admin = new Pool({ connectionString: adminUrl });
     await run("node_modules/.bin/tsx", ["scripts/migrate.ts"], { ...process.env, MIGRATION_DATABASE_URL: adminUrl });
@@ -55,7 +55,8 @@ async function main() {
       app.kill("SIGTERM");
       await new Promise<void>(resolve => { app!.once("exit", () => resolve()); setTimeout(() => { app!.kill("SIGKILL"); resolve(); }, 5000).unref(); });
     }
-    await admin?.end(); await pg.stop(); await rm(directory, { recursive: true, force: true });
+    await admin?.end(); await db?.stop(); await rm(directory, { recursive: true, force: true });
   }
 }
-main().then(() => process.exit(0), error => { console.error(error); process.exit(1); });
+const guard = failIfUnfinished("test:security");
+main().then(() => { guard.done(); process.exit(0); }, error => { guard.done(); console.error(error ?? "test:security failed with no error detail"); process.exit(1); });
