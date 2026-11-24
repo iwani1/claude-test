@@ -29,7 +29,7 @@ PIN hashes/digests are never sent to browsers. Existing PBKDF2 password hashes
 are accepted only for migration compatibility and upgraded after password login.
 There are no generated demo/default passwords. Tokens contain only user ID,
 version and bounded timestamps; role/ownership never comes from client claims.
-Signatures use constant-time comparison. Cookies are HttpOnly, SameSite=Lax and
+Signatures use constant-time comparison. Cookies are HttpOnly, SameSite=Strict and
 Secure in production, and tokens are not duplicated in JSON responses.
 Sessions last 8 hours without use. A request from a session more than an hour
 old gets a fresh cookie, so a device in use stays signed in through a long shift,
@@ -61,6 +61,19 @@ cumulative refunds against collected funds, and require a same-branch active
 manager's PIN. Partial refunds retain their own payment state. Stock restoration
 uses original stock movements, not a mutable recipe; insufficient stock during
 order creation causes rollback rather than a clamped/inaccurate ledger.
+
+## Browser hardening
+
+Pages are served with a per-request nonce Content Security Policy (`src/proxy.ts`,
+N24): only scripts carrying that response's nonce run (`'strict-dynamic'`, no
+`'unsafe-inline'`, no eval in production), no other origin is allowed for anything,
+framing is forbidden and insecure requests are upgraded. Pre-paint scripts in
+`layout.tsx` take the nonce from the `x-nonce` request header; any new inline script
+must do the same. API answers, the service worker script and public files get a static
+policy without inline scripts (`next.config.ts`). Every answer also carries
+`X-Frame-Options: DENY`, `nosniff`, `Referrer-Policy: no-referrer`, COOP and CORP
+`same-origin`, and a Permissions-Policy that allows only full screen (N25). CSV exports
+keep formula-like cells as text (`src/lib/csv.ts`, N27).
 
 ## Removals and voids
 

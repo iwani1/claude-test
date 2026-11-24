@@ -126,7 +126,11 @@ export function publicUser(user: SessionUser) {
   const { sessionVersion: _version, ...safe } = user;
   return safe;
 }
-export const cookieOptions = () => ({ httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax" as const, path: "/", maxAge: SESSION_SECONDS });
+// SameSite=Strict (N26): the session cookie is never sent on a request another
+// site starts, so a link or form elsewhere cannot act as a signed-in till. The
+// POS is opened from a bookmark, the home-screen icon or by typing its address,
+// all of which count as same-site.
+export const cookieOptions = () => ({ httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "strict" as const, path: "/", maxAge: SESSION_SECONDS });
 
 /** A renewed session cookie, if this session is due one: older than
  *  SESSION_RENEW_AFTER_SECONDS and still inside the hard limit. */
@@ -137,6 +141,6 @@ export function renewedSessionCookie(claims: TokenClaims, user: Pick<SessionUser
   const maxAge = Math.max(0, Math.min(SESSION_SECONDS, claims.auth + SESSION_MAX_SECONDS - now));
   if (maxAge <= 0) return null;
   const options = cookieOptions();
-  return [`pos_session=${token}`, `Path=${options.path}`, `Max-Age=${maxAge}`, "HttpOnly", "SameSite=Lax", ...(options.secure ? ["Secure"] : [])].join("; ");
+  return [`pos_session=${token}`, `Path=${options.path}`, `Max-Age=${maxAge}`, "HttpOnly", "SameSite=Strict", ...(options.secure ? ["Secure"] : [])].join("; ");
 }
 

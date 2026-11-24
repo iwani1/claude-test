@@ -5,11 +5,7 @@ import { db } from "@/db";
 import { orders } from "@/db/schema";
 import { desc } from "drizzle-orm";
 import { requirePermission } from "@/lib/guard";
-
-function csvCell(value: unknown): string {
-  const text = String(value ?? "");
-  return /[",\n\r]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
-}
+import { csvCell } from "@/lib/csv";
 
 async function handlePOST(req: Request) {
   try {
