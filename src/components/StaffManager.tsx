@@ -17,6 +17,7 @@ import {
   X,
   Trash2,
   UserCheck,
+  UserCog,
 } from "lucide-react";
 import { PERMISSION_DEFINITIONS, PERMISSION_KEYS, ROLE_PERMISSIONS, UserRole, type PermissionKey } from "@/lib/permissions";
 import { apiErrorMessage, apiFetch } from "@/lib/api-client";
@@ -28,6 +29,17 @@ type PermissionMap = Record<PermissionKey, boolean>;
  *  overrides resolved by the API, a draft being edited). */
 const permissionMapFrom = (source?: Partial<Record<PermissionKey, boolean>> | null): PermissionMap =>
   Object.fromEntries(PERMISSION_KEYS.map((key) => [key, !!source?.[key]])) as PermissionMap;
+
+/** Every role, in the order the pickers offer them. One list for Add Employee
+ *  and Change Role, so the two can never offer different roles. */
+const ROLE_OPTIONS: { value: UserRole; label: string }[] = [
+  { value: "cashier", label: "Cashier / Waiter" },
+  { value: "cook", label: "Cook / Head Chef" },
+  { value: "manager", label: "Restaurant Manager" },
+  { value: "inventory_officer", label: "Inventory Officer" },
+  { value: "accountant", label: "Accountant" },
+  { value: "super_admin", label: "Super Admin / Owner" },
+];
 
 const PERMISSION_GROUPS = [...new Set(PERMISSION_DEFINITIONS.map((d) => d.group))];
 
@@ -78,6 +90,11 @@ export const StaffManager: React.FC<{ currentUser?: any }> = ({ currentUser }) =
   const [permissionError, setPermissionError] = useState("");
   const [newPermissionDraft, setNewPermissionDraft] = useState<PermissionMap>(() => permissionMapFrom(ROLE_PERMISSIONS.cashier));
   const [newPermissionsCustom, setNewPermissionsCustom] = useState(false);
+  // Owner-only: move an existing account to a different role.
+  const [showRoleModal, setShowRoleModal] = useState<any | null>(null);
+  const [roleDraft, setRoleDraft] = useState<UserRole>("cashier");
+  const [roleBusy, setRoleBusy] = useState(false);
+  const [roleError, setRoleError] = useState("");
   const [showPasswordModal, setShowPasswordModal] = useState<any | null>(null);
   const [newPassword, setNewPassword] = useState("");
   const [newPin, setNewPin] = useState("");
@@ -177,6 +194,33 @@ export const StaffManager: React.FC<{ currentUser?: any }> = ({ currentUser }) =
       setPermissionError(apiErrorMessage(err, "Could not reach the server. Permissions were not saved."));
     } finally {
       setPermissionBusy(false);
+    }
+  };
+
+  const handleSaveRole = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!showRoleModal) return;
+    setRoleBusy(true);
+    setRoleError("");
+    try {
+      const data = await apiFetch("/api/staff", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "update_role", userId: showRoleModal.id, role: roleDraft }),
+      });
+      if (data.success) {
+        const savedName = showRoleModal.name;
+        setShowRoleModal(null);
+        notify(`${savedName} is now ${ROLE_PERMISSIONS[roleDraft]?.label || roleDraft}. They have been signed out and will see their new access when they sign in again.${data.note ? " " + data.note : ""}`, "ok");
+        fetchStaff();
+      } else {
+        setRoleError(data.error || "The role was not changed");
+      }
+    } catch (err) {
+      console.error(err);
+      setRoleError(apiErrorMessage(err, "Could not reach the server. The role was not changed."));
+    } finally {
+      setRoleBusy(false);
     }
   };
 
@@ -454,6 +498,20 @@ export const StaffManager: React.FC<{ currentUser?: any }> = ({ currentUser }) =
                       <span>Permissions</span>
                     </button>
                   )}
+                  {/* Changing a role is the owner's call, and never your own. */}
+                  {currentUser?.role === "super_admin" && u.id !== currentUser?.id && (
+                    <button
+                      onClick={() => {
+                        setRoleDraft(u.role as UserRole);
+                        setRoleError("");
+                        setShowRoleModal(u);
+                      }}
+                      className="min-h-11 px-3 rounded-xl bg-neutral-800/70 hover:bg-neutral-700 border border-neutral-700 text-amber-300 font-semibold flex items-center gap-1.5 transition"
+                    >
+                      <UserCog className="w-4 h-4" />
+                      <span>Change Role</span>
+                    </button>
+                  )}
                   <button
                     onClick={() => {
                       setShowPinModal(u);
@@ -566,12 +624,9 @@ export const StaffManager: React.FC<{ currentUser?: any }> = ({ currentUser }) =
                   }}
                   className="w-full bg-neutral-800 border border-neutral-700 rounded-xl px-3 py-2 text-white"
                 >
-                  <option value="cashier">Cashier / Waiter</option>
-                  <option value="cook">Cook / Head Chef</option>
-                  <option value="manager">Restaurant Manager</option>
-                  <option value="inventory_officer">Inventory Officer</option>
-                  <option value="accountant">Accountant</option>
-                  <option value="super_admin">Super Admin / Owner</option>
+                  {ROLE_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
                 </select>
               </div>
 
@@ -678,6 +733,57 @@ export const StaffManager: React.FC<{ currentUser?: any }> = ({ currentUser }) =
                 className="px-4 py-2 text-xs font-semibold bg-amber-500 text-black rounded-lg disabled:opacity-50"
               >
                 {permissionBusy ? "Saving…" : "Save Permissions"}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* MODAL: Change role (owner only) */}
+      {showRoleModal && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/70 backdrop-blur-xs p-4 overflow-y-auto">
+          <form
+            onSubmit={handleSaveRole}
+            className="bg-neutral-900 border border-neutral-700 rounded-2xl p-6 w-full max-w-sm shadow-2xl space-y-4 max-h-[92dvh] overflow-y-auto my-auto"
+          >
+            <div className="flex justify-between items-start">
+              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                <UserCog className="w-4 h-4 text-amber-400" />
+                <span>Change role for {showRoleModal.name}</span>
+              </h3>
+              <button type="button" onClick={() => setShowRoleModal(null)} aria-label="Close" className="text-neutral-400 hover:text-white">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <p className="text-xs text-neutral-400">
+              Currently {ROLE_PERMISSIONS[showRoleModal.role as UserRole]?.label || showRoleModal.role}. The new role&apos;s
+              default permissions replace any custom permissions this person has. Saving signs them out.
+            </p>
+            {roleError && <p role="alert" className="text-red-400 text-xs">{roleError}</p>}
+            <select
+              value={roleDraft}
+              onChange={(e) => setRoleDraft(e.target.value as UserRole)}
+              className="w-full bg-neutral-800 border border-neutral-700 rounded-xl px-3 py-2 text-white text-sm"
+            >
+              {ROLE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+            {roleDraft === "super_admin" && showRoleModal.role !== "super_admin" && (
+              <p className="text-xs text-amber-300">
+                Owners have full access to everything, including staff, settings and deleting orders.
+              </p>
+            )}
+            <div className="flex justify-end gap-2 pt-2 border-t border-neutral-800">
+              <button type="button" onClick={() => setShowRoleModal(null)} className="px-3 py-2 text-xs text-neutral-400 hover:text-white">
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={roleBusy || roleDraft === showRoleModal.role}
+                className="px-4 py-2 text-xs font-semibold bg-amber-500 text-black rounded-lg disabled:opacity-50"
+              >
+                {roleBusy ? "Saving…" : "Save Role"}
               </button>
             </div>
           </form>

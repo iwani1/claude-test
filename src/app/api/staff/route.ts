@@ -77,6 +77,7 @@ export const POST = secureRoute(async req => {
   let employee;
   let note: string | null = null;
   let permissionAudit = "";
+  let roleAudit = "";
   const setsPin = (action === "create_employee" && body.pin) || action === "update_pin";
   if (setsPin) await assertNotThrottled(pinCollisionKey(actor.id), PIN_COLLISION_LIMIT);
   try {
@@ -98,7 +99,7 @@ export const POST = secureRoute(async req => {
       passwordHash: await hashPasswordAsync(password), pin: pin ? await hashPasswordAsync(pin) : null, pinLookup: pin ? pinDigest(pin) : null,
       role: role as UserRole, permissionOverrides, phone: typeof phone === "string" ? phone : null }).returning(fields);
     employee = withPermissions({ ...employee, permissionOverrides });
-  } else if (["toggle_active", "update_pin", "reset_password", "delete_user", "update_permissions"].includes(action)) {
+  } else if (["toggle_active", "update_pin", "reset_password", "delete_user", "update_permissions", "update_role"].includes(action)) {
     const [target] = await db.select().from(users).where(eq(users.id, Number(body.userId))).for("update");
     if (!target) throw new ApiError(404, "Employee not found");
     const removed = await isRemoved(target.id);
@@ -124,7 +125,32 @@ export const POST = secureRoute(async req => {
       // removed, and the roster would not show it.
       if (removed) throw new ApiError(409, "This staff account was removed and can no longer be changed. Its sales history is kept.");
       if (actor.role !== "super_admin" && ["super_admin", "manager"].includes(target.role)) throw new ApiError(403, "Only owners may modify privileged staff");
-      if (action === "update_permissions") {
+      if (action === "update_role") {
+        // Changing what job someone holds is the owner's call alone, like
+        // selecting permissions. Your own role is never changed here, so an
+        // owner cannot demote the last owner (themselves) by mistake.
+        if (actor.role !== "super_admin") throw new ApiError(403, "Only the owner may change a staff member's role");
+        const role = body.role;
+        if (typeof role !== "string" || !Object.hasOwn(ROLE_PERMISSIONS, role)) throw new ApiError(400, "Choose a valid role");
+        if (target.id === actor.id) throw new ApiError(400, "You cannot change your own role");
+        if (role === target.role) throw new ApiError(400, `${target.name} already has that role`);
+        // Per-person selections were made against the old role's defaults, so
+        // they are cleared: the person starts from the new role's defaults and
+        // the owner can tailor them again.
+        const hadOverrides = Object.keys(sanitizePermissionOverrides(target.permissionOverrides)).length > 0;
+        const fromLabel = ROLE_PERMISSIONS[target.role as UserRole]?.label ?? target.role;
+        const toLabel = ROLE_PERMISSIONS[role as UserRole].label;
+        roleAudit = `${actor.name} changed ${target.name}'s role from ${fromLabel} to ${toLabel}` +
+          (hadOverrides ? "; their custom permissions were reset to the new role's defaults" : "");
+        // Sessions are revoked so the person signs in to screens that match the new role.
+        [employee] = await db.update(users).set({ role: role as UserRole, permissionOverrides: {}, sessionVersion: sql`${users.sessionVersion} + 1` })
+          .where(eq(users.id, target.id)).returning(fields);
+        // PINs are stored hashed, so their length is unknown here: remind instead.
+        if (needsApproverPin(role as UserRole, {}) && !needsApproverPin(target.role as UserRole, target.permissionOverrides)) {
+          note = `${target.name} can now approve with a PIN. Approval PINs must be 6 to 8 digits: if theirs is shorter, set a new one.`;
+        }
+        employee = withPermissions({ ...employee, permissionOverrides: {} });
+      } else if (action === "update_permissions") {
         // Selecting what a person may do is the owner's call alone — even a
         // manager who manages staff day-to-day cannot grant or revoke access.
         if (actor.role !== "super_admin") throw new ApiError(403, "Only the owner may select permissions");
@@ -179,6 +205,7 @@ export const POST = secureRoute(async req => {
   }
   await db.insert(auditLogs).values({ userId: actor.id, userName: actor.name, action, entityType: "user", entityId: String(employee.id),
     ...(action === "delete_user" ? { details: `${employee.name} was removed from the staff roster. Past sales keep this account's name.` }
-      : action === "update_permissions" ? { details: permissionAudit } : {}) });
+      : action === "update_permissions" ? { details: permissionAudit }
+      : action === "update_role" ? { details: roleAudit } : {}) });
   return NextResponse.json({ success: true, employee, note });
 }, "canManageStaff");

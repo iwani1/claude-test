@@ -435,6 +435,19 @@ async function main() {
   const createdWithPermissions = await request("/api/staff", "POST", { action: "create_employee", name: "Tailored Test", email: "tailored@test.invalid", role: "cashier", password: "Tailored-password-123!", pin: "3434", permissions: { canViewReports: true } }, owner);
   check(createdWithPermissions.status === 200 && createdWithPermissions.body.employee.permissions.canViewReports === true, "the owner can select permissions when creating an employee");
   check((await request("/api/staff", "POST", { action: "create_employee", name: "Manager Tailored", email: "mgrtailored@test.invalid", role: "cashier", password: "Tailored-password-123!", pin: "5656", permissions: { canViewReports: true } }, manager)).status === 403, "a manager cannot select permissions at creation either");
+  // --- Owner changes a staff member's role ---------------------------------
+  // Owner only; never your own role; per-person selections reset to the new
+  // role's defaults; the person is signed out; the change is audited.
+  check((await request("/api/staff", "POST", { action: "update_role", userId: createdWithPermissions.body.employee.id, role: "manager" }, manager)).status === 403, "a manager cannot change anyone's role");
+  check((await request("/api/staff", "POST", { action: "update_role", userId: createdWithPermissions.body.employee.id, role: "wizard" }, owner)).status === 400, "an unknown role is refused");
+  check((await request("/api/staff", "POST", { action: "update_role", userId: 1, role: "cashier" }, owner)).status === 400, "the owner cannot change their own role");
+  const roleLogin = await request("/api/auth/login", "POST", { email: "tailored@test.invalid", password: "Tailored-password-123!" });
+  const promoted = await request("/api/staff", "POST", { action: "update_role", userId: createdWithPermissions.body.employee.id, role: "accountant" }, owner);
+  check(promoted.status === 200 && promoted.body.employee.role === "accountant" && Object.keys(promoted.body.employee.permissionOverrides).length === 0, "the owner moves a cashier to accountant; custom permissions reset to the new role's defaults");
+  check((await request("/api/auth/me", "GET", undefined, roleLogin.cookie)).status === 401, "a role change signs the person out");
+  const roleAuditRow = (await admin.query("SELECT user_id, details FROM audit_logs WHERE action='update_role' AND entity_id=$1 ORDER BY id DESC LIMIT 1", [String(createdWithPermissions.body.employee.id)])).rows[0];
+  check(roleAuditRow?.user_id === 1 && /from .* to Accountant/.test(roleAuditRow.details), "the role change is audited with the acting owner");
+  check((await request("/api/staff", "POST", { action: "update_role", userId: createdWithPermissions.body.employee.id, role: "accountant" }, owner)).status === 400, "setting the role it already has is refused");
   // --- N6: approvals follow the owner's per-person choices, not job titles ---
   // Set directly so nobody's session is revoked mid-suite; restored below.
   const n6Before = (await admin.query("SELECT id, permission_overrides FROM users WHERE id IN (2,3) ORDER BY id")).rows;
